@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>League Management</h2>
+                <button class="btn btn-primary" onclick="showAddLeagueForm()">
+                    <i class="fas fa-plus"></i> Add New League
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 25%">Name</th>
+                                    <th style="width: 15%">Region</th>
+                                    <th style="width: 35%">Description</th>
+                                    <th style="width: 15%">Status</th>
+                                    <th style="width: 10%">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for league in leagues %}
+                                <tr>
+                                    <td class="fw-bold">{{ league.name }}</td>
+                                    <td>{{ league.region }}</td>
+                                    <td>{{ league.description }}</td>
+                                    <td>
+                                        <span class="badge {% if league.is_active %}bg-success{% else %}bg-danger{% endif %} px-3 py-2">
+                                            {{ "Active" if league.is_active else "Inactive" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-primary" onclick="editLeague('{{ league.league_id }}')">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- League Modal Form -->
+<div id="leagueModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h3 id="modalTitle">Add New League</h3>
+        <form id="leagueForm" onsubmit="handleLeagueSubmit(event)">
+            <input type="hidden" id="leagueId" name="leagueId">
+            <div class="form-group">
+                <label for="name">League Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="form-group">
+                <label for="region">Region:</label>
+                <input type="text" id="region" name="region" required>
+            </div>
+            <div class="form-group">
+                <label for="description">Description:</label>
+                <textarea id="description" name="description" rows="3"></textarea>
+            </div>
+            <div class="form-group" id="statusGroup" style="display: none;">
+                <label for="isActive">Status:</label>
+                <select id="isActive" name="isActive">
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                </select>
+            </div>
+            <button type="submit" class="btn primary">Save League</button>
+        </form>
+    </div>
+</div>
+
+<style>
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.4);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 600px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: #000;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 90%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #4a9eff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.btn.primary {
+    background-color: #4a9eff;
+    color: white;
+}
+
+.btn.primary:hover {
+    background-color: #357abd;
+}
+
+h3 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+}
+
+/* Table styles */
+.table {
+    margin-bottom: 0;
+}
+
+.table th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border-radius: 0.5rem;
+}
+</style>
+
+<script>
+const modal = document.getElementById('leagueModal');
+const closeBtn = document.getElementsByClassName('close')[0];
+const form = document.getElementById('leagueForm');
+const statusGroup = document.getElementById('statusGroup');
+
+function showAddLeagueForm() {
+    document.getElementById('modalTitle').textContent = 'Add New League';
+    document.getElementById('leagueId').value = '';
+    form.reset();
+    statusGroup.style.display = 'none';
+    modal.style.display = 'block';
+}
+
+function editLeague(leagueId) {
+    document.getElementById('modalTitle').textContent = 'Edit League';
+    document.getElementById('leagueId').value = leagueId;
+    // TODO: Fetch league details and populate form
+    statusGroup.style.display = 'block';
+    modal.style.display = 'block';
+}
+
+async function handleLeagueSubmit(event) {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const leagueId = formData.get('leagueId');
+    const endpoint = leagueId ? `/admin/leagues/${leagueId}` : '/admin/leagues';
+    
+    try {
+        const response = await fetch(endpoint, {
+            method: leagueId ? 'PUT' : 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(Object.fromEntries(formData)),
+        });
+        
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Error saving league');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error saving league');
+    }
+}
+
+closeBtn.onclick = () => modal.style.display = 'none';
+window.onclick = (event) => {
+    if (event.target == modal) modal.style.display = 'none';
+}
+</script>
+{% endblock %}

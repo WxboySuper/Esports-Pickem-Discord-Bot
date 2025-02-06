@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Pick'em Leaderboards</h2>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-primary active" data-board="global">Global</button>
+                <button type="button" class="btn btn-primary" data-board="guild">Server Specific</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Top Players</h5>
+                    <select id="guildSelect" class="form-select d-none" style="width: auto;">
+                        <option value="">Select Server</option>
+                        {% for guild in guilds %}
+                        <option value="{{ guild.id }}">{{ guild.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>User</th>
+                                    <th>Correct</th>
+                                    <th>Total</th>
+                                    <th>Accuracy</th>
+                                    {% if request.args.get('type') == 'global' %}
+                                    <th>Servers</th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboardBody">
+                                {% for entry in leaderboard %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td>{{ entry.user_name }}</td>
+                                    <td>{{ entry.correct_picks }}</td>
+                                    <td>{{ entry.total_picks }}</td>
+                                    <td>{{ "%.1f"|format(entry.accuracy * 100) }}%</td>
+                                    {% if request.args.get('type') == 'global' %}
+                                    <td>{{ entry.guild_count }}</td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Total Players</span>
+                            <span id="totalPlayers">{{ stats.total_players }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Total Picks</span>
+                            <span id="totalPicks">{{ stats.total_picks }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Average Accuracy</span>
+                            <span id="avgAccuracy">{{ "%.1f"|format(stats.avg_accuracy * 100) }}%</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const guildSelect = document.getElementById('guildSelect');
+    const buttons = document.querySelectorAll('[data-board]');
+    
+    // Handle board type switching
+    buttons.forEach(button => {
+        button.addEventListener('click', function() {
+            buttons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            const boardType = this.dataset.board;
+            guildSelect.classList.toggle('d-none', boardType === 'global');
+            
+            if (boardType === 'global') {
+                loadLeaderboard();
+            } else {
+                // Show guild selector
+                guildSelect.classList.remove('d-none');
+            }
+        });
+    });
+    
+    // Handle guild selection
+    guildSelect.addEventListener('change', function() {
+        loadLeaderboard(this.value);
+    });
+    
+    function loadLeaderboard(guildId = null) {
+        const url = `/api/leaderboard${guildId ? `?guild_id=${guildId}` : ''}`;
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateLeaderboard(data.leaderboard);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    }
+    
+    function updateLeaderboard(data) {
+        const tbody = document.getElementById('leaderboardBody');
+        tbody.innerHTML = '';
+        
+        data.forEach((entry, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${entry.user_id}</td>
+                <td>${entry.correct_picks}</td>
+                <td>${entry.total_picks}</td>
+                <td>${((entry.correct_picks / entry.total_picks) * 100).toFixed(1)}%</td>
+                ${entry.guild_count ? `<td>${entry.guild_count}</td>` : ''}
+            `;
+            tbody.appendChild(row);
+        });
+    }
+});
+</script>
+{% endblock %}

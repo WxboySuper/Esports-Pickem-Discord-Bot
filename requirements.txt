@@ -1,0 +1,8 @@
+discord.py[voice]>=2.3.2
+Flask
+Flask-SQLAlchemy
+Flask-Migrate
+python-dotenv
+requests
+PyNaCl>=1.5.0
+pytz>=2025.1
