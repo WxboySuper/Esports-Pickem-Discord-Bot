@@ -9,8 +9,8 @@ Welcome to the Discord Esports Pickem project! This bot allows users to compete 
 - **Leaderboard**: A leaderboard displays the rankings of users based on their picks.
 - **Admin Dashboard**: An admin interface to manage matchups, view statistics, and oversee bot operations.
 
-### Note:
-Current Implementation currently only works with Tier 1 LoL Esports as it is manually updated
+### Note
+Currently, this implementation supports only Tier 1 LoL Esports and is manually updated.
 
 ## Project Structure
 
