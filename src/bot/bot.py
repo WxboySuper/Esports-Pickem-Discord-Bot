@@ -473,7 +473,9 @@ class MatchPicksView(ui.View):
     def create_pick_embed(self) -> discord.Embed:
         # Rename match to current_match
         current_match = self.matches[self.current_index]
-        match_id, team_a, team_b, match_date, league_name, league_region, match_name = current_match
+        # Unpack all 9 values from the match tuple
+        # skipcq: PYL-W0612
+        match_id, team_a, team_b, match_date, is_active, league_name, league_region, match_name = current_match
         
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
         
@@ -746,10 +748,11 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
     guild_id = interaction.guild_id
     bot_logger.info("Pick command used by %s (ID: %s) in guild: %s (ID: %s)", interaction.user.name, interaction.user.id, interaction.guild.name, guild_id)
     
-    active_matches = bot.db.get_upcoming_matches(hours=48)
+    upcoming_matches = bot.db.get_upcoming_matches(hours=48)
     matches_to_close = []
+    active_matches = []
     
-    if not active_matches:
+    if not upcoming_matches:
         embed = discord.Embed(
             title="No Active Matches",
             description="There are no matches available for picks in the next 48 hours.",
@@ -758,13 +761,18 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
-    for match in active_matches:
-        match_id, team_a, team_b, _, _, _, _ = match
+    for match in upcoming_matches:
+        match_id, team_a, team_b, _, _, _, _, _ = match
         if team_a == 'TBD' or team_b == 'TBD':
             matches_to_close.append(match_id)
         
     for match_id in matches_to_close:
         bot.db.close_match(match_id)
+
+    for match in upcoming_matches:
+        match_id, _, _, _, is_active, _, _, _ = match
+        if is_active == 1:
+            active_matches.append(match)
 
     view = MatchPicksView(guild_id, active_matches, bot.db)
     embed = view.create_pick_embed()

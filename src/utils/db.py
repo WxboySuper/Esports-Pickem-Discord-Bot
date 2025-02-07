@@ -635,6 +635,7 @@ class PickemDB:
                     m.team_a,
                     m.team_b,
                     m.match_date,
+                    m.is_active,
                     COALESCE(l.name, 'Unknown League') as league_name,
                     COALESCE(l.region, 'Global') as league_region,
                     m.match_name
