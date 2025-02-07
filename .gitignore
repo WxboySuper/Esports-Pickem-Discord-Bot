@@ -125,3 +125,6 @@ pickem.db
 
 # VS Code Stuff
 .vscode/
+
+# Deployment 
+deploy.bat
