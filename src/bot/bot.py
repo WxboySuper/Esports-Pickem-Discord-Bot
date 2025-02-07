@@ -45,7 +45,7 @@ class CustomFormatter(logging.Formatter):
         logging.DEBUG: grey + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
         logging.INFO: grey + "%(asctime)s - %(levelname)s - %(name)s" + reset,
         logging.WARNING: yellow + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
-        logging.ERROR: red + "%(asctime)s - %(levellevel)s - %(name)s - %(message)s" + reset,
+        logging.ERROR: red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
         logging.CRITICAL: bold_red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset
     }
     
