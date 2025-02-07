@@ -816,7 +816,7 @@ async def test(interaction: discord.Interaction, type: str = "announce"):
             f"❌ Invalid input: {str(val_error)}", 
             ephemeral=True
         )
-    except Exception as e:  # Skipcq: PYL-W0621
+    except Exception as e:  # skipcq: PYL-W0621
         await interaction.response.send_message(f"❌ Test failed: {str(e)}", ephemeral=True)
         logging.error(f"Test command error: {e}")
 
@@ -876,7 +876,7 @@ async def set_winner(interaction: discord.Interaction, match_id: int, winner: st
             f"❌ Invalid input: {str(val_error)}",
             ephemeral=True
         )
-    except Exception as e:  # Skipcq: PYL-W0621
+    except Exception as e:  # skipcq: PYL-W0621
         # Send error response if we haven't responded yet
         try:
             await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
@@ -1335,7 +1335,7 @@ async def update_match(
             f"❌ Invalid input: {str(val_error)}",
             ephemeral=True
         )
-    except Exception as e:  # Skipcq: PYL-W0621
+    except Exception as e:  # skipcq: PYL-W0621
         await interaction.response.send_message(
             f"❌ An error occurred: {str(e)}",
             ephemeral=True
@@ -1458,7 +1458,7 @@ async def admin_summary(interaction: discord.Interaction):
         
         await interaction.response.send_message(embed=initial_embed, view=view, ephemeral=True)
 
-    except Exception as e:  # Skipcq: PYL-W0621
+    except Exception as e:  # skipcq: PYL-W0621
         await interaction.response.send_message(
             f"❌ An error occurred: {str(e)}",
             ephemeral=True
@@ -1691,7 +1691,7 @@ async def on_guild_join(guild: discord.Guild):
         bot_logger.error(f"HTTP error setting up guild {guild.name}: {http_error}")
     except sqlite3.Error as db_error:
         bot_logger.error(f"Database error setting up guild {guild.name}: {db_error}")
-    except Exception as e:  # Skipcq: PYL-W0621
+    except Exception as e:  # skipcq: PYL-W0621
         bot_logger.error(f"Error setting up new guild {guild.name}: {e}")
 
 # Add the help command after your other commands
