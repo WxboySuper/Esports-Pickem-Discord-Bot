@@ -9,9 +9,9 @@ from discord.ext import commands
 from discord import app_commands, ui, ButtonStyle
 import asyncio
 import sqlite3
-from utils.db import PickemDB  # Import db from utils
-from utils import path_helper
-from utils.bot_instance import BotInstance
+from src.utils.db import PickemDB  # Import db from utils
+from src.utils import path_helper
+from src.utils.bot_instance import BotInstance
 from src.bot.config.config import Config
 
 # Get the src directory path
@@ -45,7 +45,7 @@ class CustomFormatter(logging.Formatter):
         logging.DEBUG: grey + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
         logging.INFO: grey + "%(asctime)s - %(levelname)s - %(name)s" + reset,
         logging.WARNING: yellow + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
-        logging.ERROR: red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
+        logging.ERROR: red + "%(asctime)s - %(levellevel)s - %(name)s - %(message)s" + reset,
         logging.CRITICAL: bold_red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset
     }
     
@@ -103,6 +103,19 @@ def parse_datetime(date_str: str, time_str: str) -> datetime:
     except ValueError as date_error:
         raise ValueError("Invalid date/time format. Use: YYYY-MM-DD for date and HH:MM AM/PM for time") from date_error
 
+# Add this helper function near other helpers at the top of the file
+def ensure_datetime(date_value) -> datetime:
+    """Convert string or datetime to datetime object"""
+    if isinstance(date_value, str):
+        try:
+            return datetime.strptime(date_value, '%Y-%m-%d %H:%M:%S')
+        except ValueError as val_error:
+            raise ValueError(f"Invalid datetime format: {date_value}") from val_error
+    elif isinstance(date_value, datetime):
+        return date_value
+    else:
+        raise ValueError(f"Cannot convert {type(date_value)} to datetime")
+
 config = Config.get_config()
 bot_logger.info("Running in %s mode", {'PRODUCTION' if config.is_production else 'TEST'})
 
@@ -110,16 +123,8 @@ bot_logger.info("Running in %s mode", {'PRODUCTION' if config.is_production else
 TOKEN = config.DISCORD_TOKEN
 APP_ID = config.APP_ID
 
-def validate_user_id(user_id: str) -> int:
-    """Validate and convert user ID to integer"""
-    if not user_id:
-        raise ValueError("Owner user ID not set in environment variables")
-    try:
-        return int(user_id)
-    except ValueError:
-        raise ValueError("Invalid owner user ID. Must be an integer")
-
-USER_ID = validate_user_id(os.getenv("OWNER_USER_DISCORD_ID"))
+# Replace validate_user_id and USER_ID assignment with direct config usage
+USER_ID = config.OWNER_ID
 
 class AnnouncementManager:
     def __init__(self, bot):
@@ -238,6 +243,7 @@ class AnnouncementManager:
                 except discord.Forbidden:
                     continue
 
+    # Replace the update_match_update function in AnnouncementManager class
     async def announce_match_update(self, match_id: int, old_details: dict, new_details: dict, league_name: str):
         """Send announcement for match updates"""
         embed = discord.Embed(
@@ -245,33 +251,37 @@ class AnnouncementManager:
             color=discord.Color.blue()
         )
 
-        # Format datetime objects for display
-        old_date = datetime.strptime(str(old_details['match_date']), '%Y-%m-%d %H:%M:%S') \
-            if isinstance(old_details['match_date'], str) else old_details['match_date']
-        new_date = datetime.strptime(str(new_details['match_date']), '%Y-%m-%d %H:%M:%S') \
-            if isinstance(new_details['match_date'], str) else new_details['match_date']
-        
-        changes = []
-        if old_details['team_a'] != new_details['team_a'] or old_details['team_b'] != new_details['team_b']:
-            changes.append(f"Teams: {old_details['team_a']} vs {old_details['team_b']} ➔ "
-                         f"{new_details['team_a']} vs {new_details['team_b']}")
-        if old_date != new_date:
-            changes.append(f"Date: {get_discord_timestamp(old_date, 'F')} ➔ "
-                         f"{get_discord_timestamp(new_date, 'F')}")
-        if old_details['match_name'] != new_details['match_name']:
-            changes.append(f"Type: {old_details['match_name']} ➔ {new_details['match_name']}")
+        try:
+            # Format datetime objects for display
+            old_date = ensure_datetime(old_details['match_date'])
+            new_date = ensure_datetime(new_details['match_date'])
+            
+            changes = []
+            if old_details['team_a'] != new_details['team_a'] or old_details['team_b'] != new_details['team_b']:
+                changes.append(f"Teams: {old_details['team_a']} vs {old_details['team_b']} ➔ "
+                            f"{new_details['team_a']} vs {new_details['team_b']}")
+            if old_date != new_date:
+                changes.append(f"Date: {get_discord_timestamp(old_date, 'F')} ➔ "
+                            f"{get_discord_timestamp(new_date, 'F')}")
+            if old_details['match_name'] != new_details['match_name']:
+                changes.append(f"Type: {old_details['match_name']} ➔ {new_details['match_name']}")
 
-        embed.description = (
-            f"**{league_name}** - Match #{match_id}\n\n"
-            "**Changes:**\n" + "\n".join(f"• {change}" for change in changes)
-        )
+            embed.description = (
+                f"**{league_name}** - Match #{match_id}\n\n"
+                "**Changes:**\n" + "\n".join(f"• {change}" for change in changes)
+            )
 
-        for guild in self.bot.guilds:
-            if channel := await self.get_announcement_channel(guild):
-                try:
-                    await channel.send(embed=embed)
-                except discord.Forbidden:
-                    continue
+            for guild in self.bot.guilds:
+                if channel := await self.get_announcement_channel(guild):
+                    try:
+                        await channel.send(embed=embed)
+                    except discord.Forbidden:
+                        continue
+                        
+        except ValueError as val_error:
+            bot_logger.error(f"Date parsing error in match update announcement: {val_error}")
+        except Exception as err:
+            bot_logger.error(f"Error in match update announcement: {err}")
 
     async def send_custom_announcement(self, title: str, message: str, color: discord.Color = discord.Color.blue()):
         """Send a custom announcement to all guilds"""
@@ -1249,37 +1259,33 @@ async def update_match(
             await interaction.response.send_message("❌ Match not found!", ephemeral=True)
             return
 
+        # Ensure old_details['match_date'] is a datetime object
+        old_details['match_date'] = ensure_datetime(old_details['match_date'])
+        
         # Prepare new details
         new_details = old_details.copy()
         if team_a.lower() != 'keep':
             new_details['team_a'] = team_a
         if team_b.lower() != 'keep':
             new_details['team_b'] = team_b
-        if match_date.lower() != 'keep' and match_time.lower() != 'keep':
-            try:
+            
+        # Handle date/time updates
+        try:
+            if match_date.lower() != 'keep' and match_time.lower() != 'keep':
                 new_details['match_date'] = parse_datetime(match_date, match_time)
-            except ValueError as e:
-                await interaction.response.send_message(
-                    f"❌ {str(e)}",
-                    ephemeral=True
-                )
-                return
-        elif match_date.lower() != 'keep':
-            # Keep old time, update date
-            old_time = old_details['match_date'].time()
-            new_date = datetime.strptime(match_date, "%Y-%m-%d").date()
-            new_details['match_date'] = datetime.combine(new_date, old_time)
-        elif match_time.lower() != 'keep':
-            # Keep old date, update time
-            try:
+            elif match_date.lower() != 'keep':
+                old_time = old_details['match_date'].time()
+                new_date = datetime.strptime(match_date, "%Y-%m-%d").date()
+                new_details['match_date'] = datetime.combine(new_date, old_time)
+            elif match_time.lower() != 'keep':
                 new_time = datetime.strptime(match_time, "%I:%M %p").time()
                 new_details['match_date'] = datetime.combine(old_details['match_date'].date(), new_time)
-            except ValueError:
-                await interaction.response.send_message(
-                    "❌ Invalid time format. Please use: HH:MM AM/PM",
-                    ephemeral=True
-                )
-                return
+        except ValueError as val_error:
+            await interaction.response.send_message(
+                f"❌ Invalid date/time format: {str(val_error)}",
+                ephemeral=True
+            )
+            return
                 
         if match_name.lower() != 'keep':
             new_details['match_name'] = match_name
@@ -1295,7 +1301,7 @@ async def update_match(
 
         if success:
             # Log the update with user info
-            logging.info(f"Match {match_id} updated by {interaction.user.name} (ID: {interaction.user.id})")
+            bot_logger.info(f"Match {match_id} updated by {interaction.user.name} (ID: {interaction.user.id})")
             
             # Send update announcement
             await bot.announcer.announce_match_update(
@@ -1335,12 +1341,12 @@ async def update_match(
             f"❌ Invalid input: {str(val_error)}",
             ephemeral=True
         )
-    except Exception as e:  # skipcq: PYL-W0621
+    except Exception as err:
         await interaction.response.send_message(
-            f"❌ An error occurred: {str(e)}",
+            f"❌ An error occurred: {str(err)}",
             ephemeral=True
         )
-        logging.error(f"Error updating match: {e}")
+        bot_logger.error(f"Error updating match: {err}")
 
 # Add this new class after other View classes
 class AdminSummaryView(ui.View):

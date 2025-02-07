@@ -35,7 +35,8 @@ class BaseEnvConfig(Config):
             f'{self.env_prefix}_APP_ID',
             f'{self.env_prefix}_PUBLIC_KEY',
             f'{self.env_prefix}_CLIENT_SECRET',
-            f'{self.env_prefix}_DB_NAME'
+            f'{self.env_prefix}_DB_NAME',
+            'OWNER_USER_DISCORD_ID'  # Add owner ID to required vars
         ]
         missing = [var for var in required_vars if not os.getenv(var)]
         if missing:
@@ -60,6 +61,15 @@ class BaseEnvConfig(Config):
     @property
     def DB_NAME(self) -> str:
         return os.getenv(f'{self.env_prefix}_DB_NAME', '')
+    
+    @property
+    def OWNER_ID(self) -> int:
+        """Get owner ID as integer"""
+        owner_id = os.getenv('OWNER_USER_DISCORD_ID', '')
+        try:
+            return int(owner_id)
+        except ValueError as val_error:
+            raise ValueError("OWNER_USER_DISCORD_ID must be a valid integer") from val_error
 
 class ProdConfig(BaseEnvConfig):
     def __init__(self) -> None:
