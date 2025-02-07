@@ -68,7 +68,7 @@ class Deployer:
             current_branch = result.stdout.strip()
             
             if current_branch != 'main':
-                raise RuntimeError(f"Not on main branch. Current branch: {current_branch}")
+                raise RuntimeError("Not on main branch. Current branch: %s" % current_branch)
             
             # Fetch latest changes
             logger.info("Fetching latest changes from remote...")
@@ -95,14 +95,14 @@ class Deployer:
             return True
             
         except subprocess.CalledProcessError as proc_error:
-            raise RuntimeError(f"Git command failed: {proc_error}")
+            raise RuntimeError("Git command failed: %s" % proc_error)
 
     def create_backup(self):
         """Create backup of current production code"""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_path = self.backup_dir / f'backup_{timestamp}'
         
-        logger.info(f"Creating backup at {backup_path}")
+        logger.info("Creating backup at %s", backup_path)
         shutil.copytree(self.prod_dir, backup_path, ignore=shutil.ignore_patterns(
             'backups', '__pycache__', '*.pyc', '*.pyo', '.git', '.env', 'logs'
         ))
@@ -153,7 +153,7 @@ class Deployer:
         try:
             startup_script = self.prod_dir / 'prod_startup.py'
             if not startup_script.exists():
-                raise FileNotFoundError(f"Startup script not found at: {startup_script}")
+                raise FileNotFoundError("Startup script not found at: %s" % startup_script)
             
             # Resolve to absolute paths
             startup_script = startup_script.resolve()
@@ -208,7 +208,7 @@ class Deployer:
 
             # Create backup
             backup_path = self.create_backup()
-            logger.info(f"Backup created at: {backup_path}")
+            logger.info("Backup created at: %s", backup_path)
 
             # Copy files
             self.copy_files()
@@ -228,7 +228,7 @@ class Deployer:
             logger.warning("Proceeding with deployment despite git check failure")
             
         except Exception as err:
-            logger.error(f"Deployment failed: {err}")
+            logger.error("Deployment failed: %s", err)
             should_restore = input("Would you like to restore from backup? (y/n): ").lower()
             if should_restore == 'y':
                 self.restore_from_backup(backup_path)
@@ -236,7 +236,7 @@ class Deployer:
 
     def restore_from_backup(self, backup_path):
         """Restore from a backup in case of deployment failure"""
-        logger.info(f"Restoring from backup: {backup_path}")
+        logger.info("Restoring from backup: %s", backup_path)
         try:
             # Remove current production files (except .env and logs)
             for item in self.prod_dir.iterdir():
@@ -257,7 +257,7 @@ class Deployer:
                         
             logger.info("Restore completed successfully")
         except Exception as err:
-            logger.error(f"Restore failed: {err}")
+            logger.error("Restore failed: %s", err)
             raise
 
 if __name__ == "__main__":
