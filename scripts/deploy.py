@@ -39,7 +39,7 @@ class Deployer:
         self.changelog_path = self.prod_dir / 'changelog.md'
 
     @staticmethod
-    def get_python_executable(self) -> Path:
+    def get_python_executable() -> Path:
         """Get full path to Python executable"""
         # First try sys.executable for current Python
         if sys.executable and Path(sys.executable).exists():
