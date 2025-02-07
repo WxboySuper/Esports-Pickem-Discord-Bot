@@ -1688,7 +1688,7 @@ async def on_command_error(ctx, error):
         if 'audioop' in str(error):
             await ctx.send("Voice functionality is currently unavailable. Please ensure voice dependencies are properly installed.")
         else:
-            await ctx.send("An error occurred: %s", str(error))
+            await ctx.send(f"An error occurred: {str(error)}")
     logging.error("Command error: %s", error, exc_info=True)
 
 @bot.event
