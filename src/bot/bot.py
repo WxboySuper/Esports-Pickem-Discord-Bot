@@ -1691,7 +1691,7 @@ async def on_command_error(ctx, error):
         if 'audioop' in str(error):
             await ctx.send("Voice functionality is currently unavailable. Please ensure voice dependencies are properly installed.")
         else:
-            await ctx.send("An error occurred: %s", str(error))
+            await ctx.send(f"An error occurred: {str(error)}")
     logging.error("Command error: %s", error, exc_info=True)
 
 @bot.event
@@ -1784,5 +1784,5 @@ if __name__ == '__main__':
         bot_logger.critical("Connection closed: %s", bot_conn_error)
     except ConnectionError as bot_net_error:
         bot_logger.critical("Network error: %s", bot_net_error)
-    except Exception as bot_error:
+    except discord.DiscordException as bot_error:
         bot_logger.critical("Unexpected error: %s", bot_error, exc_info=True)
