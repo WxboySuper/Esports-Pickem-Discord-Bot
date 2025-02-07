@@ -53,7 +53,8 @@ class Deployer:
             
         return None
 
-    def get_git_executable(self) -> Path:
+    @staticmethod
+    def get_git_executable() -> Path:
         """Get full path to Git executable"""
         git_cmd = 'git.exe' if os.name == 'nt' else 'git'
         git_path = shutil.which(git_cmd)
