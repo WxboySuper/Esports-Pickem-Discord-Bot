@@ -43,9 +43,9 @@ class CustomFormatter(logging.Formatter):
     
     FORMATS = {
         logging.DEBUG: grey + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
-        logging.INFO: grey + "%(asctime)s - %(levellevel)s - %(name)s" + reset,
+        logging.INFO: grey + "%(asctime)s - %(levelname)s - %(name)s" + reset,
         logging.WARNING: yellow + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
-        logging.ERROR: red + "%(asctime)s - %(levellevel)s - %(name)s - %(message)s" + reset,
+        logging.ERROR: red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
         logging.CRITICAL: bold_red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset
     }
     
@@ -1231,6 +1231,70 @@ async def summary(interaction: discord.Interaction):
     await interaction.response.send_message(embed=initial_embed, view=view)
 
 # Update update_match command
+async def validate_update_match_request(interaction: discord.Interaction, match_id: int) -> tuple[dict, dict]:
+    """Validate update request and get match details"""
+    if interaction.user.id != USER_ID:
+        await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
+        return None, None
+
+    # Get current match details
+    old_details = bot.db.get_match_details(match_id)
+    if not old_details:
+        await interaction.response.send_message("❌ Match not found!", ephemeral=True)
+        return None, None
+
+    # Ensure old_details['match_date'] is a datetime object
+    old_details['match_date'] = ensure_datetime(old_details['match_date'])
+    return old_details, old_details.copy()
+
+def update_match_teams(new_details: dict, team_a: str, team_b: str) -> None:
+    """Update team names if provided"""
+    if team_a.lower() != 'keep':
+        new_details['team_a'] = team_a
+    if team_b.lower() != 'keep':
+        new_details['team_b'] = team_b
+
+def update_match_datetime(new_details: dict, old_details: dict, match_date: str, match_time: str) -> bool:
+    """Update match date/time if provided"""
+    try:
+        if match_date.lower() != 'keep' and match_time.lower() != 'keep':
+            new_details['match_date'] = parse_datetime(match_date, match_time)
+        elif match_date.lower() != 'keep':
+            old_time = old_details['match_date'].time()
+            new_date = datetime.strptime(match_date, "%Y-%m-%d").date()
+            new_details['match_date'] = datetime.combine(new_date, old_time)
+        elif match_time.lower() != 'keep':
+            new_time = datetime.strptime(match_time, "%I:%M %p").time()
+            new_details['match_date'] = datetime.combine(old_details['match_date'].date(), new_time)
+        return True
+    except ValueError:
+        return False
+
+async def handle_update_result(interaction: discord.Interaction, success: bool, match_id: int, 
+                             old_details: dict, new_details: dict) -> None:
+    """Handle the result of the update operation"""
+    if success:
+        bot_logger.info("Match %d updated by %s (ID: %s)", 
+                       match_id, interaction.user.name, interaction.user.id)
+        
+        # Send update announcement
+        await bot.announcer.announce_match_update(
+            match_id,
+            old_details,
+            new_details,
+            old_details['league_name']
+        )
+
+        # Send confirmation to command user
+        embed = discord.Embed(
+            title="✅ Match Updated",
+            description=f"Match #{match_id} has been updated successfully",
+            color=discord.Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
+    else:
+        await interaction.response.send_message("❌ Failed to update match", ephemeral=True)
+
 @bot.tree.command(name="update_match", description="Update match details [Owner Only]")
 @app_commands.describe(
     match_id="ID of the match to update",
@@ -1250,50 +1314,31 @@ async def update_match(
     match_name: str
 ):
     """Update match details and announce changes"""
-    bot_logger.info("Update match command initiated by %s (ID: %s) for match %d", interaction.user.name, interaction.user.id, match_id)
-    if interaction.user.id != USER_ID:
-        await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
-        return
+    bot_logger.info("Update match command initiated by %s (ID: %s) for match %d", 
+                   interaction.user.name, interaction.user.id, match_id)
 
     try:
-        # Get current match details
-        old_details = bot.db.get_match_details(match_id)
+        # Validate request and get match details
+        old_details, new_details = await validate_update_match_request(interaction, match_id)
         if not old_details:
-            await interaction.response.send_message("❌ Match not found!", ephemeral=True)
             return
 
-        # Ensure old_details['match_date'] is a datetime object
-        old_details['match_date'] = ensure_datetime(old_details['match_date'])
-        
-        # Prepare new details
-        new_details = old_details.copy()
-        if team_a.lower() != 'keep':
-            new_details['team_a'] = team_a
-        if team_b.lower() != 'keep':
-            new_details['team_b'] = team_b
-            
-        # Handle date/time updates
-        try:
-            if match_date.lower() != 'keep' and match_time.lower() != 'keep':
-                new_details['match_date'] = parse_datetime(match_date, match_time)
-            elif match_date.lower() != 'keep':
-                old_time = old_details['match_date'].time()
-                new_date = datetime.strptime(match_date, "%Y-%m-%d").date()
-                new_details['match_date'] = datetime.combine(new_date, old_time)
-            elif match_time.lower() != 'keep':
-                new_time = datetime.strptime(match_time, "%I:%M %p").time()
-                new_details['match_date'] = datetime.combine(old_details['match_date'].date(), new_time)
-        except ValueError as val_error:
+        # Update team names
+        update_match_teams(new_details, team_a, team_b)
+
+        # Update date/time
+        if not update_match_datetime(new_details, old_details, match_date, match_time):
             await interaction.response.send_message(
-                f"❌ Invalid date/time format: {str(val_error)}",
+                "❌ Invalid date/time format",
                 ephemeral=True
             )
             return
-                
+
+        # Update match name
         if match_name.lower() != 'keep':
             new_details['match_name'] = match_name
 
-        # Update the match
+        # Update the match in database
         success = bot.db.update_match(
             match_id,
             new_details['team_a'],
@@ -1302,27 +1347,7 @@ async def update_match(
             new_details['match_name']
         )
 
-        if success:
-            # Log the update with user info
-            bot_logger.info("Match %d updated by %s (ID: %s)", match_id, interaction.user.name, interaction.user.id)
-            
-            # Send update announcement
-            await bot.announcer.announce_match_update(
-                match_id,
-                old_details,
-                new_details,
-                old_details['league_name']
-            )
-
-            # Send confirmation to command user
-            embed = discord.Embed(
-                title="✅ Match Updated",
-                description=f"Match #{match_id} has been updated successfully",
-                color=discord.Color.green()
-            )
-            await interaction.response.send_message(embed=embed)
-        else:
-            await interaction.response.send_message("❌ Failed to update match", ephemeral=True)
+        await handle_update_result(interaction, success, match_id, old_details, new_details)
 
     except sqlite3.Error as db_sqlite_error:
         await interaction.response.send_message(
@@ -1337,11 +1362,6 @@ async def update_match(
     except discord.errors.HTTPException as cmd_http_error:
         await interaction.response.send_message(
             f"❌ HTTP error: {str(cmd_http_error)}",
-            ephemeral=True
-        )
-    except ValueError as input_error:
-        await interaction.response.send_message(
-            f"❌ Invalid input: {str(input_error)}",
             ephemeral=True
         )
     except Exception as unexpected_cmd_error:
