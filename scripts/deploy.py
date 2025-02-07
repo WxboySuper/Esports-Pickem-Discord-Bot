@@ -13,7 +13,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger(__name__)
+bot_logger = logging.getLogger('bot')  # Changed from logger to bot_logger
 
 class Deployer:
     def __init__(self):
@@ -71,7 +71,7 @@ class Deployer:
                 raise RuntimeError("Not on main branch. Current branch: %s" % current_branch)
             
             # Fetch latest changes
-            logger.info("Fetching latest changes from remote...")
+            bot_logger.info("Fetching latest changes from remote...")
             subprocess.run(['git', 'fetch', 'origin', 'main'], 
                          check=True, cwd=str(self.test_dir))
             
@@ -91,7 +91,7 @@ class Deployer:
             if "nothing to commit" not in result.stdout:
                 raise RuntimeError("You have uncommitted changes. Please commit or stash them first.")
                 
-            logger.info("Git branch verification successful")
+            bot_logger.info("Git branch verification successful")
             return True
             
         except subprocess.CalledProcessError as proc_error:
@@ -102,7 +102,7 @@ class Deployer:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_path = self.backup_dir / f'backup_{timestamp}'
         
-        logger.info("Creating backup at %s", backup_path)
+        bot_logger.info("Creating backup at %s", backup_path)
         shutil.copytree(self.prod_dir, backup_path, ignore=shutil.ignore_patterns(
             'backups', '__pycache__', '*.pyc', '*.pyo', '.git', '.env', 'logs'
         ))
@@ -110,7 +110,7 @@ class Deployer:
 
     def copy_files(self):
         """Copy files from test to production"""
-        logger.info("Copying files to production...")
+        bot_logger.info("Copying files to production...")
         
         # Files/directories to exclude from copy
         exclude = [
@@ -149,7 +149,7 @@ class Deployer:
 
     def start_prod_bot(self):
         """Start the production bot"""
-        logger.info("Starting production bot...")
+        bot_logger.info("Starting production bot...")
         try:
             startup_script = self.prod_dir / 'prod_startup.py'
             if not startup_script.exists():
@@ -159,9 +159,9 @@ class Deployer:
             startup_script = startup_script.resolve()
             working_dir = self.prod_dir.resolve()
             
-            logger.info("Using Python: %s", self.python_exe)
-            logger.info("Starting script: %s", startup_script)
-            logger.info("Working directory: %s", working_dir)
+            bot_logger.info("Using Python: %s", self.python_exe)
+            bot_logger.info("Starting script: %s", startup_script)
+            bot_logger.info("Working directory: %s", working_dir)
 
             # Validate paths
             if not all(p.exists() for p in (self.python_exe, startup_script, working_dir)):
@@ -180,19 +180,19 @@ class Deployer:
                     cwd=str(working_dir),
                     start_new_session=True
                 )
-            logger.info("Bot startup initiated")
+            bot_logger.info("Bot startup initiated")
             
             # Wait a moment to check if the process stays running
             time.sleep(5)
-            logger.info("Bot appears to be running successfully")
+            bot_logger.info("Bot appears to be running successfully")
         except FileNotFoundError as path_error:
-            logger.error("Failed to find required file: %s", path_error)
+            bot_logger.error("Failed to find required file: %s", path_error)
             raise
         except subprocess.SubprocessError as proc_error:
-            logger.error("Failed to start bot process: %s", proc_error)
+            bot_logger.error("Failed to start bot process: %s", proc_error)
             raise
         except Exception as err:
-            logger.error("Failed to start production bot: %s", err)
+            bot_logger.error("Failed to start production bot: %s", err)
             raise
 
     def deploy(self):
@@ -202,33 +202,33 @@ class Deployer:
             self.ensure_main_branch()
             
             # Get confirmation before proceeding
-            logger.info("Please ensure you have used the /shutdown command in Discord before continuing.")
-            logger.info("The bot will be automatically restarted after deployment.")
+            bot_logger.info("Please ensure you have used the /shutdown command in Discord before continuing.")
+            bot_logger.info("The bot will be automatically restarted after deployment.")
             input("Press Enter when the bot has been shut down...")
 
             # Create backup
             backup_path = self.create_backup()
-            logger.info("Backup created at: %s", backup_path)
+            bot_logger.info("Backup created at: %s", backup_path)
 
             # Copy files
             self.copy_files()
-            logger.info("Files copied successfully")
+            bot_logger.info("Files copied successfully")
 
             # Start the bot
-            logger.info("Starting bot...")
+            bot_logger.info("Starting bot...")
             self.start_prod_bot()
             
-            logger.info("Deployment completed successfully")
+            bot_logger.info("Deployment completed successfully")
 
         except RuntimeError as git_error:
-            logger.error("Git check failed: %s", git_error)
+            bot_logger.error("Git check failed: %s", git_error)
             should_continue = input("Git check failed. Continue anyway? (y/n): ").lower()
             if should_continue != 'y':
                 raise
-            logger.warning("Proceeding with deployment despite git check failure")
+            bot_logger.warning("Proceeding with deployment despite git check failure")
             
         except Exception as err:
-            logger.error("Deployment failed: %s", err)
+            bot_logger.error("Deployment failed: %s", err)
             should_restore = input("Would you like to restore from backup? (y/n): ").lower()
             if should_restore == 'y':
                 self.restore_from_backup(backup_path)
@@ -236,7 +236,7 @@ class Deployer:
 
     def restore_from_backup(self, backup_path):
         """Restore from a backup in case of deployment failure"""
-        logger.info("Restoring from backup: %s", backup_path)
+        bot_logger.info("Restoring from backup: %s", backup_path)
         try:
             # Remove current production files (except .env and logs)
             for item in self.prod_dir.iterdir():
@@ -255,9 +255,9 @@ class Deployer:
                     else:
                         shutil.copy2(item, dest)
                         
-            logger.info("Restore completed successfully")
+            bot_logger.info("Restore completed successfully")
         except Exception as err:
-            logger.error("Restore failed: %s", err)
+            bot_logger.error("Restore failed: %s", err)
             raise
 
 if __name__ == "__main__":

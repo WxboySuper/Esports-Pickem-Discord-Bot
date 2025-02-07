@@ -8,7 +8,7 @@ src_path = Path(__file__).parent.parent / 'src'
 sys.path.append(str(src_path))
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+bot_logger = logging.getLogger('bot')  # Changed from logger to bot_logger
 
 def run_tests():
     """Run all tests and return True if all pass"""
@@ -25,12 +25,12 @@ def run_tests():
     return result.wasSuccessful()
 
 if __name__ == "__main__":
-    logger.info("Running pre-deployment tests...")
+    bot_logger.info("Running pre-deployment tests...")
     success = run_tests()
     
     if success:
-        logger.info("All tests passed!")
+        bot_logger.info("All tests passed!")
         sys.exit(0)
     else:
-        logger.error("Tests failed!")
+        bot_logger.error("Tests failed!")
         sys.exit(1)
