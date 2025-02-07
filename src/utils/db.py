@@ -318,7 +318,6 @@ class PickemDB:
     def update_match_result(self, match_id: int, winner: str) -> bool:
         """Update match result and calculate correct picks - globally"""
         db_logger.info(f"Updating match {match_id}: Winner set to {winner}")
-        print(f"\nUpdating match result: {match_id} winner: {winner}")
         try:
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
@@ -337,7 +336,6 @@ class PickemDB:
                 return True
                 
         except sqlite3.Error as e:
-            print(f"Database error: {str(e)}")
             db_logger.error(f"Failed to update match result: {e}", exc_info=True)
             return False
 

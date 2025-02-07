@@ -764,7 +764,6 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
             matches_to_close.append(match_id)
         
     for match_id in matches_to_close:
-        print(matches_to_close)
         bot.db.close_match(match_id)
 
     view = MatchPicksView(guild_id, active_matches, bot.db)
@@ -1263,23 +1262,16 @@ async def handle_update_result(interaction: discord.Interaction, success: bool, 
 
 def check_update_match_active_status(match_id: int):
     """Check team names and if a match is active and update if necessary"""
-    print("Updating match status")
     match_data = bot.db.get_match_details(match_id)
-    print(match_data)
     
     match_id = match_data['match_id']
     team_a = match_data['team_a']
     team_b = match_data['team_b']
     is_active = match_data['is_active']
-    
-    print(team_a)
-    print(team_b)
-    
+        
     if is_active == 0 and (team_a != "TBD" or team_b != "TBD"):
-        print("Updating match status to open")
         bot.db.open_match(match_id)
     elif is_active == 1 and (team_a == "TBD" or team_b == "TBD"):
-        print("Updating match status to closed")
         bot.db.close_match(match_id)
     else:
         pass
