@@ -43,7 +43,7 @@ class CustomFormatter(logging.Formatter):
     
     FORMATS = {
         logging.DEBUG: grey + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
-        logging.INFO: grey + "%(asctime)s - %(levelname)s - %(name)s" + reset,
+        logging.INFO: grey + "%(asctime)s - %(levellevel)s - %(name)s" + reset,
         logging.WARNING: yellow + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
         logging.ERROR: red + "%(asctime)s - %(levellevel)s - %(name)s - %(message)s" + reset,
         logging.CRITICAL: bold_red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset
@@ -169,12 +169,12 @@ class AnnouncementManager:
                 if result:
                     total_picks = result[0]
                     correct_picks = result[1] or 0
-        except sqlite3.Error as db_error:
-            bot_logger.error(f"Database error in match result announcement: {db_error}")
-        except discord.errors.Forbidden as perm_error:
-            bot_logger.error(f"Permission error in match result announcement: {perm_error}")
-        except discord.errors.HTTPException as http_error:
-            bot_logger.error(f"HTTP error in match result announcement: {http_error}")
+        except sqlite3.Error as sqlite_error:
+            bot_logger.error(f"Database error in match result announcement: {sqlite_error}")
+        except discord.errors.Forbidden as permission_error:
+            bot_logger.error(f"Permission error in match result announcement: {permission_error}")
+        except discord.errors.HTTPException as discord_http_error:
+            bot_logger.error(f"HTTP error in match result announcement: {discord_http_error}")
 
         # Create embed with voting statistics
         embed = discord.Embed(
@@ -285,10 +285,10 @@ class AnnouncementManager:
                     except discord.Forbidden:
                         continue
                         
-        except ValueError as val_error:
-            bot_logger.error(f"Date parsing error in match update announcement: {val_error}")
-        except Exception as err:
-            bot_logger.error(f"Error in match update announcement: {err}")
+        except ValueError as datetime_error:
+            bot_logger.error(f"Date parsing error in match update announcement: {datetime_error}")
+        except Exception as announce_error:
+            bot_logger.error(f"Error in match update announcement: {announce_error}")
 
     async def send_custom_announcement(self, title: str, message: str, color: discord.Color = discord.Color.blue()):
         """Send a custom announcement to all guilds"""
@@ -367,15 +367,15 @@ class CustomBot(commands.Bot):
                 
                 # Update every 5 minutes
                 await asyncio.sleep(300)
-        except discord.errors.ConnectionClosed as conn_error:
-            bot_logger.error(f"Connection error in status update task: {conn_error}")
-        except discord.errors.HTTPException as http_error:
-            bot_logger.error(f"HTTP error in status update task: {http_error}")
+        except discord.errors.ConnectionClosed as discord_conn_error:
+            bot_logger.error(f"Connection error in status update task: {discord_conn_error}")
+        except discord.errors.HTTPException as status_http_error:
+            bot_logger.error(f"HTTP error in status update task: {status_http_error}")
         except asyncio.CancelledError:
             bot_logger.info("Status update task cancelled")
             raise
-        except Exception as err:  # Keep generic handler as fallback
-            bot_logger.error(f"Unexpected error in status update task: {err}")
+        except Exception as update_error:
+            bot_logger.error(f"Unexpected error in status update task: {update_error}")
 
 # Replace bot initialization
 bot = CustomBot()
@@ -822,12 +822,12 @@ async def test(interaction: discord.Interaction, type: str = "announce"):
         else:
             await interaction.response.send_message("❌ Invalid test type. Use 'announce' or 'result'", ephemeral=True)
             
-    except discord.errors.Forbidden as perm_error:
-        bot_logger.error(f"Insufficient permissions to send test announcement: {perm_error}")
-        await interaction.response.send_message(f"❌ Test failed: {str(perm_error)}", ephemeral=True)
-    except discord.errors.HTTPException as http_error:
-        bot_logger.error(f"HTTP error sending test announcement: {http_error}")
-        await interaction.response.send_message(f"❌ Test failed: {str(http_error)}", ephemeral=True)
+    except discord.errors.Forbidden as permission_error:
+        bot_logger.error(f"Insufficient permissions to send test announcement: {permission_error}")
+        await interaction.response.send_message(f"❌ Test failed: {str(permission_error)}", ephemeral=True)
+    except discord.errors.HTTPException as discord_http_error:
+        bot_logger.error(f"HTTP error sending test announcement: {discord_http_error}")
+        await interaction.response.send_message(f"❌ Test failed: {str(discord_http_error)}", ephemeral=True)
     except ValueError as val_error:
         await interaction.response.send_message(
             f"❌ Invalid input: {str(val_error)}", 
@@ -873,36 +873,32 @@ async def set_winner(interaction: discord.Interaction, match_id: int, winner: st
         else:
             await interaction.response.send_message("❌ Failed to update match result.", ephemeral=True)
             
-    except sqlite3.Error as db_error:
+    except sqlite3.Error as db_sqlite_error:
         await interaction.response.send_message(
-            f"❌ Database error: {str(db_error)}",
+            f"❌ Database error: {str(db_sqlite_error)}",
             ephemeral=True
         )
-    except discord.errors.Forbidden as perm_error:
+    except discord.errors.Forbidden as discord_permission_error:
         await interaction.response.send_message(
-            f"❌ Permission error: {str(perm_error)}",
+            f"❌ Permission error: {str(discord_permission_error)}",
             ephemeral=True
         )
-    except discord.errors.HTTPException as http_error:
+    except discord.errors.HTTPException as cmd_http_error:
         await interaction.response.send_message(
-            f"❌ HTTP error: {str(http_error)}",
+            f"❌ HTTP error: {str(cmd_http_error)}",
             ephemeral=True
         )
-    except ValueError as val_error:
+    except ValueError as input_error:
         await interaction.response.send_message(
-            f"❌ Invalid input: {str(val_error)}",
+            f"❌ Invalid input: {str(input_error)}",
             ephemeral=True
         )
-    except Exception as e:  # skipcq: PYL-W0621
-        # Send error response if we haven't responded yet
-        try:
-            await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
-        except discord.errors.InteractionResponded:
-            # If we've already responded, edit the response
-            await interaction.edit_original_response(
-                content=f"❌ An error occurred: {str(e)}"
-            )
-        logging.error(f"Error setting match winner: {e}", exc_info=True)
+    except Exception as unexpected_cmd_error:
+        await interaction.response.send_message(
+            f"❌ An error occurred: {str(unexpected_cmd_error)}",
+            ephemeral=True
+        )
+        logging.error(f"Error setting match winner: {unexpected_cmd_error}", exc_info=True)
 
 # Update create_match command
 @bot.tree.command(name="create_match", description="Create a new match [Owner Only]")
@@ -1328,32 +1324,32 @@ async def update_match(
         else:
             await interaction.response.send_message("❌ Failed to update match", ephemeral=True)
 
-    except sqlite3.Error as db_error:
+    except sqlite3.Error as db_sqlite_error:
         await interaction.response.send_message(
-            f"❌ Database error: {str(db_error)}",
+            f"❌ Database error: {str(db_sqlite_error)}",
             ephemeral=True
         )
-    except discord.errors.Forbidden as perm_error:
+    except discord.errors.Forbidden as discord_permission_error:
         await interaction.response.send_message(
-            f"❌ Permission error: {str(perm_error)}",
+            f"❌ Permission error: {str(discord_permission_error)}",
             ephemeral=True
         )
-    except discord.errors.HTTPException as http_error:
+    except discord.errors.HTTPException as cmd_http_error:
         await interaction.response.send_message(
-            f"❌ HTTP error: {str(http_error)}",
+            f"❌ HTTP error: {str(cmd_http_error)}",
             ephemeral=True
         )
-    except ValueError as val_error:
+    except ValueError as input_error:
         await interaction.response.send_message(
-            f"❌ Invalid input: {str(val_error)}",
+            f"❌ Invalid input: {str(input_error)}",
             ephemeral=True
         )
-    except Exception as err:
+    except Exception as unexpected_cmd_error:
         await interaction.response.send_message(
-            f"❌ An error occurred: {str(err)}",
+            f"❌ An error occurred: {str(unexpected_cmd_error)}",
             ephemeral=True
         )
-        bot_logger.error(f"Error updating match: {err}")
+        bot_logger.error(f"Error updating match: {unexpected_cmd_error}")
 
 # Add this new class after other View classes
 class AdminSummaryView(ui.View):
@@ -1578,18 +1574,18 @@ async def announce(
                 color=discord.Color.green()
             )
             await interaction.edit_original_response(content="", embed=result, view=None)
-        except discord.errors.Forbidden as perm_error:
-            bot_logger.error(f"Insufficient permissions to send announcement: {perm_error}")
+        except discord.errors.Forbidden as permission_error:
+            bot_logger.error(f"Insufficient permissions to send announcement: {permission_error}")
             await interaction.edit_original_response(content="", embed=discord.Embed(
                 title="❌ Announcement Failed",
-                description=f"Insufficient permissions: {perm_error}",
+                description=f"Insufficient permissions: {permission_error}",
                 color=discord.Color.red()
             ), view=None)
-        except discord.errors.HTTPException as http_error:
-            bot_logger.error(f"HTTP error sending announcement: {http_error}")
+        except discord.errors.HTTPException as discord_http_error:
+            bot_logger.error(f"HTTP error sending announcement: {discord_http_error}")
             await interaction.edit_original_response(content="", embed=discord.Embed(
                 title="❌ Announcement Failed",
-                description=f"HTTP error: {http_error}",
+                description=f"HTTP error: {discord_http_error}",
                 color=discord.Color.red()
             ), view=None)
     else:
@@ -1630,10 +1626,10 @@ async def on_ready():
         bot_logger.info("Syncing commands globally...")
         synced = await bot.tree.sync()
         bot_logger.info(f"Synced {len(synced)} commands")
-    except discord.errors.HTTPException as http_error:
-        bot_logger.error(f"HTTP error syncing commands: {http_error}")
-    except discord.errors.ClientException as client_error:
-        bot_logger.error(f"Client error during startup: {client_error}")
+    except discord.errors.HTTPException as startup_http_error:
+        bot_logger.error(f"HTTP error syncing commands: {startup_http_error}")
+    except discord.errors.ClientException as startup_client_error:
+        bot_logger.error(f"Client error during startup: {startup_client_error}")
 
     try:
         # Start the status update task
@@ -1649,14 +1645,14 @@ async def on_ready():
             bot_logger.info("Online announcement sent successfully")
         else:
             bot_logger.info("Online announcement skipped")
-    except discord.errors.HTTPException as http_error:
-        bot_logger.error(f"HTTP error during startup: {http_error}")
-    except discord.errors.ClientException as client_error:
-        bot_logger.error(f"Client error during startup: {client_error}")
-    except asyncio.CancelledError as cancel_error:
-        bot_logger.info(f"Startup task cancelled: {cancel_error}")
-    except ConnectionError as conn_error:
-        bot_logger.error(f"Connection error during startup: {conn_error}")
+    except discord.errors.HTTPException as startup_http_error:
+        bot_logger.error(f"HTTP error during startup: {startup_http_error}")
+    except discord.errors.ClientException as startup_client_error:
+        bot_logger.error(f"Client error during startup: {startup_client_error}")
+    except asyncio.CancelledError as startup_cancel_error:
+        bot_logger.info(f"Startup task cancelled: {startup_cancel_error}")
+    except ConnectionError as startup_conn_error:
+        bot_logger.error(f"Connection error during startup: {startup_conn_error}")
     
     bot_logger.info("=== Bot Ready Complete ===")
 
@@ -1698,14 +1694,14 @@ async def on_guild_join(guild: discord.Guild):
                 color=discord.Color.green()
             )
             await channel.send(embed=welcome_embed)
-    except discord.errors.Forbidden as perm_error:
-        bot_logger.error(f"Permission error setting up guild {guild.name}: {perm_error}")
-    except discord.errors.HTTPException as http_error:
-        bot_logger.error(f"HTTP error setting up guild {guild.name}: {http_error}")
-    except sqlite3.Error as db_error:
-        bot_logger.error(f"Database error setting up guild {guild.name}: {db_error}")
-    except Exception as e:  # skipcq: PYL-W0621
-        bot_logger.error(f"Error setting up new guild {guild.name}: {e}")
+    except discord.errors.Forbidden as guild_permission_error:
+        bot_logger.error(f"Permission error setting up guild {guild.name}: {guild_permission_error}")
+    except discord.errors.HTTPException as guild_http_error:
+        bot_logger.error(f"HTTP error setting up guild {guild.name}: {guild_http_error}")
+    except sqlite3.Error as guild_db_error:
+        bot_logger.error(f"Database error setting up guild {guild.name}: {guild_db_error}")
+    except Exception as guild_error:
+        bot_logger.error(f"Error setting up new guild {guild.name}: {guild_error}")
 
 # Add the help command after your other commands
 @bot.tree.command(name="help", description="Show available commands and bot information")
@@ -1758,11 +1754,11 @@ if __name__ == '__main__':
     try:
         bot_logger.info("Starting bot...")
         bot.run(TOKEN)
-    except discord.errors.LoginFailure as login_error:
-        bot_logger.critical(f'Login failed: {login_error}')
-    except discord.errors.ConnectionClosed as conn_error:
-        bot_logger.critical(f'Connection closed: {conn_error}')
-    except ConnectionError as net_error:
-        bot_logger.critical(f'Network error: {net_error}')
-    except Exception as unexpected_error:  # Keep as last resort
-        bot_logger.critical(f'Unexpected error: {unexpected_error}', exc_info=True)
+    except discord.errors.LoginFailure as bot_login_error:
+        bot_logger.critical(f'Login failed: {bot_login_error}')
+    except discord.errors.ConnectionClosed as bot_conn_error:
+        bot_logger.critical(f'Connection closed: {bot_conn_error}')
+    except ConnectionError as bot_net_error:
+        bot_logger.critical(f'Network error: {bot_net_error}')
+    except Exception as bot_error:
+        bot_logger.critical(f'Unexpected error: {bot_error}', exc_info=True)
