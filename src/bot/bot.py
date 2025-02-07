@@ -24,10 +24,6 @@ path_helper.setup_path()
 # Load environment variables
 load_dotenv()
 
-# Enhanced logging setup
-import os
-from datetime import datetime
-
 # Create logs directory if it doesn't exist
 logs_dir = Path("logs")
 logs_dir.mkdir(exist_ok=True)
@@ -161,7 +157,7 @@ class AnnouncementManager:
                 if result:
                     total_picks = result[0]
                     correct_picks = result[1] or 0
-        except Exception as e:
+        except Exception as e:  # Skipcq: PYL-W0621
             bot_logger.error(f"Failed to get voting statistics: {e}")
 
         # Create embed with voting statistics
@@ -350,7 +346,7 @@ class CustomBot(commands.Bot):
                 
                 # Update every 5 minutes
                 await asyncio.sleep(300)
-        except Exception as e:
+        except Exception as e:  # Skipcq: PYL-W0621
             bot_logger.error(f"Error in status update task: {e}")
 
 # Replace bot initialization
@@ -798,7 +794,7 @@ async def test(interaction: discord.Interaction, type: str = "announce"):
         else:
             await interaction.response.send_message("❌ Invalid test type. Use 'announce' or 'result'", ephemeral=True)
             
-    except Exception as e:
+    except Exception as e:  # Skipcq: PYL-W0621
         await interaction.response.send_message(f"❌ Test failed: {str(e)}", ephemeral=True)
         logging.error(f"Test command error: {e}")
 
@@ -838,7 +834,7 @@ async def set_winner(interaction: discord.Interaction, match_id: int, winner: st
         else:
             await interaction.response.send_message("❌ Failed to update match result.", ephemeral=True)
             
-    except Exception as e:
+    except Exception as e:  # Skipcq: PYL-W0621
         # Send error response if we haven't responded yet
         try:
             await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
@@ -921,7 +917,7 @@ async def create_match(
             bot_logger.error("Failed to create match: Database returned None")
             await interaction.response.send_message("❌ Failed to create match", ephemeral=True)
             
-    except Exception as e:
+    except Exception as e:  # Skipcq: PYL-W0621
         bot_logger.error(f"Error creating match: {e}", exc_info=True)
         await interaction.response.send_message(
             f"❌ An error occurred: {str(e)}",
@@ -1266,7 +1262,7 @@ async def update_match(
         else:
             await interaction.response.send_message("❌ Failed to update match", ephemeral=True)
 
-    except Exception as e:
+    except Exception as e:  # Skipcq: PYL-W0621
         await interaction.response.send_message(
             f"❌ An error occurred: {str(e)}",
             ephemeral=True
@@ -1389,7 +1385,7 @@ async def admin_summary(interaction: discord.Interaction):
         
         await interaction.response.send_message(embed=initial_embed, view=view, ephemeral=True)
 
-    except Exception as e:
+    except Exception as e:  # Skipcq: PYL-W0621
         await interaction.response.send_message(
             f"❌ An error occurred: {str(e)}",
             ephemeral=True
@@ -1533,7 +1529,7 @@ async def on_ready():
         bot_logger.info("Syncing commands globally...")
         synced = await bot.tree.sync()
         bot_logger.info(f"Synced {len(synced)} commands")
-    except Exception as e:
+    except Exception as e:  # Skipcq: PYL-W0621
         bot_logger.error(f"Failed to sync commands: {e}", exc_info=True)
 
     try:
@@ -1550,7 +1546,7 @@ async def on_ready():
             bot_logger.info("Online announcement sent successfully")
         else:
             bot_logger.info("Online announcement skipped")
-    except Exception as e:
+    except Exception as e:  # Skipcq: PYL-W0621
         bot_logger.error(f"Failed to handle startup tasks: {e}", exc_info=True)
     
     bot_logger.info("=== Bot Ready Complete ===")
@@ -1593,7 +1589,7 @@ async def on_guild_join(guild: discord.Guild):
                 color=discord.Color.green()
             )
             await channel.send(embed=welcome_embed)
-    except Exception as e:
+    except Exception as e:  # Skipcq: PYL-W0621
         bot_logger.error(f"Error setting up new guild {guild.name}: {e}")
 
 # Add the help command after your other commands
@@ -1647,5 +1643,5 @@ if __name__ == '__main__':
     try:
         bot_logger.info("Starting bot...")
         bot.run(TOKEN)
-    except Exception as e:
+    except Exception as e:  # Skipcq: PYL-W0621
         bot_logger.critical(f'Failed to start bot: {e}', exc_info=True)
