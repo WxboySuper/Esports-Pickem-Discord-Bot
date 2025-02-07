@@ -347,9 +347,9 @@ class CustomBot(commands.Bot):
                 ongoing_matches = self.db.get_ongoing_matches()
                 
                 if ongoing_matches:
-                    # Get the first ongoing match
-                    match = ongoing_matches[0]
-                    team_a, team_b = match[2], match[3]
+                    # Get the first ongoing match - rename to current_match to avoid shadowing
+                    current_match = ongoing_matches[0]
+                    team_a, team_b = current_match[2], current_match[3]
                     
                     # Set watching status for the match
                     activity = discord.Activity(
@@ -425,9 +425,9 @@ class MatchPicksView(ui.View):
             if isinstance(child, ui.Button) and child.custom_id and child.custom_id.startswith("pick_"):
                 self.remove_item(child)
         
-        # Get current match
-        match = self.matches[self.current_index]
-        match_id, team_a, team_b = match[0], match[1], match[2]
+        # Get current match - rename to current_match
+        current_match = self.matches[self.current_index]
+        match_id, team_a, team_b = current_match[0], current_match[1], current_match[2]
         
         # Add new team buttons
         team_a_button = ui.Button(label=team_a, style=ButtonStyle.primary, custom_id=f"pick_{match_id}_{team_a}")
@@ -471,8 +471,9 @@ class MatchPicksView(ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
 
     def create_pick_embed(self) -> discord.Embed:
-        match = self.matches[self.current_index]
-        match_id, team_a, team_b, match_date, league_name, league_region, match_name = match
+        # Rename match to current_match
+        current_match = self.matches[self.current_index]
+        match_id, team_a, team_b, match_date, league_name, league_region, match_name = current_match
         
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
         
@@ -528,12 +529,12 @@ def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
         color=discord.Color.blue()
     )
     
-    for match in matches:
+    for match_data in matches:  # Rename match to match_data
         try:
-            match_id, team_a, team_b, winner, match_date, _, league_name, league_region, match_name = match
+            match_id, team_a, team_b, winner, match_date, _, league_name, league_region, match_name = match_data
         except ValueError:
             # Fallback for matches without match_name
-            match_id, team_a, team_b, winner, match_date, _, league_name, league_region = match
+            match_id, team_a, team_b, winner, match_date, _, league_name, league_region = match_data
             match_name = "Groups"  # Default value
             
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
@@ -624,12 +625,12 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
         embed.description = "No matches scheduled for this day."
         return embed
     
-    # Process each match
-    for match in matches:
-        match_id, team_a, team_b, winner, match_date, _, league_name, league_region, match_name = match
+    # Process each match - rename match to match_data
+    for match_data in matches:
+        match_id, team_a, team_b, winner, match_date, _, league_name, league_region, match_name = match_data
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
         
-        # Get user's pick for this match
+        # Get user's pick for this match - rename pick to user_pick to be more specific
         user_pick = db.get_user_pick(guild_id, user_id, match_id)
         
         # Determine match status and format field
@@ -740,7 +741,7 @@ async def shutdown(interaction: discord.Interaction, type: str):
 # Replace the pick command implementation
 @bot.tree.command(name="pick", description="Make picks for upcoming matches (next 48 hours)")
 @app_commands.guild_only()
-async def pick(interaction: discord.Interaction):
+async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pick
     """Command to make picks for matches within the next 48 hours"""
     guild_id = interaction.guild_id
     bot_logger.info("Pick command used by %s (ID: %s) in guild: %s (ID: %s)", interaction.user.name, interaction.user.id, interaction.guild.name, guild_id)
@@ -1782,4 +1783,3 @@ if __name__ == '__main__':
         bot_logger.critical("Network error: %s", bot_net_error)
     except Exception as bot_error:
         bot_logger.critical("Unexpected error: %s", bot_error, exc_info=True)
-
