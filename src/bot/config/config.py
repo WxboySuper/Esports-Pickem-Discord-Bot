@@ -3,17 +3,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from typing import Literal, Union
+
 class Config:
     """Base configuration class"""
-    BOT_ENV = os.getenv('BOT_ENV', 'prod').lower()
+    ENV_TYPE = Literal['prod', 'test']
+    BOT_ENV: ENV_TYPE = os.getenv('BOT_ENV', 'prod').lower()
+    
+    def __init__(self) -> None:
+        if self.BOT_ENV not in ('prod', 'test'):
+            raise ValueError(f"Invalid BOT_ENV value: {self.BOT_ENV}. Must be 'prod' or 'test'")
     
     @staticmethod
-    def get_config():
+    def get_config() -> Union['ProdConfig', 'TestConfig']:
         """Factory method to get correct config"""
-        if os.getenv('BOT_ENV', 'prod').lower() == 'test':
+        if Config.BOT_ENV == 'test':
             return TestConfig()
         return ProdConfig()
-
 class ProdConfig(Config):
     """Production configuration"""
     DISCORD_TOKEN = os.getenv('PROD_DISCORD_TOKEN')
