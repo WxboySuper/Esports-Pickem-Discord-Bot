@@ -569,7 +569,7 @@ class SummaryView(ui.View):
         super().__init__(timeout=300)  # 5 minute timeout
         self.user_id = user_id
         self.guild_id = guild_id
-        self.matches = matches_by_day
+        self.match_data = matches_by_day  # Renamed from matches to match_data
         self.db = db
         self.current_date = current_date
         self.dates = sorted(matches_by_day.keys())
@@ -597,7 +597,7 @@ class SummaryView(ui.View):
         embed = create_summary_embed(
             self.user_id,
             self.guild_id,
-            self.matches[self.dates[self.current_index]],
+            self.match_data[self.dates[self.current_index]],  # Using self.match_data instead of self.matches
             self.current_date,
             self.db
         )
@@ -763,23 +763,25 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
 
 # Update other commands to include guild_id
 @bot.tree.command(name="stats", description="View your pick'em statistics")
-async def stats(interaction: discord.Interaction):
-    bot_logger.info("Stats command used by %s (ID: %s) in guild: %s", interaction.user.name, interaction.user.id, interaction.guild.name)
-    stats = bot.db.get_user_stats(interaction.guild_id, interaction.user.id)
+async def get_stats(interaction: discord.Interaction):  # Renamed from stats to get_stats
+    bot_logger.info("Stats command used by %s (ID: %s) in guild: %s", 
+                   interaction.user.name, interaction.user.id, interaction.guild.name)
+    user_stats = bot.db.get_user_stats(interaction.guild_id, interaction.user.id)  # Renamed from stats to user_stats
     
     # Create ratio string for correct/completed picks
-    completed_ratio = f"{stats['correct_picks']}/{stats['completed_picks']}" if stats['completed_picks'] > 0 else "0/0"
+    completed_ratio = f"{user_stats['correct_picks']}/{user_stats['completed_picks']}" \
+                     if user_stats['completed_picks'] > 0 else "0/0"
     
     embed = discord.Embed(
         title="Your Pick'em Stats",
         color=discord.Color.blue()
     )
-    embed.add_field(name="Total Picks", value=str(stats["total_picks"]))
+    embed.add_field(name="Total Picks", value=str(user_stats["total_picks"]))
     embed.add_field(name="Completed Matches", value=completed_ratio)
-    embed.add_field(name="Accuracy", value=f"{stats['accuracy']:.1%}")
+    embed.add_field(name="Accuracy", value=f"{user_stats['accuracy']:.1%}")
     
     # Add active picks count
-    active_picks = stats["total_picks"] - stats["completed_picks"]
+    active_picks = user_stats["total_picks"] - user_stats["completed_picks"]
     embed.add_field(name="Active Picks", value=str(active_picks), inline=False)
     
     await interaction.response.send_message(embed=embed)
@@ -992,8 +994,9 @@ async def create_match(
         )
 
 @bot.tree.command(name="matches", description="Show matches by day")
-async def matches(interaction: discord.Interaction):
-    bot_logger.info("Matches command used by %s (ID: %s) in guild: %s", interaction.user.name, interaction.user.id, interaction.guild.name)
+async def show_matches(interaction: discord.Interaction):  # Renamed from matches to show_matches
+    bot_logger.info("Matches command used by %s (ID: %s) in guild: %s", 
+                   interaction.user.name, interaction.user.id, interaction.guild.name)
     """Display matches organized by day with navigation"""
     all_matches = bot.db.get_all_matches()
     
@@ -1003,11 +1006,11 @@ async def matches(interaction: discord.Interaction):
 
     # Group matches by day
     matches_by_day = {}
-    for match in all_matches:
-        match_date = datetime.strptime(str(match[4]), '%Y-%m-%d %H:%M:%S').date()
+    for match_data in all_matches:  # Renamed from match to match_data
+        match_date = datetime.strptime(str(match_data[4]), '%Y-%m-%d %H:%M:%S').date()
         if match_date not in matches_by_day:
             matches_by_day[match_date] = []
-        matches_by_day[match_date].append(match)
+        matches_by_day[match_date].append(match_data)
 
     # Start with current day or nearest future day
     current_date = datetime.now()
