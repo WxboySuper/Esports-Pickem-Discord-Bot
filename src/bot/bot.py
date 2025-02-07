@@ -170,11 +170,11 @@ class AnnouncementManager:
                     total_picks = result[0]
                     correct_picks = result[1] or 0
         except sqlite3.Error as sqlite_error:
-            bot_logger.error(f"Database error in match result announcement: {sqlite_error}")
+            bot_logger.error("Database error in match result announcement: %s", sqlite_error)
         except discord.errors.Forbidden as permission_error:
-            bot_logger.error(f"Permission error in match result announcement: {permission_error}")
+            bot_logger.error("Permission error in match result announcement: %s", permission_error)
         except discord.errors.HTTPException as discord_http_error:
-            bot_logger.error(f"HTTP error in match result announcement: {discord_http_error}")
+            bot_logger.error("HTTP error in match result announcement: %s", discord_http_error)
 
         # Create embed with voting statistics
         embed = discord.Embed(
@@ -286,9 +286,9 @@ class AnnouncementManager:
                         continue
                         
         except ValueError as datetime_error:
-            bot_logger.error(f"Date parsing error in match update announcement: {datetime_error}")
+            bot_logger.error("Date parsing error in match update announcement: %s", datetime_error)
         except Exception as announce_error:
-            bot_logger.error(f"Error in match update announcement: {announce_error}")
+            bot_logger.error("Error in match update announcement: %s", announce_error)
 
     async def send_custom_announcement(self, title: str, message: str, color: discord.Color = discord.Color.blue()):
         """Send a custom announcement to all guilds"""
@@ -368,14 +368,14 @@ class CustomBot(commands.Bot):
                 # Update every 5 minutes
                 await asyncio.sleep(300)
         except discord.errors.ConnectionClosed as discord_conn_error:
-            bot_logger.error(f"Connection error in status update task: {discord_conn_error}")
+            bot_logger.error("Connection error in status update task: %s", discord_conn_error)
         except discord.errors.HTTPException as status_http_error:
-            bot_logger.error(f"HTTP error in status update task: {status_http_error}")
+            bot_logger.error("HTTP error in status update task: %s", status_http_error)
         except asyncio.CancelledError:
             bot_logger.info("Status update task cancelled")
             raise
         except Exception as update_error:
-            bot_logger.error(f"Unexpected error in status update task: {update_error}")
+            bot_logger.error("Unexpected error in status update task: %s", update_error)
 
 # Replace bot initialization
 bot = CustomBot()
@@ -681,7 +681,7 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
 @app_commands.guild_only()
 async def shutdown(interaction: discord.Interaction, type: str):
     """Shuts down the bot"""
-    bot_logger.info(f"Shutdown command initiated by {interaction.user.name} (ID: {interaction.user.id}) with type: {type}")
+    bot_logger.info("Shutdown command initiated by %s (ID: %s) with type: %s", interaction.user.name, interaction.user.id, type)
     if interaction.user.id != USER_ID:
         await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
         return
@@ -743,7 +743,7 @@ async def shutdown(interaction: discord.Interaction, type: str):
 async def pick(interaction: discord.Interaction):
     """Command to make picks for matches within the next 48 hours"""
     guild_id = interaction.guild_id
-    bot_logger.info(f"Pick command used by {interaction.user.name} (ID: {interaction.user.id}) in guild: {interaction.guild.name} (ID: {guild_id})")
+    bot_logger.info("Pick command used by %s (ID: %s) in guild: %s (ID: %s)", interaction.user.name, interaction.user.id, interaction.guild.name, guild_id)
     
     active_matches = bot.db.get_upcoming_matches(hours=48)
     
@@ -763,7 +763,7 @@ async def pick(interaction: discord.Interaction):
 # Update other commands to include guild_id
 @bot.tree.command(name="stats", description="View your pick'em statistics")
 async def stats(interaction: discord.Interaction):
-    bot_logger.info(f"Stats command used by {interaction.user.name} (ID: {interaction.user.id}) in guild: {interaction.guild.name}")
+    bot_logger.info("Stats command used by %s (ID: %s) in guild: %s", interaction.user.name, interaction.user.id, interaction.guild.name)
     stats = bot.db.get_user_stats(interaction.guild_id, interaction.user.id)
     
     # Create ratio string for correct/completed picks
@@ -789,7 +789,7 @@ async def stats(interaction: discord.Interaction):
 )
 async def test(interaction: discord.Interaction, type: str = "announce"):
     """Test command to verify announcement system"""
-    bot_logger.info(f"Test command initiated by {interaction.user.name} (ID: {interaction.user.id}) with type: {type}")
+    bot_logger.info("Test command initiated by %s (ID: %s) with type: %s", interaction.user.name, interaction.user.id, type)
     if interaction.user.id != USER_ID:
         await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
         return
@@ -823,10 +823,10 @@ async def test(interaction: discord.Interaction, type: str = "announce"):
             await interaction.response.send_message("❌ Invalid test type. Use 'announce' or 'result'", ephemeral=True)
             
     except discord.errors.Forbidden as permission_error:
-        bot_logger.error(f"Insufficient permissions to send test announcement: {permission_error}")
+        bot_logger.error("Insufficient permissions to send test announcement: %s", permission_error)
         await interaction.response.send_message(f"❌ Test failed: {str(permission_error)}", ephemeral=True)
     except discord.errors.HTTPException as discord_http_error:
-        bot_logger.error(f"HTTP error sending test announcement: {discord_http_error}")
+        bot_logger.error("HTTP error sending test announcement: %s", discord_http_error)
         await interaction.response.send_message(f"❌ Test failed: {str(discord_http_error)}", ephemeral=True)
     except ValueError as val_error:
         await interaction.response.send_message(
@@ -835,13 +835,13 @@ async def test(interaction: discord.Interaction, type: str = "announce"):
         )
     except Exception as e:  # skipcq: PYL-W0621
         await interaction.response.send_message(f"❌ Test failed: {str(e)}", ephemeral=True)
-        logging.error(f"Test command error: {e}")
+        logging.error("Test command error: %s", e)
 
 # Modify set_winner command to use the announcer
 @bot.tree.command(name="set_winner", description="Set the winner for a match [Owner Only]")
 async def set_winner(interaction: discord.Interaction, match_id: int, winner: str):
     """Set the winner for a match and update pick results"""
-    bot_logger.info(f"Set winner command initiated by {interaction.user.name} (ID: {interaction.user.id}) for match {match_id}")
+    bot_logger.info("Set winner command initiated by %s (ID: %s) for match %d", interaction.user.name, interaction.user.id, match_id)
     try:
         # Check if user is owner
         if interaction.user.id != USER_ID:
@@ -869,7 +869,7 @@ async def set_winner(interaction: discord.Interaction, match_id: int, winner: st
                 await bot.announcer.announce_match_result(match_id, team_a, team_b, winner, match_details['league_name'])
             except Exception as announce_error:
                 # Log the announcement error but don't fail the command
-                logging.error(f"Failed to announce match result: {announce_error}")
+                logging.error("Failed to announce match result: %s", announce_error)
         else:
             await interaction.response.send_message("❌ Failed to update match result.", ephemeral=True)
             
@@ -898,7 +898,7 @@ async def set_winner(interaction: discord.Interaction, match_id: int, winner: st
             f"❌ An error occurred: {str(unexpected_cmd_error)}",
             ephemeral=True
         )
-        logging.error(f"Error setting match winner: {unexpected_cmd_error}", exc_info=True)
+        logging.error("Error setting match winner: %s", unexpected_cmd_error, exc_info=True)
 
 # Update create_match command
 @bot.tree.command(name="create_match", description="Create a new match [Owner Only]")
@@ -920,10 +920,10 @@ async def create_match(
     league_name: str = "Unknown League"
 ):
     """Create a new match in the database"""
-    bot_logger.info(f"Create match command initiated by {interaction.user.name} (ID: {interaction.user.id})")
+    bot_logger.info("Create match command initiated by %s (ID: %s)", interaction.user.name, interaction.user.id)
     
     if interaction.user.id != USER_ID:
-        bot_logger.warning(f"Unauthorized create match attempt by {interaction.user.name} (ID: {interaction.user.id})")
+        bot_logger.warning("Unauthorized create match attempt by %s (ID: %s)", interaction.user.name, interaction.user.id)
         await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
         return
 
@@ -931,16 +931,16 @@ async def create_match(
         # Parse the date and time strings
         try:
             date_obj = parse_datetime(match_date, match_time)
-            bot_logger.debug(f"Parsed datetime: {date_obj}")
+            bot_logger.debug("Parsed datetime: %s", date_obj)
         except ValueError as e:
-            bot_logger.error(f"Date/time parsing error: {e}")
+            bot_logger.error("Date/time parsing error: %s", e)
             await interaction.response.send_message(
                 f"❌ {str(e)}",
                 ephemeral=True
             )
             return
         
-        bot_logger.info(f"Creating match: {team_a} vs {team_b} at {date_obj}, Type: {match_name}, League: {league_name}")
+        bot_logger.info("Creating match: %s vs %s at %s, Type: %s, League: %s", team_a, team_b, date_obj, match_name, league_name)
         
         # Get league ID (use default league if not found)
         league_id = 1  # Default league ID
@@ -955,7 +955,7 @@ async def create_match(
         )
         
         if match_id:
-            bot_logger.info(f"Match created successfully with ID: {match_id}")
+            bot_logger.info("Match created successfully with ID: %d", match_id)
             embed = discord.Embed(
                 title="✅ Match Created",
                 description=f"Match #{match_id} has been created globally",
@@ -973,13 +973,13 @@ async def create_match(
             await interaction.response.send_message("❌ Failed to create match", ephemeral=True)
             
     except sqlite3.Error as db_error:
-        bot_logger.error(f"Database error creating match: {db_error}")
+        bot_logger.error("Database error creating match: %s", db_error)
         await interaction.response.send_message(
             "❌ Failed to create match in database",
             ephemeral=True
         )
     except discord.errors.HTTPException as http_error:
-        bot_logger.error(f"Failed to send response: {http_error}")
+        bot_logger.error("Failed to send response: %s", http_error)
         await interaction.response.send_message(
             "❌ Failed to send response",
             ephemeral=True
@@ -992,7 +992,7 @@ async def create_match(
 
 @bot.tree.command(name="matches", description="Show matches by day")
 async def matches(interaction: discord.Interaction):
-    bot_logger.info(f"Matches command used by {interaction.user.name} (ID: {interaction.user.id}) in guild: {interaction.guild.name}")
+    bot_logger.info("Matches command used by %s (ID: %s) in guild: %s", interaction.user.name, interaction.user.id, interaction.guild.name)
     """Display matches organized by day with navigation"""
     all_matches = bot.db.get_all_matches()
     
@@ -1025,7 +1025,7 @@ async def matches(interaction: discord.Interaction):
 @bot.tree.command(name="activepicks", description="View your active picks for upcoming matches")
 @app_commands.guild_only()
 async def activepicks(interaction: discord.Interaction):
-    bot_logger.info(f"Active picks command used by {interaction.user.name} (ID: {interaction.user.id}) in guild: {interaction.guild.name}")
+    bot_logger.info("Active picks command used by %s (ID: %s) in guild: %s", interaction.user.name, interaction.user.id, interaction.guild.name)
     """Display all active picks for the user"""
     guild_id = interaction.guild_id
     user_id = interaction.user.id
@@ -1175,7 +1175,7 @@ class LeaderboardView(ui.View):
 @bot.tree.command(name="leaderboard", description="View the server's Pick'em leaderboard")
 @app_commands.guild_only()
 async def leaderboard(interaction: discord.Interaction):
-    bot_logger.info(f"Leaderboard command used by {interaction.user.name} (ID: {interaction.user.id}) in guild: {interaction.guild.name}")
+    bot_logger.info("Leaderboard command used by %s (ID: %s) in guild: %s", interaction.user.name, interaction.user.id, interaction.guild.name)
     """Display the server's leaderboard with timeframe options"""
     guild_id = interaction.guild_id
     guild_name = interaction.guild.name
@@ -1191,7 +1191,7 @@ async def leaderboard(interaction: discord.Interaction):
 @bot.tree.command(name="summary", description="View your daily Pick'em summary")
 @app_commands.guild_only()
 async def summary(interaction: discord.Interaction):
-    bot_logger.info(f"Summary command used by {interaction.user.name} (ID: {interaction.user.id}) in guild: {interaction.guild.name}")
+    bot_logger.info("Summary command used by %s (ID: %s) in guild: %s", interaction.user.name, interaction.user.id, interaction.guild.name)
     """Display a comprehensive daily summary of matches and picks"""
     guild_id = interaction.guild_id
     user_id = interaction.user.id
@@ -1250,7 +1250,7 @@ async def update_match(
     match_name: str
 ):
     """Update match details and announce changes"""
-    bot_logger.info(f"Update match command initiated by {interaction.user.name} (ID: {interaction.user.id}) for match {match_id}")
+    bot_logger.info("Update match command initiated by %s (ID: %s) for match %d", interaction.user.name, interaction.user.id, match_id)
     if interaction.user.id != USER_ID:
         await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
         return
@@ -1304,7 +1304,7 @@ async def update_match(
 
         if success:
             # Log the update with user info
-            bot_logger.info(f"Match {match_id} updated by {interaction.user.name} (ID: {interaction.user.id})")
+            bot_logger.info("Match %d updated by %s (ID: %s)", match_id, interaction.user.name, interaction.user.id)
             
             # Send update announcement
             await bot.announcer.announce_match_update(
@@ -1349,7 +1349,7 @@ async def update_match(
             f"❌ An error occurred: {str(unexpected_cmd_error)}",
             ephemeral=True
         )
-        bot_logger.error(f"Error updating match: {unexpected_cmd_error}")
+        bot_logger.error("Error updating match: %s", unexpected_cmd_error)
 
 # Add this new class after other View classes
 class AdminSummaryView(ui.View):
@@ -1428,7 +1428,7 @@ def create_admin_summary_embed(matches: list, date: datetime) -> discord.Embed:
 # Replace the existing admin_summary command with this updated version
 @bot.tree.command(name="admin_summary", description="View administrative summary [Owner Only]")
 async def admin_summary(interaction: discord.Interaction):
-    bot_logger.info(f"Admin summary command used by {interaction.user.name} (ID: {interaction.user.id})")
+    bot_logger.info("Admin summary command used by %s (ID: %s)", interaction.user.name, interaction.user.id)
     """Display administrative summary of matches with day-by-day navigation"""
     if interaction.user.id != USER_ID:
         await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
@@ -1472,7 +1472,7 @@ async def admin_summary(interaction: discord.Interaction):
             f"❌ An error occurred: {str(e)}",
             ephemeral=True
         )
-        logging.error(f"Error in admin summary: {e}")
+        logging.error("Error in admin summary: %s", e)
 
 class AnnouncementConfirmView(ui.View):
     def __init__(self):
@@ -1506,7 +1506,7 @@ async def announce(
     message: str, 
     color: str = "blue"
 ):
-    bot_logger.info(f"Announce command initiated by {interaction.user.name} (ID: {interaction.user.id})")
+    bot_logger.info("Announce command initiated by %s (ID: %s)", interaction.user.name, interaction.user.id)
     """Send an announcement to all servers"""
     if interaction.user.id != USER_ID:
         await interaction.response.send_message(
@@ -1575,14 +1575,14 @@ async def announce(
             )
             await interaction.edit_original_response(content="", embed=result, view=None)
         except discord.errors.Forbidden as permission_error:
-            bot_logger.error(f"Insufficient permissions to send announcement: {permission_error}")
+            bot_logger.error("Insufficient permissions to send announcement: %s", permission_error)
             await interaction.edit_original_response(content="", embed=discord.Embed(
                 title="❌ Announcement Failed",
                 description=f"Insufficient permissions: {permission_error}",
                 color=discord.Color.red()
             ), view=None)
         except discord.errors.HTTPException as discord_http_error:
-            bot_logger.error(f"HTTP error sending announcement: {discord_http_error}")
+            bot_logger.error("HTTP error sending announcement: %s", discord_http_error)
             await interaction.edit_original_response(content="", embed=discord.Embed(
                 title="❌ Announcement Failed",
                 description=f"HTTP error: {discord_http_error}",
@@ -1609,27 +1609,27 @@ async def prompt_online_announcement():
 @bot.event
 async def on_ready():
     bot_logger.info("=== Bot Ready ===")
-    bot_logger.info(f'Bot connected as {bot.user.name}')
-    bot_logger.info(f'Application ID: {bot.application_id}')
-    bot_logger.info(f'Bot owner ID set to: {USER_ID}')
-    bot_logger.debug(f'Announcer exists: {bot.announcer is not None}')
-    bot_logger.debug(f'DB has announcer: {bot.db.announcer is not None}')
+    bot_logger.info("Bot connected as %s", bot.user.name)
+    bot_logger.info("Application ID: %s", bot.application_id)
+    bot_logger.info("Bot owner ID set to: %s", USER_ID)
+    bot_logger.debug("Announcer exists: %s", bot.announcer is not None)
+    bot_logger.debug("DB has announcer: %s", bot.db.announcer is not None)
     
     guild_info = [f"- {guild.name} (id: {guild.id})" for guild in bot.guilds]
-    bot_logger.info(f'Connected to {len(bot.guilds)} guilds:\n' + '\n'.join(guild_info))
+    bot_logger.info("Connected to %d guilds:\n%s", len(bot.guilds), '\n'.join(guild_info))
     
     for guild in bot.guilds:
         channel = await bot.announcer.get_announcement_channel(guild)
-        bot_logger.debug(f'Guild {guild.name} has announcement channel: {channel is not None}')
+        bot_logger.debug("Guild %s has announcement channel: %s", guild.name, channel is not None)
     
     try:
         bot_logger.info("Syncing commands globally...")
         synced = await bot.tree.sync()
-        bot_logger.info(f"Synced {len(synced)} commands")
+        bot_logger.info("Synced %d commands", len(synced))
     except discord.errors.HTTPException as startup_http_error:
-        bot_logger.error(f"HTTP error syncing commands: {startup_http_error}")
+        bot_logger.error("HTTP error syncing commands: %s", startup_http_error)
     except discord.errors.ClientException as startup_client_error:
-        bot_logger.error(f"Client error during startup: {startup_client_error}")
+        bot_logger.error("Client error during startup: %s", startup_client_error)
 
     try:
         # Start the status update task
@@ -1646,19 +1646,19 @@ async def on_ready():
         else:
             bot_logger.info("Online announcement skipped")
     except discord.errors.HTTPException as startup_http_error:
-        bot_logger.error(f"HTTP error during startup: {startup_http_error}")
+        bot_logger.error("HTTP error during startup: %s", startup_http_error)
     except discord.errors.ClientException as startup_client_error:
-        bot_logger.error(f"Client error during startup: {startup_client_error}")
+        bot_logger.error("Client error during startup: %s", startup_client_error)
     except asyncio.CancelledError as startup_cancel_error:
-        bot_logger.info(f"Startup task cancelled: {startup_cancel_error}")
+        bot_logger.info("Startup task cancelled: %s", startup_cancel_error)
     except ConnectionError as startup_conn_error:
-        bot_logger.error(f"Connection error during startup: {startup_conn_error}")
+        bot_logger.error("Connection error during startup: %s", startup_conn_error)
     
     bot_logger.info("=== Bot Ready Complete ===")
 
 @bot.event
 async def on_error(event, *args, **kwargs):
-    bot_logger.error(f'An error occurred in {event}', exc_info=True)
+    bot_logger.error("An error occurred in %s", event, exc_info=True)
 
 # Add specific error handler for voice-related errors
 @bot.event
@@ -1667,19 +1667,19 @@ async def on_command_error(ctx, error):
         if 'audioop' in str(error):
             await ctx.send("Voice functionality is currently unavailable. Please ensure voice dependencies are properly installed.")
         else:
-            await ctx.send(f"An error occurred: {str(error)}")
-    logging.error(f'Command error: {error}', exc_info=True)
+            await ctx.send("An error occurred: %s", str(error))
+    logging.error("Command error: %s", error, exc_info=True)
 
 @bot.event
 async def on_guild_join(guild: discord.Guild):
     """Handle new guild joins"""
-    bot_logger.info(f"Joined new guild: {guild.name} (ID: {guild.id})")
+    bot_logger.info("Joined new guild: %s (ID: %s)", guild.name, guild.id)
     
     try:
         # Sync commands for the new guild
         bot_logger.info("Starting bot...")
         await bot.tree.sync()
-        bot_logger.info(f"Commands synced for guild: {guild.name}")
+        bot_logger.info("Commands synced for guild: %s", guild.name)
         
         # Set up announcement channel
         channel = await bot.announcer.get_announcement_channel(guild)
@@ -1695,19 +1695,19 @@ async def on_guild_join(guild: discord.Guild):
             )
             await channel.send(embed=welcome_embed)
     except discord.errors.Forbidden as guild_permission_error:
-        bot_logger.error(f"Permission error setting up guild {guild.name}: {guild_permission_error}")
+        bot_logger.error("Permission error setting up guild %s: %s", guild.name, guild_permission_error)
     except discord.errors.HTTPException as guild_http_error:
-        bot_logger.error(f"HTTP error setting up guild {guild.name}: {guild_http_error}")
+        bot_logger.error("HTTP error setting up guild %s: %s", guild.name, guild_http_error)
     except sqlite3.Error as guild_db_error:
-        bot_logger.error(f"Database error setting up guild {guild.name}: {guild_db_error}")
+        bot_logger.error("Database error setting up guild %s: %s", guild.name, guild_db_error)
     except Exception as guild_error:
-        bot_logger.error(f"Error setting up new guild {guild.name}: {guild_error}")
+        bot_logger.error("Error setting up new guild %s: %s", guild.name, guild_error)
 
 # Add the help command after your other commands
 @bot.tree.command(name="help", description="Show available commands and bot information")
 async def help(interaction: discord.Interaction):
     """Display help information about the bot and its commands"""
-    bot_logger.info(f"Help command used by {interaction.user.name} (ID: {interaction.user.id})")
+    bot_logger.info("Help command used by %s (ID: %s)", interaction.user.name, interaction.user.id)
 
     embed = discord.Embed(
         title="📖 Pick'em Bot Help",
@@ -1755,10 +1755,11 @@ if __name__ == '__main__':
         bot_logger.info("Starting bot...")
         bot.run(TOKEN)
     except discord.errors.LoginFailure as bot_login_error:
-        bot_logger.critical(f'Login failed: {bot_login_error}')
+        bot_logger.critical("Login failed: %s", bot_login_error)
     except discord.errors.ConnectionClosed as bot_conn_error:
-        bot_logger.critical(f'Connection closed: {bot_conn_error}')
+        bot_logger.critical("Connection closed: %s", bot_conn_error)
     except ConnectionError as bot_net_error:
-        bot_logger.critical(f'Network error: {bot_net_error}')
+        bot_logger.critical("Network error: %s", bot_net_error)
     except Exception as bot_error:
-        bot_logger.critical(f'Unexpected error: {bot_error}', exc_info=True)
+        bot_logger.critical("Unexpected error: %s", bot_error, exc_info=True)
+
