@@ -474,6 +474,7 @@ class MatchPicksView(ui.View):
         # Rename match to current_match
         current_match = self.matches[self.current_index]
         # Unpack all 9 values from the match tuple
+        # skipcq: PYL-W0612
         match_id, team_a, team_b, match_date, is_active, league_name, league_region, match_name = current_match
         
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
