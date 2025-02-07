@@ -123,8 +123,15 @@ bot_logger.info("Running in %s mode", {'PRODUCTION' if config.is_production else
 TOKEN = config.DISCORD_TOKEN
 APP_ID = config.APP_ID
 
-# Replace validate_user_id and USER_ID assignment with direct config usage
-USER_ID = config.OWNER_ID
+def validate_user_id(user_id: str) -> int:
+    """Validate and convert user ID to integer"""
+    if not user_id:
+        raise ValueError("Owner user ID not set in environment variables")
+    try:
+        return int(user_id)
+    except ValueError:
+        raise ValueError("Invalid owner user ID. Must be an integer") from None
+USER_ID = validate_user_id(os.getenv("OWNER_USER_DISCORD_ID"))
 
 class AnnouncementManager:
     def __init__(self, bot):
