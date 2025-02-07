@@ -23,7 +23,7 @@ import sqlite3  # Add this import at the top
 from utils.db import PickemDB  # Import db from utils
 from utils import path_helper
 from utils.bot_instance import BotInstance
-from config.config import Config
+from src.bot.config.config import Config
 
 path_helper.setup_path()
 

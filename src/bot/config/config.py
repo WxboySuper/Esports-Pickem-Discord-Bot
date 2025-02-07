@@ -15,7 +15,7 @@ class Config:
         return ProdConfig()
 
 class ProdConfig(Config):
-    """Production Configuration"""
+    """Production configuration"""
     DISCORD_TOKEN = os.getenv('PROD_DISCORD_TOKEN')
     APP_ID = os.getenv('PROD_APP_ID')
     PUBLIC_KEY = os.getenv('PROD_PUBLIC_KEY')
@@ -32,7 +32,7 @@ class ProdConfig(Config):
         return True
 
 class TestConfig(Config):
-    """Test Configuration"""
+    """Test configuration"""
     DISCORD_TOKEN = os.getenv('TEST_DISCORD_TOKEN')
     APP_ID = os.getenv('TEST_APP_ID')
     PUBLIC_KEY = os.getenv('TEST_PUBLIC_KEY')
