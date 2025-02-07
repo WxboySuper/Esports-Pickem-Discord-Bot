@@ -117,8 +117,7 @@ def validate_user_id(user_id: str) -> int:
     try:
         return int(user_id)
     except ValueError:
-        raise ValueError("Invalid owner user ID. Must be an integer")
-
+        raise ValueError("Invalid owner user ID. Must be an integer") from None
 USER_ID = validate_user_id(os.getenv("OWNER_USER_DISCORD_ID"))
 
 class AnnouncementManager:
