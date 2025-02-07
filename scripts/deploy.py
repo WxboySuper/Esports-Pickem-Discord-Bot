@@ -71,7 +71,7 @@ class Deployer:
             if not result.stdout.strip().startswith('git version'):
                 raise RuntimeError("Invalid git version output")
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Git check failed: {e}")
+            raise RuntimeError("Git check failed: %s" % e)
         except FileNotFoundError:
             raise RuntimeError("Git executable not found")
 
@@ -121,7 +121,7 @@ class Deployer:
     def create_backup(self):
         """Create backup of current production code"""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_path = self.backup_dir / f'backup_{timestamp}'
+        backup_path = self.backup_dir / ('backup_' + timestamp)
         
         bot_logger.info("Creating backup at %s", backup_path)
         shutil.copytree(self.prod_dir, backup_path, ignore=shutil.ignore_patterns(
