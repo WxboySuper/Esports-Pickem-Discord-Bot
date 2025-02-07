@@ -134,8 +134,8 @@ def validate_user_id(user_id: str) -> int:
 USER_ID = validate_user_id(os.getenv("OWNER_USER_DISCORD_ID"))
 
 class AnnouncementManager:
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot_instance):  # Renamed parameter from 'bot' to 'bot_instance'
+        self.bot = bot_instance  # More explicit naming of the instance
 
     async def get_announcement_channel(self, guild):
         """Find the pickem-updates channel in a guild"""
@@ -400,7 +400,7 @@ class ShutdownView(ui.View):
     def __init__(self):
         super().__init__(timeout=10)  # Button disappears after 10 seconds
         
-    @discord.ui.button(label="Cancel Shutdown", style=ButtonStyle.danger)
+    @ui.button(label="Cancel Shutdown", style=ButtonStyle.danger)
     async def cancel_button(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.send_message("Shutdown cancelled!", ephemeral=True)
         self.stop()
