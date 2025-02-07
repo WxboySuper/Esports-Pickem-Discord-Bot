@@ -1781,5 +1781,5 @@ if __name__ == '__main__':
         bot_logger.critical("Connection closed: %s", bot_conn_error)
     except ConnectionError as bot_net_error:
         bot_logger.critical("Network error: %s", bot_net_error)
-    except (discord.DiscordException, ConnectionError) as bot_error:
+    except discord.DiscordException as bot_error:
         bot_logger.critical("Unexpected error: %s", bot_error, exc_info=True)
