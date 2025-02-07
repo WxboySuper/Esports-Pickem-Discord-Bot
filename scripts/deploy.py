@@ -22,13 +22,27 @@ class Deployer:
         self.backup_dir = self.prod_dir / 'backups'
         self.backup_dir.mkdir(exist_ok=True)
         
-        # Add Python executable path
-        self.python_exe = Path(sys.executable)
-        if not self.python_exe.exists():
-            raise RuntimeError(f"Python executable not found at: {self.python_exe}")
+        # Validate Python executable path
+        self.python_exe = self.get_python_executable()
+        if not self.python_exe:
+            raise RuntimeError("Could not find Python executable")
 
         # Add git check before other initialization
         self.check_git_installation()
+
+    def get_python_executable(self) -> Path:
+        """Get full path to Python executable"""
+        # First try sys.executable for current Python
+        if sys.executable and Path(sys.executable).exists():
+            return Path(sys.executable)
+            
+        # Fallback to searching PATH
+        python_cmd = 'python.exe' if os.name == 'nt' else 'python3'
+        python_path = shutil.which(python_cmd)
+        if python_path:
+            return Path(python_path)
+            
+        return None
 
     @staticmethod
     def check_git_installation():
@@ -140,22 +154,30 @@ class Deployer:
             startup_script = self.prod_dir / 'prod_startup.py'
             if not startup_script.exists():
                 raise FileNotFoundError(f"Startup script not found at: {startup_script}")
-
+            
+            # Resolve to absolute paths
+            startup_script = startup_script.resolve()
+            working_dir = self.prod_dir.resolve()
+            
             logger.info("Using Python: %s", self.python_exe)
             logger.info("Starting script: %s", startup_script)
-            logger.info("Working directory: %s", self.prod_dir)
+            logger.info("Working directory: %s", working_dir)
 
-            # Create a new process detached from the current one
+            # Validate paths
+            if not all(p.exists() for p in (self.python_exe, startup_script, working_dir)):
+                raise FileNotFoundError("One or more required paths do not exist")
+
+            # Create a new process with absolute paths
             if os.name == 'nt':  # Windows
                 subprocess.Popen(
-                    [str(self.python_exe), str(startup_script)],
-                    cwd=str(self.prod_dir),
+                    [str(self.python_exe.absolute()), str(startup_script)],
+                    cwd=str(working_dir),
                     creationflags=subprocess.CREATE_NEW_CONSOLE
                 )
             else:  # Linux/Unix
                 subprocess.Popen(
-                    [str(self.python_exe), str(startup_script)],
-                    cwd=str(self.prod_dir),
+                    [str(self.python_exe.absolute()), str(startup_script)],
+                    cwd=str(working_dir),
                     start_new_session=True
                 )
             logger.info("Bot startup initiated")
