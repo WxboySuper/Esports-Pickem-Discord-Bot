@@ -114,7 +114,7 @@ def parse_datetime(date_str: str, time_str: str) -> datetime:
         raise ValueError("Invalid date/time format. Use: YYYY-MM-DD for date and HH:MM AM/PM for time")
 
 config = Config.get_config()
-bot_logger.info(f"Running in {'PRODUCTION' if config.is_production else 'TEST'} mode")
+bot_logger.info("Running in %s mode", {'PRODUCTION' if config.is_production else 'TEST'})
 
 # Replace TOKEN and APP_ID assignment
 TOKEN = config.DISCORD_TOKEN
