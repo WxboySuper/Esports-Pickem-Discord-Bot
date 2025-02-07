@@ -1,29 +1,23 @@
 import sys
+import os
 from pathlib import Path
+from datetime import datetime, timedelta
+import logging
+from dotenv import load_dotenv
+import discord
+from discord.ext import commands
+from discord import app_commands, ui, ButtonStyle
+import asyncio
+import sqlite3
+from utils.db import PickemDB  # Import db from utils
+from utils import path_helper
+from utils.bot_instance import BotInstance
+from src.bot.config.config import Config
 
 # Get the src directory path
 src_path = Path(__file__).parent.parent
 if str(src_path) not in sys.path:
     sys.path.append(str(src_path))
-
-# Rest of imports
-import discord
-from discord.ext import commands
-from discord import app_commands
-import os
-from dotenv import load_dotenv
-import logging
-import sys
-from discord import ui, ButtonStyle
-from datetime import datetime, timedelta  # Add timedelta to imports
-import pytz  # Add this import at the top
-import asyncio  # Add this import at the top
-import sqlite3  # Add this import at the top
-
-from utils.db import PickemDB  # Import db from utils
-from utils import path_helper
-from utils.bot_instance import BotInstance
-from src.bot.config.config import Config
 
 path_helper.setup_path()
 
@@ -120,7 +114,16 @@ bot_logger.info("Running in %s mode", {'PRODUCTION' if config.is_production else
 TOKEN = config.DISCORD_TOKEN
 APP_ID = config.APP_ID
 
-USER_ID = os.getenv("OWNER_USER_DISCORD_ID")
+def validate_user_id(user_id: str) -> int:
+    """Validate and convert user ID to integer"""
+    if not user_id:
+        raise ValueError("Owner user ID not set in environment variables")
+    try:
+        return int(user_id)
+    except ValueError:
+        raise ValueError("Invalid owner user ID. Must be an integer")
+
+USER_ID = validate_user_id(os.getenv("OWNER_USER_DISCORD_ID"))
 
 class AnnouncementManager:
     def __init__(self, bot):

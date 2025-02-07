@@ -20,24 +20,6 @@ class Config:
         if Config.BOT_ENV == 'test':
             return TestConfig()
         return ProdConfig()
-class ProdConfig(Config):
-    """Production configuration"""
-    DISCORD_TOKEN = os.getenv('PROD_DISCORD_TOKEN')
-    APP_ID = os.getenv('PROD_APP_ID')
-    PUBLIC_KEY = os.getenv('PROD_PUBLIC_KEY')
-    CLIENT_SECRET = os.getenv('PROD_CLIENT_SECRET')
-    
-    # Database configuration
-    DB_NAME = os.getenv('PROD_DB_NAME')
-    
-    # Logging configuration
-    LOG_LEVEL = 'INFO'
-    
-    @property
-    def is_production(self):
-        return True
-
-import os
 
 class BaseEnvConfig(Config):
     """Base class for environment-specific configs"""
@@ -100,5 +82,6 @@ class TestConfig(BaseEnvConfig):
     def LOG_LEVEL(self) -> str:
         return os.getenv('TEST_LOG_LEVEL', 'DEBUG')
     
+    @property
     def is_production(self) -> bool:
         return False
