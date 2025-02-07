@@ -51,7 +51,7 @@ class Deployer:
             'deploy.bat'
         ]
         
-        def ignore_patterns(path, names):
+        def ignore_patterns(names):
             return [n for n in names if any(p in n for p in exclude)]
 
         # Copy files
