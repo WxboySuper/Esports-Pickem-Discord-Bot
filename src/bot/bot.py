@@ -1260,7 +1260,7 @@ async def handle_update_result(interaction: discord.Interaction, success: bool, 
     else:
         await interaction.response.send_message("❌ Failed to update match", ephemeral=True)
 
-def check_update_match_active_status(match_id: int):
+def update_match_active_status(match_id: int):
     """Check team names and if a match is active and update if necessary"""
     match_data = bot.db.get_match_details(match_id)
     
@@ -1328,7 +1328,7 @@ async def update_match(
             new_details['match_name']
         )
 
-        check_update_match_active_status(match_id)
+        update_match_active_status(match_id)
 
         await handle_update_result(interaction, success, match_id, old_details, new_details)
 
