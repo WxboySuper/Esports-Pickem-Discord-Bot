@@ -3,7 +3,6 @@ import logging
 from datetime import datetime
 from .async_helper import run_async  # Add this import at the top
 from .bot_instance import BotInstance
-import asyncio
 from pathlib import Path
 
 # Set up database logger

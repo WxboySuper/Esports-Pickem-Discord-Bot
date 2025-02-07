@@ -1,7 +1,7 @@
 import sys
 import os
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 from dotenv import load_dotenv
 import discord
