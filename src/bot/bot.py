@@ -473,7 +473,8 @@ class MatchPicksView(ui.View):
     def create_pick_embed(self) -> discord.Embed:
         # Rename match to current_match
         current_match = self.matches[self.current_index]
-        match_id, team_a, team_b, match_date, league_name, league_region, match_name = current_match
+        # Unpack all 9 values from the match tuple
+        match_id, team_a, team_b, match_date, is_active, league_name, league_region, match_name = current_match
         
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
         
