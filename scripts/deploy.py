@@ -196,6 +196,7 @@ class Deployer:
             'test_startup.py'
         ]
         
+        # skipcq: PYL-W0613
         def ignore_patterns(dirname, filenames):  # Added dirname parameter
             """Filter function for shutil.copytree to ignore certain patterns"""
             return [n for n in filenames if any(p in n for p in exclude)]
