@@ -30,6 +30,7 @@ class Deployer:
         # Add git check before other initialization
         self.check_git_installation()
 
+    @staticmethod
     def get_python_executable(self) -> Path:
         """Get full path to Python executable"""
         # First try sys.executable for current Python
