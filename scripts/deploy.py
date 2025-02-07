@@ -27,6 +27,11 @@ class Deployer:
         if not self.python_exe:
             raise RuntimeError("Could not find Python executable")
 
+        # Get Git executable path
+        self.git_exe = self.get_git_executable()
+        if not self.git_exe:
+            raise RuntimeError("Git executable not found in PATH")
+
         # Add git check before other initialization
         self.check_git_installation()
 
@@ -45,26 +50,41 @@ class Deployer:
             
         return None
 
-    @staticmethod
-    def check_git_installation():
+    def get_git_executable(self) -> Path:
+        """Get full path to Git executable"""
+        git_cmd = 'git.exe' if os.name == 'nt' else 'git'
+        git_path = shutil.which(git_cmd)
+        if not git_path:
+            return None
+        return Path(git_path).resolve()
+
+    def check_git_installation(self):
         """Check if git is installed and accessible"""
         try:
-            subprocess.run(['git', '--version'], check=True, capture_output=True)
-        except subprocess.CalledProcessError:
-            raise RuntimeError("Git is not installed or not accessible")
+            # Use full path to git executable
+            result = subprocess.run(
+                [str(self.git_exe), '--version'],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            if not result.stdout.strip().startswith('git version'):
+                raise RuntimeError("Invalid git version output")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Git check failed: {e}")
         except FileNotFoundError:
-            raise RuntimeError("Git command not found in PATH")
+            raise RuntimeError("Git executable not found")
 
     def ensure_main_branch(self):
         """Ensure we're on the main branch and it's up to date"""
         try:
-            # Check current branch
+            # Use resolved paths for all git commands
             result = subprocess.run(
-                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                [str(self.git_exe), 'rev-parse', '--abbrev-ref', 'HEAD'],
                 capture_output=True,
                 text=True,
                 check=True,
-                cwd=str(self.test_dir)
+                cwd=str(self.test_dir.resolve())
             )
             current_branch = result.stdout.strip()
             
@@ -73,16 +93,16 @@ class Deployer:
             
             # Fetch latest changes
             bot_logger.info("Fetching latest changes from remote...")
-            subprocess.run(['git', 'fetch', 'origin', 'main'], 
-                         check=True, cwd=str(self.test_dir))
+            subprocess.run([str(self.git_exe), 'fetch', 'origin', 'main'], 
+                         check=True, cwd=str(self.test_dir.resolve()))
             
             # Check if we're behind
             result = subprocess.run(
-                ['git', 'status', '-uno'],
+                [str(self.git_exe), 'status', '-uno'],
                 capture_output=True,
                 text=True,
                 check=True,
-                cwd=str(self.test_dir)
+                cwd=str(self.test_dir.resolve())
             )
             
             if "Your branch is behind" in result.stdout:
@@ -153,31 +173,37 @@ class Deployer:
         bot_logger.info("Starting production bot...")
         try:
             startup_script = self.prod_dir / 'prod_startup.py'
-            if not startup_script.exists():
-                raise FileNotFoundError("Startup script not found at: %s" % startup_script)
             
-            # Resolve to absolute paths
+            # Resolve and validate all paths
             startup_script = startup_script.resolve()
             working_dir = self.prod_dir.resolve()
-            
-            bot_logger.info("Using Python: %s", self.python_exe)
-            bot_logger.info("Starting script: %s", startup_script)
+            python_exe = self.python_exe.resolve()
+
+            # Validate existence of all paths before execution
+            for path, name in [
+                (startup_script, "Startup script"),
+                (working_dir, "Working directory"),
+                (python_exe, "Python executable")
+            ]:
+                if not path.exists():
+                    raise FileNotFoundError(f"{name} not found at: {path}")
+                if not os.access(str(path), os.X_OK) and path.suffix in ['.exe', '']:
+                    raise PermissionError(f"No execute permission for {name}: {path}")
+
+            # Create process with absolute paths and proper security checks
+            process_args = [str(python_exe), str(startup_script)]
+            bot_logger.info("Starting process with: %s", ' '.join(process_args))
             bot_logger.info("Working directory: %s", working_dir)
 
-            # Validate paths
-            if not all(p.exists() for p in (self.python_exe, startup_script, working_dir)):
-                raise FileNotFoundError("One or more required paths do not exist")
-
-            # Create a new process with absolute paths
             if os.name == 'nt':  # Windows
                 subprocess.Popen(
-                    [str(self.python_exe.absolute()), str(startup_script)],
+                    process_args,
                     cwd=str(working_dir),
-                    creationflags=subprocess.CREATE_NEW_CONSOLE
+                    creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NO_WINDOW
                 )
             else:  # Linux/Unix
                 subprocess.Popen(
-                    [str(self.python_exe.absolute()), str(startup_script)],
+                    process_args,
                     cwd=str(working_dir),
                     start_new_session=True
                 )
