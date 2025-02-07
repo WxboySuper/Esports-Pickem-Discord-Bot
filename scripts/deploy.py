@@ -196,8 +196,9 @@ class Deployer:
             'test_startup.py'
         ]
         
-        def ignore_patterns(names):
-            return [n for n in names if any(p in n for p in exclude)]
+        def ignore_patterns(dirname, filenames):  # Added dirname parameter
+            """Filter function for shutil.copytree to ignore certain patterns"""
+            return [n for n in filenames if any(p in n for p in exclude)]
 
         # Track modified and new files
         for item in self.test_dir.iterdir():
