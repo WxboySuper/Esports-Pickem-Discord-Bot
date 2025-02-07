@@ -23,6 +23,7 @@ import sqlite3  # Add this import at the top
 from utils.db import PickemDB  # Import db from utils
 from utils import path_helper
 from utils.bot_instance import BotInstance
+from config.config import Config
 
 path_helper.setup_path()
 
@@ -112,18 +113,14 @@ def parse_datetime(date_str: str, time_str: str) -> datetime:
     except ValueError as e:
         raise ValueError("Invalid date/time format. Use: YYYY-MM-DD for date and HH:MM AM/PM for time")
 
-# Load the bot token and USER_ID
-TOKEN = os.getenv('DISCORD_TOKEN')
-try:
-    USER_ID = int(os.getenv('DISCORD_USER_ID', '0'))
-    if USER_ID == 0:
-        raise ValueError("Invalid USER_ID")
-except (ValueError, TypeError) as e:
-    logging.error(f"Failed to parse USER_ID: {e}")
-    raise ValueError("Invalid USER_ID in environment variables")
+config = Config.get_config()
+bot_logger.info(f"Running in {'PRODUCTION' if config.is_production else 'TEST'} mode")
 
-if not TOKEN:
-    raise ValueError("No token found! Make sure DISCORD_TOKEN environment variable is set.")
+# Replace TOKEN and APP_ID assignment
+TOKEN = config.DISCORD_TOKEN
+APP_ID = config.APP_ID
+
+USER_ID = os.getenv("OWNER_USER_DISCORD_ID")
 
 class AnnouncementManager:
     def __init__(self, bot):
@@ -301,8 +298,11 @@ class CustomBot(commands.Bot):
         super().__init__(
             command_prefix='!',
             intents=discord.Intents.all(),
-            application_id=os.getenv('APPLICATION_ID')  # Add your application ID from Discord Developer Portal
+            application_id=config.APP_ID
         )
+        
+        self.config = config
+        
         bot_logger.info("Initializing bot...")
         self.announcer = AnnouncementManager(self)
         bot_logger.info("Announcer created")
