@@ -747,6 +747,7 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
     bot_logger.info("Pick command used by %s (ID: %s) in guild: %s (ID: %s)", interaction.user.name, interaction.user.id, interaction.guild.name, guild_id)
     
     active_matches = bot.db.get_upcoming_matches(hours=48)
+    matches_to_close = []
     
     if not active_matches:
         embed = discord.Embed(
@@ -756,6 +757,15 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
+
+    for match in active_matches:
+        match_id, team_a, team_b, _, _, _, _ = match
+        if team_a == 'TBD' or team_b == 'TBD':
+            matches_to_close.append(match_id)
+        
+    for match_id in matches_to_close:
+        print(matches_to_close)
+        bot.db.close_match(match_id)
 
     view = MatchPicksView(guild_id, active_matches, bot.db)
     embed = view.create_pick_embed()
@@ -785,60 +795,6 @@ async def get_stats(interaction: discord.Interaction):  # Renamed from stats to 
     embed.add_field(name="Active Picks", value=str(active_picks), inline=False)
     
     await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="test", description="Test the announcement system [Owner Only]")
-@app_commands.describe(
-    type="Type of test: announce, result"
-)
-async def test(interaction: discord.Interaction, type: str = "announce"):
-    """Test command to verify announcement system"""
-    bot_logger.info("Test command initiated by %s (ID: %s) with type: %s", interaction.user.name, interaction.user.id, type)
-    if interaction.user.id != USER_ID:
-        await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
-        return
-
-    try:
-        if type == "announce":
-            # Test new match announcement
-            test_date = datetime.now() + timedelta(hours=24)  # Fixed: use timedelta directly
-            await bot.announcer.announce_new_match(
-                match_id=0,
-                team_a="Test Team A",
-                team_b="Test Team B",
-                match_date=test_date,
-                league_name="Test League",
-                match_name="Test Match"
-            )
-            await interaction.response.send_message("✅ Test match announcement sent!", ephemeral=True)
-            
-        elif type == "result":
-            # Test match result announcement
-            await bot.announcer.announce_match_result(
-                match_id=0,
-                team_a="Test Team A",
-                team_b="Test Team B",
-                winner="Test Team A",
-                league_name="Test League"
-            )
-            await interaction.response.send_message("✅ Test result announcement sent!", ephemeral=True)
-            
-        else:
-            await interaction.response.send_message("❌ Invalid test type. Use 'announce' or 'result'", ephemeral=True)
-            
-    except discord.errors.Forbidden as permission_error:
-        bot_logger.error("Insufficient permissions to send test announcement: %s", permission_error)
-        await interaction.response.send_message(f"❌ Test failed: {str(permission_error)}", ephemeral=True)
-    except discord.errors.HTTPException as discord_http_error:
-        bot_logger.error("HTTP error sending test announcement: %s", discord_http_error)
-        await interaction.response.send_message(f"❌ Test failed: {str(discord_http_error)}", ephemeral=True)
-    except ValueError as val_error:
-        await interaction.response.send_message(
-            f"❌ Invalid input: {str(val_error)}", 
-            ephemeral=True
-        )
-    except Exception as e:  # skipcq: PYL-W0621
-        await interaction.response.send_message(f"❌ Test failed: {str(e)}", ephemeral=True)
-        logging.error("Test command error: %s", e)
 
 # Modify set_winner command to use the announcer
 @bot.tree.command(name="set_winner", description="Set the winner for a match [Owner Only]")
@@ -948,12 +904,18 @@ async def create_match(
         # Get league ID (use default league if not found)
         league_id = 1  # Default league ID
         
+        if team_a == "TBD" or team_b == "TBD":
+            is_active = 0
+        else:
+            is_active = 1
+        
         # Create the match with all required parameters
         match_id = bot.db.add_match(
             league_id=league_id,
             team_a=team_a,
             team_b=team_b,
             match_date=date_obj,
+            is_active=is_active,
             match_name=match_name
         )
         
@@ -1299,6 +1261,29 @@ async def handle_update_result(interaction: discord.Interaction, success: bool, 
     else:
         await interaction.response.send_message("❌ Failed to update match", ephemeral=True)
 
+def check_update_match_active_status(match_id: int):
+    """Check team names and if a match is active and update if necessary"""
+    print("Updating match status")
+    match_data = bot.db.get_match_details(match_id)
+    print(match_data)
+    
+    match_id = match_data['match_id']
+    team_a = match_data['team_a']
+    team_b = match_data['team_b']
+    is_active = match_data['is_active']
+    
+    print(team_a)
+    print(team_b)
+    
+    if is_active == 0 and (team_a != "TBD" or team_b != "TBD"):
+        print("Updating match status to open")
+        bot.db.open_match(match_id)
+    elif is_active == 1 and (team_a == "TBD" or team_b == "TBD"):
+        print("Updating match status to closed")
+        bot.db.close_match(match_id)
+    else:
+        pass
+
 @bot.tree.command(name="update_match", description="Update match details [Owner Only]")
 @app_commands.describe(
     match_id="ID of the match to update",
@@ -1350,6 +1335,8 @@ async def update_match(
             new_details['match_date'],
             new_details['match_name']
         )
+
+        check_update_match_active_status(match_id)
 
         await handle_update_result(interaction, success, match_id, old_details, new_details)
 

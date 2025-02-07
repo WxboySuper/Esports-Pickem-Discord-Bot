@@ -254,44 +254,19 @@ class PickemDB:
         except sqlite3.Error:
             return False
 
-    def add_match(self, league_id: int, team_a: str, team_b: str, match_date: datetime, match_name: str) -> int:
+    def add_match(self, league_id: int, team_a: str, team_b: str, match_date: datetime, is_active: int, match_name: str) -> int:
         """Add a new match to the database"""
         db_logger.info(f"Adding new match: {team_a} vs {team_b} ({match_name})")
         try:
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
                 c.execute(
-                    "INSERT INTO matches (league_id, team_a, team_b, match_date, match_name) VALUES (?, ?, ?, ?, ?)",
-                    (league_id, team_a, team_b, match_date, match_name)
+                    "INSERT INTO matches (league_id, team_a, team_b, match_date, is_active, match_name) VALUES (?, ?, ?, ?, ?, ?)",
+                    (league_id, team_a, team_b, match_date, is_active, match_name)
                 )
                 conn.commit()
                 match_id = c.lastrowid
                 db_logger.info(f"Match created successfully with ID: {match_id}")
-
-                # Get league name for the announcement
-                c.execute("SELECT name FROM leagues WHERE league_id = ?", (league_id,))
-                result = c.fetchone()
-                league_name = result[0] if result else "Unknown League"
-
-                # Handle announcement if announcer is set
-                if self.announcer and "tbd" not in team_a.lower() and "tbd" not in team_b.lower():
-                    try:
-                        bot = BotInstance.get_bot()
-                        if bot and bot.loop and bot.loop.is_running():
-                            future = asyncio.run_coroutine_threadsafe(
-                                self.announcer.announce_new_match(
-                                    match_id=match_id,
-                                    team_a=team_a,
-                                    team_b=team_b,
-                                    match_date=match_date,
-                                    league_name=league_name,
-                                    match_name=match_name  # Added: pass match_name to announcement
-                                ),
-                                bot.loop
-                            )
-                            result = future.result(timeout=30)
-                    except Exception as e:
-                        db_logger.error(f"Failed to announce new match {match_id}: {e}", exc_info=True)
 
                 return match_id
                 
@@ -589,6 +564,22 @@ class PickemDB:
         except sqlite3.Error as e:
             logging.error(f"Database error: {e}")
             return False
+    
+    def open_match(self, match_id: int) -> bool:
+        """Re-open a match for picks"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                c = conn.cursor()
+                c.execute("""
+                        UPDATE matches
+                        SET is_active = 1
+                        WHERE match_id = ?
+                        """, (match_id,))
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            logging.error("Database error: %s" % e)
+            return False
 
     def get_global_stats(self) -> dict:
         """Get global statistics for the dashboard"""
@@ -698,6 +689,7 @@ class PickemDB:
                 m.team_a,
                 m.team_b,
                 m.match_date,
+                m.is_active,
                 m.match_name,
                 COALESCE(l.name, 'Unknown League') as league_name,
                 COALESCE(l.region, 'Global') as league_region
@@ -716,9 +708,10 @@ class PickemDB:
                         'team_a': result[1],
                         'team_b': result[2],
                         'match_date': result[3],
-                        'match_name': result[4],
-                        'league_name': result[5],
-                        'league_region': result[6]
+                        'is_active': result[4],
+                        'match_name': result[5],
+                        'league_name': result[6],
+                        'league_region': result[7]
                     }
                 db_logger.warning(f"No match found with ID {match_id}")
                 return None
