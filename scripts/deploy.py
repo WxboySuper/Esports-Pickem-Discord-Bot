@@ -30,7 +30,8 @@ class Deployer:
         # Add git check before other initialization
         self.check_git_installation()
 
-    def check_git_installation(self):
+    @staticmethod
+    def check_git_installation():
         """Check if git is installed and accessible"""
         try:
             subprocess.run(['git', '--version'], check=True, capture_output=True)
