@@ -5,6 +5,7 @@ from pathlib import Path
 import logging
 from datetime import datetime
 import time
+import sys
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +21,11 @@ class Deployer:
         self.prod_dir = Path('E:/esports-pickem - Production')
         self.backup_dir = self.prod_dir / 'backups'
         self.backup_dir.mkdir(exist_ok=True)
+        
+        # Add Python executable path
+        self.python_exe = Path(sys.executable)
+        if not self.python_exe.exists():
+            raise RuntimeError(f"Python executable not found at: {self.python_exe}")
 
     def create_backup(self):
         """Create backup of current production code"""
@@ -48,7 +54,13 @@ class Deployer:
             'testing',
             '.pytest_cache',
             '.vscode',
-            'deploy.bat'
+            'deploy.bat',
+            'scripts',
+            '.coverage',
+            'deepsource.toml',
+            'pickem.db',
+            'pytest.ini',
+            'test_startup.py'
         ]
         
         def ignore_patterns(names):
@@ -69,16 +81,24 @@ class Deployer:
         """Start the production bot"""
         logger.info("Starting production bot...")
         try:
+            startup_script = self.prod_dir / 'prod_startup.py'
+            if not startup_script.exists():
+                raise FileNotFoundError(f"Startup script not found at: {startup_script}")
+
+            logger.info("Using Python: %s", self.python_exe)
+            logger.info("Starting script: %s", startup_script)
+            logger.info("Working directory: %s", self.prod_dir)
+
             # Create a new process detached from the current one
             if os.name == 'nt':  # Windows
                 subprocess.Popen(
-                    ['python', 'prod_startup.py'],
+                    [str(self.python_exe), str(startup_script)],
                     cwd=str(self.prod_dir),
                     creationflags=subprocess.CREATE_NEW_CONSOLE
                 )
             else:  # Linux/Unix
                 subprocess.Popen(
-                    ['python', 'prod_startup.py'],
+                    [str(self.python_exe), str(startup_script)],
                     cwd=str(self.prod_dir),
                     start_new_session=True
                 )
@@ -87,8 +107,14 @@ class Deployer:
             # Wait a moment to check if the process stays running
             time.sleep(5)
             logger.info("Bot appears to be running successfully")
+        except FileNotFoundError as path_error:
+            logger.error("Failed to find required file: %s", path_error)
+            raise
+        except subprocess.SubprocessError as proc_error:
+            logger.error("Failed to start bot process: %s", proc_error)
+            raise
         except Exception as err:
-            logger.error(f"Failed to start production bot: {err}")
+            logger.error("Failed to start production bot: %s", err)
             raise
 
     def deploy(self):
