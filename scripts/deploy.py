@@ -75,7 +75,7 @@ class Deployer:
             if not result.stdout.strip().startswith('git version'):
                 raise RuntimeError("Invalid git version output")
         except subprocess.CalledProcessError as e:
-            raise RuntimeError("Git check failed: %s" % e)
+            raise RuntimeError(f"Git check failed: {e}")
         except FileNotFoundError:
             raise RuntimeError("Git executable not found")
 
@@ -93,7 +93,7 @@ class Deployer:
             current_branch = result.stdout.strip()
             
             if current_branch != 'main':
-                raise RuntimeError("Not on main branch. Current branch: %s" % current_branch)
+                raise RuntimeError(f"Not on main branch. Current branch: {current_branch}")
             
             # Fetch latest changes
             bot_logger.info("Fetching latest changes from remote...")
@@ -120,7 +120,7 @@ class Deployer:
             return True
             
         except subprocess.CalledProcessError as proc_error:
-            raise RuntimeError("Git command failed: %s" % proc_error)
+            raise RuntimeError(f"Git check failed: {proc_error}")
 
     def create_backup(self):
         """Create backup of current production code"""
