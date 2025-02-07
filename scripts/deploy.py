@@ -35,6 +35,9 @@ class Deployer:
         # Add git check before other initialization
         self.check_git_installation()
 
+        self.changes = []  # Track changes during deployment
+        self.changelog_path = self.prod_dir / 'changelog.md'
+
     @staticmethod
     def get_python_executable(self) -> Path:
         """Get full path to Python executable"""
@@ -129,6 +132,44 @@ class Deployer:
         ))
         return backup_path
 
+    def track_change(self, category: str, description: str):
+        """Add a change to the deployment changelog"""
+        self.changes.append({
+            'category': category,
+            'description': description,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+
+    def save_changelog(self):
+        """Save the changelog to a file"""
+        if not self.changes:
+            return
+        
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        try:
+            with open(self.changelog_path, 'a', encoding='utf-8') as f:
+                f.write(f"\n## Deployment - {timestamp}\n\n")
+                
+                # Group changes by category
+                categories = {}
+                for change in self.changes:
+                    cat = change['category']
+                    if cat not in categories:
+                        categories[cat] = []
+                    categories[cat].append(change['description'])
+                
+                # Write changes by category
+                for category, descriptions in categories.items():
+                    f.write(f"\n### {category}\n")
+                    for desc in descriptions:
+                        f.write(f"- {desc}\n")
+                f.write("\n---\n")
+                
+            bot_logger.info("Changelog saved to: %s", self.changelog_path)
+        except Exception as err:
+            bot_logger.error("Failed to save changelog: %s", err)
+
     def copy_files(self):
         """Copy files from test to production"""
         bot_logger.info("Copying files to production...")
@@ -156,6 +197,21 @@ class Deployer:
         
         def ignore_patterns(names):
             return [n for n in names if any(p in n for p in exclude)]
+
+        # Track modified and new files
+        for item in self.test_dir.iterdir():
+            if item.name not in exclude:
+                dest = self.prod_dir / item.name
+                if item.is_dir():
+                    if dest.exists():
+                        self.track_change('Updated Directories', f"Updated directory: {item.name}")
+                    else:
+                        self.track_change('New Directories', f"Added directory: {item.name}")
+                else:
+                    if dest.exists():
+                        self.track_change('Updated Files', f"Updated file: {item.name}")
+                    else:
+                        self.track_change('New Files', f"Added file: {item.name}")
 
         # Copy files
         for item in self.test_dir.iterdir():
@@ -225,6 +281,9 @@ class Deployer:
     def deploy(self):
         """Run full deployment process"""
         try:
+            # Clear previous changes
+            self.changes = []
+            
             # Check git branch first
             self.ensure_main_branch()
             
@@ -244,6 +303,16 @@ class Deployer:
             # Start the bot
             bot_logger.info("Starting bot...")
             self.start_prod_bot()
+            
+            # Save changelog after successful deployment
+            self.save_changelog()
+            
+            # Print instructions for announcement
+            if self.changes:
+                bot_logger.info("\nTo announce these changes:")
+                bot_logger.info("1. Use /announce command in Discord")
+                bot_logger.info("2. Copy the relevant changes from: %s", self.changelog_path)
+                bot_logger.info("3. Format the announcement as needed\n")
             
             bot_logger.info("Deployment completed successfully")
 
