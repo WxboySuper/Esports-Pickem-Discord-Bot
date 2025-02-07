@@ -576,7 +576,7 @@ class PickemDB:
                 conn.commit()
                 return True
         except sqlite3.Error as e:
-            logging.error("Database error: %s" % e)
+            logging.error("Database error: %s", e)
             return False
 
     def get_global_stats(self) -> dict:
