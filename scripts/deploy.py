@@ -27,6 +27,61 @@ class Deployer:
         if not self.python_exe.exists():
             raise RuntimeError(f"Python executable not found at: {self.python_exe}")
 
+        # Add git check before other initialization
+        self.check_git_installation()
+
+    def check_git_installation(self):
+        """Check if git is installed and accessible"""
+        try:
+            subprocess.run(['git', '--version'], check=True, capture_output=True)
+        except subprocess.CalledProcessError:
+            raise RuntimeError("Git is not installed or not accessible")
+        except FileNotFoundError:
+            raise RuntimeError("Git command not found in PATH")
+
+    def ensure_main_branch(self):
+        """Ensure we're on the main branch and it's up to date"""
+        try:
+            # Check current branch
+            result = subprocess.run(
+                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=str(self.test_dir)
+            )
+            current_branch = result.stdout.strip()
+            
+            if current_branch != 'main':
+                raise RuntimeError(f"Not on main branch. Current branch: {current_branch}")
+            
+            # Fetch latest changes
+            logger.info("Fetching latest changes from remote...")
+            subprocess.run(['git', 'fetch', 'origin', 'main'], 
+                         check=True, cwd=str(self.test_dir))
+            
+            # Check if we're behind
+            result = subprocess.run(
+                ['git', 'status', '-uno'],
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=str(self.test_dir)
+            )
+            
+            if "Your branch is behind" in result.stdout:
+                raise RuntimeError("Local main branch is behind remote. Please pull changes first.")
+            
+            # Check for uncommitted changes
+            if "nothing to commit" not in result.stdout:
+                raise RuntimeError("You have uncommitted changes. Please commit or stash them first.")
+                
+            logger.info("Git branch verification successful")
+            return True
+            
+        except subprocess.CalledProcessError as proc_error:
+            raise RuntimeError(f"Git command failed: {proc_error}")
+
     def create_backup(self):
         """Create backup of current production code"""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -120,6 +175,9 @@ class Deployer:
     def deploy(self):
         """Run full deployment process"""
         try:
+            # Check git branch first
+            self.ensure_main_branch()
+            
             # Get confirmation before proceeding
             logger.info("Please ensure you have used the /shutdown command in Discord before continuing.")
             logger.info("The bot will be automatically restarted after deployment.")
@@ -139,6 +197,13 @@ class Deployer:
             
             logger.info("Deployment completed successfully")
 
+        except RuntimeError as git_error:
+            logger.error("Git check failed: %s", git_error)
+            should_continue = input("Git check failed. Continue anyway? (y/n): ").lower()
+            if should_continue != 'y':
+                raise
+            logger.warning("Proceeding with deployment despite git check failure")
+            
         except Exception as err:
             logger.error(f"Deployment failed: {err}")
             should_restore = input("Would you like to restore from backup? (y/n): ").lower()
