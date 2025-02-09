@@ -966,7 +966,7 @@ async def create_match(
 async def show_matches(interaction: discord.Interaction):  # Renamed from matches to show_matches
     bot_logger.info("Matches command used by %s (ID: %s) in guild: %s", 
                    interaction.user.name, interaction.user.id, interaction.guild.name)
-    """Display matches organized by day with navigation"""
+    # Display matches organized by day with navigation
     all_matches = bot.db.get_all_matches()
     
     if not all_matches:
@@ -999,7 +999,7 @@ async def show_matches(interaction: discord.Interaction):  # Renamed from matche
 @app_commands.guild_only()
 async def activepicks(interaction: discord.Interaction):
     bot_logger.info("Active picks command used by %s (ID: %s) in guild: %s", interaction.user.name, interaction.user.id, interaction.guild.name)
-    """Display all active picks for the user"""
+    # Display all active picks for the user
     guild_id = interaction.guild_id
     user_id = interaction.user.id
     
@@ -1149,7 +1149,7 @@ class LeaderboardView(ui.View):
 @app_commands.guild_only()
 async def leaderboard(interaction: discord.Interaction):
     bot_logger.info("Leaderboard command used by %s (ID: %s) in guild: %s", interaction.user.name, interaction.user.id, interaction.guild.name)
-    """Display the server's leaderboard with timeframe options"""
+    # Display the server's leaderboard with timeframe options
     guild_id = interaction.guild_id
     guild_name = interaction.guild.name
     
@@ -1165,7 +1165,7 @@ async def leaderboard(interaction: discord.Interaction):
 @app_commands.guild_only()
 async def summary(interaction: discord.Interaction):
     bot_logger.info("Summary command used by %s (ID: %s) in guild: %s", interaction.user.name, interaction.user.id, interaction.guild.name)
-    """Display a comprehensive daily summary of matches and picks"""
+    # Display a comprehensive daily summary of matches and picks
     guild_id = interaction.guild_id
     user_id = interaction.user.id
     
@@ -1440,7 +1440,7 @@ def create_admin_summary_embed(matches: list, date: datetime) -> discord.Embed:
 @bot.tree.command(name="admin_summary", description="View administrative summary [Owner Only]")
 async def admin_summary(interaction: discord.Interaction):
     bot_logger.info("Admin summary command used by %s (ID: %s)", interaction.user.name, interaction.user.id)
-    """Display administrative summary of matches with day-by-day navigation"""
+    # Display administrative summary of matches with day-by-day navigation
     if interaction.user.id != USER_ID:
         await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
         return
@@ -1518,7 +1518,7 @@ async def announce(
     color: str = "blue"
 ):
     bot_logger.info("Announce command initiated by %s (ID: %s)", interaction.user.name, interaction.user.id)
-    """Send an announcement to all servers"""
+    # Send an announcement to all servers
     if interaction.user.id != USER_ID:
         await interaction.response.send_message(
             "❌ This command is only available to the bot owner!", 
