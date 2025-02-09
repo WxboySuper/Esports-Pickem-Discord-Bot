@@ -116,18 +116,16 @@ def test_get_leaderboard(test_db, sample_match_data):
         assert matches_count == 10, f"Expected 10 matches, got {matches_count}"
         
         # Check picks
-        # skipcq: PYL-C0209
         picks_count = c.execute(
-            "SELECT COUNT(*) FROM picks WHERE guild_id = ? AND match_id IN ({})"
+            "SELECT COUNT(*) FROM picks WHERE guild_id = ? AND match_id IN ({})"  # skipcq: PYL-C0209
             .format(','.join('?' * len(match_ids))), 
             [123] + match_ids
         ).fetchone()[0]
         assert picks_count == 10, f"Expected 10 picks, got {picks_count}"
         
         # Check winners are set
-        # skipcq: PYL-C0209
         winners_count = c.execute(
-            "SELECT COUNT(*) FROM matches WHERE winner IS NOT NULL AND match_id IN ({})"
+            "SELECT COUNT(*) FROM matches WHERE winner IS NOT NULL AND match_id IN ({})"  # skipcq: PYL-C0209
             .format(','.join('?' * len(match_ids))),
             match_ids
         ).fetchone()[0]
