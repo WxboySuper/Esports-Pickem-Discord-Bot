@@ -20,8 +20,8 @@ def index():
 
 @bp.route('/picks/<user_id>', methods=['GET'])
 def get_user_picks(user_id):
-    user = user.get_user_by_id(user_id)
-    if user:
+    user_info = user.get_user_by_id(user_id)
+    if user_info:
         picks = pick.get_picks_by_user(user_id)
         return jsonify({'user_id': user_id, 'picks': picks}), 200
     return jsonify({'error': 'User not found'}), 404
