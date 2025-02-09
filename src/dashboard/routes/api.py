@@ -45,6 +45,8 @@ def get_leaderboard():
             'error': str(e)
         }), 500
 
+# TODO: Complete the implementation
+# skipcq: PYL-W0613
 @bp.route('/match/<match_id>/result', methods=['POST'])
 def submit_match_result(match_id):
     data = request.json
