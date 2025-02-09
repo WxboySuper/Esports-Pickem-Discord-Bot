@@ -54,6 +54,7 @@ class CustomFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt, datefmt="%Y-%m-%d %H:%M:%S")
         return formatter.format(record)
 
+
 # Set up root logger
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -116,6 +117,7 @@ def ensure_datetime(date_value) -> datetime:
     else:
         raise ValueError(f"Cannot convert {type(date_value)} to datetime")
 
+
 config = Config.get_config()
 bot_logger.info("Running in %s mode", {'PRODUCTION' if config.is_production else 'TEST'})
 
@@ -131,6 +133,8 @@ def validate_user_id(user_id: str) -> int:
         return int(user_id)
     except ValueError:
         raise ValueError("Invalid owner user ID. Must be an integer") from None
+
+
 USER_ID = validate_user_id(os.getenv("OWNER_USER_DISCORD_ID"))
 
 class AnnouncementManager:
@@ -377,6 +381,7 @@ class CustomBot(commands.Bot):
             raise
         except Exception as update_error:
             bot_logger.error("Unexpected error in status update task: %s", update_error)
+
 
 # Replace bot initialization
 bot = CustomBot()
