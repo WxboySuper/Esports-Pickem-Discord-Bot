@@ -302,7 +302,7 @@ class PickemDB:
                         (guild_id, user_id, match_id, pick)
                     )
                     conn.commit()
-                    db_logger.info(f"Pick recorded successfully")
+                    db_logger.info("Pick recorded successfully")
                     return True
                 except sqlite3.Error as e:
                     db_logger.error(f"Failed to record pick: {e}")

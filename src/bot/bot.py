@@ -179,7 +179,7 @@ class AnnouncementManager:
         # Create embed with voting statistics
         embed = discord.Embed(
             title="🏆 Match Result!",
-            description=f"The winner has been decided!",
+            description="The winner has been decided!",
             color=discord.Color.gold()
         )
         
