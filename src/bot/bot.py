@@ -746,7 +746,8 @@ async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
 async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pick
     """Command to make picks for matches within the next 48 hours"""
     guild_id = interaction.guild_id
-    bot_logger.info("Pick command used by %s (ID: %s) in guild: %s (ID: %s)", interaction.user.name, interaction.user.id, interaction.guild.name, guild_id)
+    bot_logger.info("Pick command used by %s (ID: %s) in guild: %s (ID: %s)",
+                    interaction.user.name, interaction.user.id, interaction.guild.name, guild_id)
 
     upcoming_matches = bot.db.get_upcoming_matches(hours=48)
     matches_to_close = []
