@@ -96,7 +96,7 @@ def matches_page():
             current_year=datetime.now().year
         )
     except Exception as e:
-        admin_logger.error(f"Error loading matches: {str(e)}")
+        admin_logger.error("Error loading matches: %s", e)
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
 @bp.route('/matches', methods=['POST'])
@@ -130,7 +130,7 @@ def create_match():
             return jsonify({'error': 'Failed to create match'}), 400
 
     except Exception as e:
-        admin_logger.error("Error creating match: %s", str(e))
+        admin_logger.error("Error creating match: %s", e)
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 

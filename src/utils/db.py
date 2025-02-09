@@ -30,7 +30,7 @@ class PickemDB:
     def __init__(self, db_path="pickem.db"):
         self.db_path = db_path
         self.announcer = None
-        db_logger.info(f"Initializing database with path: {db_path}")
+        db_logger.info("Initializing database with path: %s", db_path)
         self.init_db()
         self.migrate_db()
         
@@ -93,7 +93,7 @@ class PickemDB:
                 conn.commit()
                 db_logger.info("Database tables initialized successfully")
         except sqlite3.Error as e:
-            db_logger.error(f"Failed to initialize database tables: {e}", exc_info=True)
+            db_logger.error("Failed to initialize database tables: %s", e, exc_info=True)
             raise
 
     def migrate_db(self):
@@ -252,7 +252,7 @@ class PickemDB:
 
     def add_match(self, league_id: int, team_a: str, team_b: str, match_date: datetime, is_active: int, match_name: str) -> int:
         """Add a new match to the database"""
-        db_logger.info(f"Adding new match: {team_a} vs {team_b} ({match_name})")
+        db_logger.info("Adding new match: %s vs %s (%s)", team_a, team_b, match_name)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
@@ -262,17 +262,19 @@ class PickemDB:
                 )
                 conn.commit()
                 match_id = c.lastrowid
-                db_logger.info(f"Match created successfully with ID: {match_id}")
+                db_logger.info("Match created successfully with ID: %d", match_id)
 
                 return match_id
                 
         except sqlite3.Error as e:
-            db_logger.error(f"Failed to add match: {e}", exc_info=True)
+            db_logger.error("Failed to add match: %s", e, exc_info=True)
             return None
 
     def make_pick(self, guild_id: int, user_id: int, match_id: int, pick: str) -> bool:
         """Record a user's pick for a match"""
-        db_logger.info(f"Recording pick: Guild {guild_id}, User {user_id} ({getattr(BotInstance.get_bot().get_user(user_id), 'name', 'Unknown')}), Match {match_id}, Pick: {pick}")
+        user_name = getattr(BotInstance.get_bot().get_user(user_id), 'name', 'Unknown')
+        db_logger.info("Recording pick: Guild %d, User %d (%s), Match %d, Pick: %s", 
+                      guild_id, user_id, user_name, match_id, pick)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
@@ -285,13 +287,13 @@ class PickemDB:
                 
                 match_data = c.fetchone()
                 if not match_data:
-                    db_logger.warning(f"Match {match_id} not found")
+                    db_logger.warning("Match %d not found", match_id)
                     return False
                     
                 _, winner = match_data
                 
                 if winner is not None:
-                    db_logger.warning(f"Match {match_id} already has a winner")
+                    db_logger.warning("Match %d already has a winner", match_id)
                     return False
                     
                 # Make the pick
@@ -304,16 +306,16 @@ class PickemDB:
                     db_logger.info("Pick recorded successfully")
                     return True
                 except sqlite3.Error as e:
-                    db_logger.error(f"Failed to record pick: {e}")
+                    db_logger.error("Failed to record pick: %s", e)
                     return False
                     
         except sqlite3.Error as e:
-            db_logger.error(f"Database error: {e}")
+            db_logger.error("Database error: %s", e)
             return False
 
     def update_match_result(self, match_id: int, winner: str) -> bool:
         """Update match result and calculate correct picks - globally"""
-        db_logger.info(f"Updating match {match_id}: Winner set to {winner}")
+        db_logger.info("Updating match %d: Winner set to %s", match_id, winner)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
@@ -328,16 +330,17 @@ class PickemDB:
                     WHERE match_id = ?
                 """, (winner, match_id))
                 conn.commit()
-                db_logger.info(f"Match {match_id} result updated successfully")
+                db_logger.info("Match %d result updated successfully", match_id)
                 return True
                 
         except sqlite3.Error as e:
-            db_logger.error(f"Failed to update match result: {e}", exc_info=True)
+            db_logger.error("Failed to update match result: %s", e, exc_info=True)
             return False
 
     def update_match(self, match_id: int, team_a: str, team_b: str, match_date: datetime, match_name: str) -> bool:
         """Update match details"""
-        db_logger.info(f"Updating match {match_id}: {team_a} vs {team_b}, Date: {match_date.strftime('%Y-%m-%d %I:%M %p')}, Type: {match_name}")
+        db_logger.info("Updating match %d: %s vs %s, Date: %s, Type: %s", 
+                      match_id, team_a, team_b, match_date.strftime('%Y-%m-%d %I:%M %p'), match_name)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
@@ -347,11 +350,11 @@ class PickemDB:
                     WHERE match_id = ?
                 """, (team_a, team_b, match_date, match_name, match_id))
                 conn.commit()
-                db_logger.info(f"Match {match_id} updated successfully")
+                db_logger.info("Match %d updated successfully", match_id)
                 return True
         except sqlite3.Error as e:
-            logging.error(f"Database error: {e}")
-            db_logger.error(f"Failed to update match: {e}", exc_info=True)
+            logging.error("Database error: %s", e)
+            db_logger.error("Failed to update match: %s", e, exc_info=True)
             return False
 
     def get_user_stats(self, guild_id: int, user_id: int) -> dict:
@@ -410,7 +413,7 @@ class PickemDB:
 
     def get_leaderboard_by_timeframe(self, guild_id: int, timeframe: str = 'all', limit: int = 10) -> list:
         """Get top users by correct picks or percentage within specified timeframe"""
-        db_logger.debug(f"Fetching leaderboard for guild {guild_id}, timeframe: {timeframe}")
+        db_logger.debug("Fetching leaderboard for guild %d, timeframe: %s", guild_id, timeframe)
         try:
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
@@ -461,10 +464,10 @@ class PickemDB:
                     """
                 
                 result = c.execute(query, (guild_id, limit)).fetchall()
-                db_logger.debug(f"Retrieved {len(result)} leaderboard entries")
+                db_logger.debug("Retrieved %d leaderboard entries", len(result))
                 return result
         except sqlite3.Error as e:
-            db_logger.error(f"Failed to get leaderboard: {e}", exc_info=True)
+            db_logger.error("Failed to get leaderboard: %s", e, exc_info=True)
             return []
 
     def get_total_users(self, guild_id: int):
@@ -556,7 +559,7 @@ class PickemDB:
                 conn.commit()
                 return True
         except sqlite3.Error as e:
-            logging.error(f"Database error: {e}")
+            logging.error("Database error: %s", e)
             return False
     
     def open_match(self, match_id: int) -> bool:
@@ -672,12 +675,12 @@ class PickemDB:
                 c.execute(query, (guild_id, user_id))
                 return c.fetchall()
         except Exception as e:
-            logging.error(f"Error getting active picks: {e}")
+            logging.error("Error getting active picks: %s", e)
             return []
 
     def get_match_details(self, match_id: int) -> dict:
         """Get detailed information about a specific match"""
-        db_logger.debug(f"Fetching details for match {match_id}")
+        db_logger.debug("Fetching details for match %d", match_id)
         query = """
             SELECT 
                 m.match_id,
@@ -697,7 +700,7 @@ class PickemDB:
                 c = conn.cursor()
                 result = c.execute(query, (match_id,)).fetchone()
                 if result:
-                    db_logger.debug(f"Match {match_id} details retrieved successfully")
+                    db_logger.debug("Match %d details retrieved successfully", match_id)
                     return {
                         'match_id': result[0],
                         'team_a': result[1],
@@ -708,11 +711,11 @@ class PickemDB:
                         'league_name': result[6],
                         'league_region': result[7]
                     }
-                db_logger.warning(f"No match found with ID {match_id}")
+                db_logger.warning("No match found with ID %d", match_id)
                 return None
         except sqlite3.Error as e:
-            logging.error(f"Database error: {e}")
-            db_logger.error(f"Failed to get match details: {e}", exc_info=True)
+            logging.error("Database error: %s", e)
+            db_logger.error("Failed to get match details: %s", e, exc_info=True)
             return None
 
     def get_user_pick(self, guild_id: int, user_id: int, match_id: int) -> str:
@@ -727,7 +730,7 @@ class PickemDB:
                 result = c.execute(query, (guild_id, user_id, match_id)).fetchone()
                 return result[0] if result else None
         except sqlite3.Error as e:
-            logging.error(f"Error getting user pick: {e}")
+            logging.error("Error getting user pick: %s", e)
             return None
 
     def get_ongoing_matches(self):
@@ -745,7 +748,7 @@ class PickemDB:
                 c.execute(query, (current_time,))
                 return c.fetchall()
         except Exception as e:
-            logging.error(f"Error getting ongoing matches: {e}")
+            logging.error("Error getting ongoing matches: %s", e)
             return []
 
     def __del__(self):
@@ -759,6 +762,6 @@ def handle_db_error(func):
         try:
             return func(*args, **kwargs)
         except sqlite3.Error as e:
-            db_logger.error(f"Database error in {func.__name__}: {e}", exc_info=True)
+            db_logger.error("Database error in %s: %s", func.__name__, e, exc_info=True)
             return
     return wrapper
