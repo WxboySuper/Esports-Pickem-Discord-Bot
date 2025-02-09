@@ -167,10 +167,10 @@ def leaderboard():
     try:
         board_type = request.args.get('type', 'global')
         guild_id = request.args.get('guild_id', type=int)
-        
+
 # Get leaderboard data directly from user model
         leaderboard_data = User.get_leaderboard(guild_id if board_type == 'guild' else None)
-        
+
 # Format leaderboard data for template
         formatted_leaderboard = [
             {
@@ -183,7 +183,7 @@ def leaderboard():
             }
             for entry in leaderboard_data
         ]
-        
+
 # Get global stats for sidebar
         global_stats = db.get_global_stats()
         stats = {
@@ -191,10 +191,10 @@ def leaderboard():
             'total_picks': global_stats['total_picks'],
             'avg_accuracy': global_stats['global_accuracy']
         }
-        
+
 # Get list of guilds for dropdown
         guilds = db.get_guild_list()
-        
+
         return render_template(
             'admin/leaderboard.html',
             leaderboard=formatted_leaderboard,
