@@ -1,5 +1,4 @@
 import sqlite3
-from datetime import datetime
 
 class Pick:
     DB_PATH = "pickem.db"  # Use the same database as the Discord bot

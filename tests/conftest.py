@@ -1,5 +1,4 @@
 import pytest
-import sqlite3
 import os
 from datetime import datetime
 from src.utils.db import PickemDB

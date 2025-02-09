@@ -13,7 +13,11 @@ def index():
 
 @bp.route('/picks/<user_id>', methods=['GET'])
 def get_user_picks(user_id):
-    user_info = user.get_user_by_id(user_id)
+    try:
+        user_id_int = int(user_id)
+    except ValueError:
+        return jsonify({'error': 'Invalid user ID'}), 400
+    user_info = user.get_user_by_id(user_id_int)
     if user_info:
         picks = pick.get_picks_by_user(user_id)
         return jsonify({'user_id': user_id, 'picks': picks}), 200
@@ -45,7 +49,9 @@ def get_leaderboard():
             'error': str(e)
         }), 500
 
+# TODO: Complete the implementation
 @bp.route('/match/<match_id>/result', methods=['POST'])
+# skipcq: PYL-W0613
 def submit_match_result(match_id):
     data = request.json
     winner = data.get('winner')

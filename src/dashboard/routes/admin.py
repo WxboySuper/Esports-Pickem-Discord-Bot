@@ -3,6 +3,27 @@ from datetime import datetime
 import logging
 import traceback
 
+# Set up admin logger
+admin_logger = logging.getLogger('admin')
+admin_logger.setLevel(logging.INFO)
+
+# Configure logging format
+log_format = "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+formatter = logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S")
+
+# Create logs directory if it doesn't exist
+from pathlib import Path
+logs_dir = Path("logs")
+logs_dir.mkdir(exist_ok=True)
+
+# Create a file handler for admin logs
+admin_log_filename = f"admin_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+admin_log_filepath = logs_dir / admin_log_filename
+
+admin_file_handler = logging.FileHandler(admin_log_filepath)
+admin_file_handler.setFormatter(formatter)
+admin_logger.addHandler(admin_file_handler)
+
 # Import directly from utils
 from utils.db import PickemDB
 from models.user import User
@@ -16,7 +37,7 @@ def index():
         picks = db.get_recent_picks(20)  # Get last 20 picks
         return render_template('dashboard.html', picks=picks)
     except Exception as e:
-        logging.error("Error loading dashboard %s", e)
+        admin_logger.error("Error loading dashboard: %s", e)
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
 @bp.route('/stats')
@@ -33,7 +54,7 @@ def admin_stats():
             current_year=datetime.now().year
         )
     except Exception as e:
-        logging.error("Error loading admin stats %s", e)
+        admin_logger.error("Error loading admin stats: %s", e)
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
 @bp.route('/api/stats')
@@ -49,7 +70,7 @@ def api_stats():
             'guilds': [{'id': g[0], 'picks': g[1]} for g in guilds]
         })
     except Exception as e:
-        logging.error("Error loading API stats %s", e)
+        admin_logger.error("Error loading API stats: %s", e)
         return jsonify({
             'success': False,
             'error': str(e)}
@@ -75,7 +96,7 @@ def matches_page():
             current_year=datetime.now().year
         )
     except Exception as e:
-        logging.error(f"Error loading matches: {str(e)}")
+        admin_logger.error("Error loading matches: %s", e)
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
 @bp.route('/matches', methods=['POST'])
@@ -83,7 +104,7 @@ def create_match():
     try:
         data = request.get_json()
         
-        logging.info("Created match with data: %s", data)
+        admin_logger.info("Created match with data: %s", data)
 
         league_id = data.get('league_id')
         team_a = data.get('team_a')
@@ -91,25 +112,25 @@ def create_match():
         match_date = data.get('match_date')
 
         if not all([league_id, team_a, team_b, match_date]):
-            logging.error("Missing required fields")
+            admin_logger.error("Missing required fields")
             return jsonify({'error': 'Missing required fields'}), 400
 
         try:
             match_date = datetime.fromisoformat(match_date.replace('T', ' '))
         except ValueError as e:
-            logging.error("Invalid date format: %s", e)
+            admin_logger.error("Invalid date format: %s", e)
             return jsonify({'error': 'Invalid date format'}), 400
 
         match_id = db.add_match(int(league_id), team_a, team_b, match_date)
         if match_id:
-            logging.info("Match created successfully: %s", match_id)
+            admin_logger.info("Match created successfully: %s", match_id)
             return jsonify({'id': match_id}), 201
         else:
-            logging.error("Failed to create match")
+            admin_logger.error("Failed to create match")
             return jsonify({'error': 'Failed to create match'}), 400
 
     except Exception as e:
-        logging.error("Error creating match: %s", str(e))
+        admin_logger.error("Error creating match: %s", e)
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 
@@ -117,7 +138,7 @@ def create_match():
 def update_match(match_id):
     try:
         data = request.get_json()
-        logging.info("Received update data: %s", data)
+        admin_logger.info("Received update data: %s", data)
 
         # Check if this is a winner update
         if 'winner' in data:
@@ -127,7 +148,7 @@ def update_match(match_id):
             try:
                 match_date = datetime.strptime(data['match_date'], '%Y-%m-%d %H:%M')
             except ValueError as e:
-                logging.error("Date parsing error: %s", e)
+                admin_logger.error("Date parsing error: %s", e)
                 return jsonify({'error': 'Invalid date format. Expected YYYY-MM-DD HH:MM'}), 400
 
             success = db.update_match(match_id, data['team_a'], data['team_b'], match_date)
@@ -137,10 +158,10 @@ def update_match(match_id):
         return jsonify({'error': 'Failed to update match'}), 400
 
     except KeyError as e:
-        logging.error("Missing required field: %s", e)
+        admin_logger.error("Missing required field: %s", e)
         return jsonify({'error': f'Missing required field: {str(e)}'}), 400
     except Exception as e:
-        logging.error("Error updating match: %s", e)
+        admin_logger.error("Error updating match: %s", e)
         return jsonify({'error': str(e)}), 400
 
 @bp.route('/leaderboard')
@@ -186,7 +207,7 @@ def leaderboard():
             current_year=datetime.now().year
         )
     except Exception as e:
-        logging.error(f"Error loading admin leaderboard: {str(e)}")
+        admin_logger.error("Error loading admin leaderboard: %s", {str(e)})
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
 @bp.route('/leagues')
@@ -211,7 +232,7 @@ def leagues_page():
             current_year=datetime.now().year
         )
     except Exception as e:
-        logging.error(f"Error loading leagues: {str(e)}")
+        admin_logger.error("Error loading leagues: %s", {str(e)})
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
 @bp.route('/leagues', methods=['POST'])
@@ -226,7 +247,7 @@ def add_league():
         )
         return jsonify({'success': True, 'league_id': league_id}), 201
     except Exception as e:
-        logging.error("Error adding league: %s", str(e))
+        admin_logger.error("Error adding league: %s", str(e))
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 400
 
 @bp.route('/leagues/<int:league_id>', methods=['PUT'])
@@ -243,5 +264,5 @@ def update_league(league_id):
         )
         return jsonify({'success': success}), 200 if success else 400
     except Exception as e:
-        logging.error("Error updating league: %s", str(e))
+        admin_logger.error("Error updating league: %s", str(e))
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 400
