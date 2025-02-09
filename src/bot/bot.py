@@ -682,7 +682,7 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
     type="Type of Shutdown Message. Options: [normal, update, restart, bugfix]"
 )
 @app_commands.guild_only()
-async def shutdown(interaction: discord.Interaction, type: str):
+async def shutdown_command(interaction: discord.Interaction, type: str):
     """Shuts down the bot"""
     bot_logger.info("Shutdown command initiated by %s (ID: %s) with type: %s", interaction.user.name, interaction.user.id, type)
     if interaction.user.id != USER_ID:
@@ -1716,7 +1716,7 @@ async def on_guild_join(guild: discord.Guild):
 
 # Add the help command after your other commands
 @bot.tree.command(name="help", description="Show available commands and bot information")
-async def help(interaction: discord.Interaction):
+async def help_command(interaction: discord.Interaction):
     """Display help information about the bot and its commands"""
     bot_logger.info("Help command used by %s (ID: %s)", interaction.user.name, interaction.user.id)
 
