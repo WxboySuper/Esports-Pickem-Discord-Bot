@@ -1,6 +1,7 @@
 import sys
 import os
 from datetime import datetime
+import sqlite3
 
 # Update import path to use bot's database
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../bot'))
@@ -25,7 +26,7 @@ def get_leaderboard(guild_id=None, limit=10):
             return db.get_leaderboard(guild_id, limit)
         
         # For global leaderboard, combine all guilds
-        with db._get_connection() as conn:
+        with sqlite3.connect(db.db_path) as conn:
             c = conn.cursor()
             return c.execute("""
                 SELECT 
@@ -50,7 +51,7 @@ def get_user_stats(user_id, guild_id=None):
             return db.get_user_stats(guild_id, user_id)
         
         # For global stats
-        with db._get_connection() as conn:
+        with sqlite3.connect(db.db_path) as conn:
             c = conn.cursor()
             c.execute("""
                 WITH user_picks AS (
