@@ -2,14 +2,8 @@ from flask import Blueprint, jsonify, request
 from dashboard.models import user
 from dashboard.models import pick  # Use absolute imports instead of relative
 import asyncio
-import sys
-import os
-from pathlib import Path
 
-# Add the bot's directory to Python path
-bot_path = Path(__file__).parent.parent.parent
-sys.path.append(str(bot_path))
-from bot.bot import bot  # Import the bot instance
+from bot.bot import bot
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
