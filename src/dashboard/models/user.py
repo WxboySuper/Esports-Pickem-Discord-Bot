@@ -42,8 +42,12 @@ def get_leaderboard(guild_id=None, limit=10):
             """, ('correct_picks', limit,)).fetchall()
             
     except Exception as e:
-        logging.error(f"Error getting leaderboard: {e}", exc_info=True)
-        return []
+        logging.error("Error getting leaderboard %s", e)
+        return {
+            'success': False,
+            'error': str(e),
+            'data': []
+        }
 
 def get_user_stats(user_id, guild_id=None):
     """Get user statistics globally or for specific guild"""
@@ -86,6 +90,8 @@ def get_user_stats(user_id, guild_id=None):
     except Exception as e:
         print(f"Error getting user stats: {e}")
         return {
+            "Success": False,
+            "Error": str(e),
             "total_picks": 0,
             "completed_picks": 0,
             "correct_picks": 0,
