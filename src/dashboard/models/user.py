@@ -1,6 +1,5 @@
 import sys
 import os
-from datetime import datetime
 import sqlite3
 import logging
 

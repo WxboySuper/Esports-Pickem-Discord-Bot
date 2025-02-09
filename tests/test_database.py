@@ -1,7 +1,5 @@
-import pytest
 from datetime import datetime, timedelta
 import sqlite3
-from src.utils.db import PickemDB
 
 def test_db_initialization(test_db):
     """Test database initialization"""
