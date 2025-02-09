@@ -2,6 +2,7 @@ import sys
 import os
 from datetime import datetime
 import sqlite3
+import logging
 
 # Update import path to use bot's database
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../bot'))
@@ -36,12 +37,12 @@ def get_leaderboard(guild_id=None, limit=10):
                     COUNT(DISTINCT guild_id) as guild_count
                 FROM picks
                 GROUP BY user_id
-                ORDER BY correct_picks DESC
+                ORDER BY ? DESC
                 LIMIT ?
-            """, (limit,)).fetchall()
+            """, ('correct_picks', limit,)).fetchall()
             
     except Exception as e:
-        print(f"Error getting leaderboard: {e}")
+        logging.error(f"Error getting leaderboard: {e}", exc_info=True)
         return []
 
 def get_user_stats(user_id, guild_id=None):
