@@ -2,6 +2,9 @@ from flask import Blueprint, render_template, request, jsonify
 from datetime import datetime
 import logging
 import traceback
+from utils.db import PickemDB
+from models.user import User
+from pathlib import Path
 
 # Set up admin logger
 admin_logger = logging.getLogger('admin')
@@ -12,7 +15,6 @@ log_format = "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
 formatter = logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S")
 
 # Create logs directory if it doesn't exist
-from pathlib import Path
 logs_dir = Path("logs")
 logs_dir.mkdir(exist_ok=True)
 
@@ -23,10 +25,6 @@ admin_log_filepath = logs_dir / admin_log_filename
 admin_file_handler = logging.FileHandler(admin_log_filepath)
 admin_file_handler.setFormatter(formatter)
 admin_logger.addHandler(admin_file_handler)
-
-# Import directly from utils
-from utils.db import PickemDB
-from models.user import User
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 db = PickemDB()

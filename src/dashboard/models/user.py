@@ -2,10 +2,10 @@ import sys
 import os
 import sqlite3
 import logging
+from utils.db import PickemDB
 
 # Update import path to use bot's database
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../bot'))
-from utils.db import PickemDB
 
 db = PickemDB()
 
