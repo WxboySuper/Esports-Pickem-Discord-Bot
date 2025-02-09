@@ -787,7 +787,7 @@ async def get_stats(interaction: discord.Interaction):  # Renamed from stats to 
     
     # Create ratio string for correct/completed picks
     completed_ratio = f"{user_stats['correct_picks']}/{user_stats['completed_picks']}" \
-                        if user_stats['completed_picks'] > 0 else "0/0"
+                    if user_stats['completed_picks'] > 0 else "0/0"
     
     embed = discord.Embed(
         title="Your Pick'em Stats",
