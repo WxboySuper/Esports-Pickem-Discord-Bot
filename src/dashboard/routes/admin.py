@@ -7,14 +7,16 @@ import traceback
 
 # Import directly from utils
 from utils.db import PickemDB
+from models.user import User  # Import the User class
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 db = PickemDB()
+user = User()
 
 @bp.route('/')
 def index():
     try:
-        picks = pick.get_recent_picks(20)  # Get last 20 picks
+        picks = db.get_recent_picks(20)  # Get last 20 picks
         return render_template('dashboard.html', picks=picks)
     except Exception as e:
         return f"Error loading dashboard: {str(e)}", 500
