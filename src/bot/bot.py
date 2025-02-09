@@ -40,7 +40,7 @@ class CustomFormatter(logging.Formatter):
     red = "\x1b[31;20m"
     bold_red = "\x1b[31;1m"
     reset = "\x1b[0m"
-    
+
     FORMATS = {
         logging.DEBUG: grey + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
         logging.INFO: grey + "%(asctime)s - %(levelname)s - %(name)s" + reset,
@@ -48,7 +48,7 @@ class CustomFormatter(logging.Formatter):
         logging.ERROR: red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
         logging.CRITICAL: bold_red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset
     }
-    
+
     def format(self, record):
         log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt, datefmt="%Y-%m-%d %H:%M:%S")
@@ -187,10 +187,10 @@ class AnnouncementManager:
             description="The winner has been decided!",
             color=discord.Color.gold()
         )
-        
+
         # Calculate percentage
         accuracy = (correct_picks / total_picks * 100) if total_picks > 0 else 0
-        
+
         embed.add_field(
             name="Match Details",
             value=f"🏆 **{team_a}** vs **{team_b}**\n"
@@ -236,7 +236,7 @@ class AnnouncementManager:
                 "restart": "Bot is restarting",
                 "bugfix": "Bot is being shutdown to fix bugs"
             }
-            
+
             embed = discord.Embed(
                 title="🤖 Bot Status Update",
                 description=messages.get(shutdown_type, "Bot is going offline"),
@@ -267,7 +267,7 @@ class AnnouncementManager:
             # Format datetime objects for display
             old_date = ensure_datetime(old_details['match_date'])
             new_date = ensure_datetime(new_details['match_date'])
-            
+
             changes = []
             if old_details['team_a'] != new_details['team_a'] or old_details['team_b'] != new_details['team_b']:
                 changes.append(f"Teams: {old_details['team_a']} vs {old_details['team_b']} ➔ "
@@ -289,7 +289,7 @@ class AnnouncementManager:
                         await channel.send(embed=embed)
                     except discord.Forbidden:
                         continue
-                        
+
         except ValueError as datetime_error:
             bot_logger.error("Date parsing error in match update announcement: %s", datetime_error)
         except Exception as announce_error:
@@ -303,10 +303,10 @@ class AnnouncementManager:
             color=color,
             timestamp=datetime.now()
         )
-        
+
         success_count = 0
         fail_count = 0
-        
+
         for guild in self.bot.guilds:
             if channel := await self.get_announcement_channel(guild):
                 try:
@@ -315,7 +315,7 @@ class AnnouncementManager:
                 except discord.Forbidden:
                     fail_count += 1
                     continue
-                
+
         return success_count, fail_count
 
 class CustomBot(commands.Bot):
@@ -325,9 +325,9 @@ class CustomBot(commands.Bot):
             intents=discord.Intents.all(),
             application_id=config.APP_ID
         )
-        
+
         self.config = config
-        
+
         bot_logger.info("Initializing bot...")
         self.announcer = AnnouncementManager(self)
         bot_logger.info("Announcer created")
@@ -337,7 +337,7 @@ class CustomBot(commands.Bot):
         bot_logger.info("Announcer set on database")
         self.status_task = None  # Add this line
         bot_logger.info("Bot initialization complete")
-        
+
     async def setup_hook(self):
         """This is called when the bot starts, sets up the command tree"""
         bot_logger.info("Setting up command tree...")
@@ -350,12 +350,12 @@ class CustomBot(commands.Bot):
             while not self.is_closed():
                 # Get current ongoing matches
                 ongoing_matches = self.db.get_ongoing_matches()
-                
+
                 if ongoing_matches:
                     # Get the first ongoing match - rename to current_match to avoid shadowing
                     current_match = ongoing_matches[0]
                     team_a, team_b = current_match[2], current_match[3]
-                    
+
                     # Set watching status for the match
                     activity = discord.Activity(
                         type=discord.ActivityType.watching,
@@ -369,7 +369,7 @@ class CustomBot(commands.Bot):
                         name="your picks | /pick"
                     )
                     await self.change_presence(activity=activity, status=discord.Status.online)
-                
+
                 # Update every 5 minutes
                 await asyncio.sleep(300)
         except discord.errors.ConnectionClosed as discord_conn_error:
@@ -390,12 +390,12 @@ BotInstance.set_bot(bot)  # Store bot instance globally
 class StartupView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)  # Button won't timeout
-        
+
     @discord.ui.button(label="Make Picks!", style=ButtonStyle.primary, emoji="🎮")
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Get the pick command
         pick_command = bot.tree.get_command("pick")
-        
+
         # Execute the pick command
         if pick_command:
             await pick_command.callback(interaction)
@@ -405,7 +405,7 @@ class StartupView(ui.View):
 class ShutdownView(ui.View):
     def __init__(self):
         super().__init__(timeout=10)  # Button disappears after 10 seconds
-        
+
     @ui.button(label="Cancel Shutdown", style=ButtonStyle.danger)
     async def cancel_button(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.send_message("Shutdown cancelled!", ephemeral=True)
@@ -418,37 +418,37 @@ class MatchPicksView(ui.View):
         self.matches = matches
         self.db = db
         self.current_index = 0
-        
+
         # Update navigation button states
         self.update_buttons()
 
     def update_buttons(self):
         self.previous_button.disabled = self.current_index == 0
         self.next_button.disabled = self.current_index == len(self.matches) - 1
-        
+
         # Remove old team buttons
         for child in self.children[:]:
             if isinstance(child, ui.Button) and child.custom_id and child.custom_id.startswith("pick_"):
                 self.remove_item(child)
-        
+
         # Get current match - rename to current_match
         current_match = self.matches[self.current_index]
         match_id, team_a, team_b = current_match[0], current_match[1], current_match[2]
-        
+
         # Add new team buttons
         team_a_button = ui.Button(label=team_a, style=ButtonStyle.primary, custom_id=f"pick_{match_id}_{team_a}")
         team_b_button = ui.Button(label=team_b, style=ButtonStyle.primary, custom_id=f"pick_{match_id}_{team_b}")
-        
+
         team_a_button.callback = self.pick_callback
         team_b_button.callback = self.pick_callback
-        
+
         self.add_item(team_a_button)
         self.add_item(team_b_button)
 
     async def pick_callback(self, interaction: discord.Interaction):
         custom_id = interaction.data["custom_id"]
         _, match_id, team = custom_id.split("_")
-        
+
         success = self.db.make_pick(self.guild_id, interaction.user.id, int(match_id), team)
         if success:
             await interaction.response.send_message(f"You picked {team}!", ephemeral=True)
@@ -482,9 +482,9 @@ class MatchPicksView(ui.View):
         # Unpack all 9 values from the match tuple
         # skipcq: PYL-W0612
         match_id, team_a, team_b, match_date, is_active, league_name, league_region, match_name = current_match
-        
+
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
-        
+
         embed = discord.Embed(
             title=f"🎮 {league_name} - Match {self.current_index + 1}/{len(self.matches)}",
             description=f"📅 {get_discord_timestamp(match_datetime, 'F')}\n"
@@ -503,7 +503,7 @@ class MatchesView(ui.View):
         self.current_date = current_date
         self.dates = sorted(matches_by_day.keys())
         self.current_index = self.dates.index(current_date.date())
-        
+
         # Disable buttons if at start/end of date range
         self.previous_button.disabled = self.current_index == 0
         self.next_button.disabled = self.current_index == len(self.dates) - 1
@@ -524,11 +524,11 @@ class MatchesView(ui.View):
 
     async def update_message(self, interaction: discord.Interaction):
         embed = create_matches_embed(self.matches[self.dates[self.current_index]], self.current_date)
-        
+
         # Update button states
         self.previous_button.disabled = self.current_index == 0
         self.next_button.disabled = self.current_index == len(self.dates) - 1
-        
+
         await interaction.response.edit_message(embed=embed, view=self)
 
 def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
@@ -536,7 +536,7 @@ def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
         title=f"🎮 Matches for {date.strftime('%B %d, %Y')}",
         color=discord.Color.blue()
     )
-    
+
     for match_data in matches:  # Rename match to match_data
         try:
             _, team_a, team_b, winner, match_date, _, league_name, league_region, match_name = match_data
@@ -544,9 +544,9 @@ def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
             # Fallback for matches without match_name
             _, team_a, team_b, winner, match_date, _, league_name, league_region = match_data
             match_name = "N/A"  # Default value
-            
+
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
-        
+
         # Format status/winner text
         if winner:
             status = f"Winner: ||{winner}||"
@@ -554,7 +554,7 @@ def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
             status = "Match Ongoing"
         else:
             status = f"Starts {get_discord_timestamp(match_datetime, 'R')}"
-            
+
         embed.add_field(
             name=f"{league_name} - {get_discord_timestamp(match_datetime, 'T')}",
             value=f"🏆 {team_a} vs {team_b}\n"
@@ -563,10 +563,10 @@ def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
                   f"📅 {status}",
             inline=False
         )
-    
+
     if not matches:
         embed.description = "No matches scheduled for this day."
-    
+
     return embed
 
 class SummaryView(ui.View):
@@ -579,7 +579,7 @@ class SummaryView(ui.View):
         self.current_date = current_date
         self.dates = sorted(matches_by_day.keys())
         self.current_index = self.dates.index(current_date.date())
-        
+
         # Disable navigation buttons if at start/end of date range
         self.previous_button.disabled = self.current_index == 0
         self.next_button.disabled = self.current_index == len(self.dates) - 1
@@ -606,11 +606,11 @@ class SummaryView(ui.View):
             self.current_date,
             self.db
         )
-        
+
         # Update button states
         self.previous_button.disabled = self.current_index == 0
         self.next_button.disabled = self.current_index == len(self.dates) - 1
-        
+
         await interaction.response.edit_message(embed=embed, view=self)
 
 def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datetime, db: PickemDB) -> discord.Embed:
@@ -618,26 +618,26 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
         title=f"📊 Pick'em Summary for {date.strftime('%B %d, %Y')}",
         color=discord.Color.blue()
     )
-    
+
     # Initialize counters
     total_matches = len(matches)
     unpicked_matches = 0
     completed_matches = 0
     pending_matches = 0
     correct_picks = 0
-    
+
     if total_matches == 0:
         embed.description = "No matches scheduled for this day."
         return embed
-    
+
     # Process each match - rename match to match_data
     for match_data in matches:
         match_id, team_a, team_b, winner, match_date, _, league_name, league_region, match_name = match_data
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
-        
+
         # Get user's pick for this match - rename pick to user_pick to be more specific
         user_pick = db.get_user_pick(guild_id, user_id, match_id)
-        
+
         # Determine match status and format field
         if winner:  # Completed match
             completed_matches += 1
@@ -654,7 +654,7 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
                 unpicked_matches += 1
             status = "⏰ Upcoming"
             pick_str = f"You picked: **{user_pick}**" if user_pick else "❌ No pick made"
-            
+
         embed.add_field(
             name=f"{league_name} - {get_discord_timestamp(match_datetime, 'T')}",
             value=f"🏆 **{team_a}** vs **{team_b}**\n"
@@ -664,7 +664,7 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
                   f"🎯 {pick_str}",
             inline=False
         )
-    
+
     # Add summary statistics
     stats = (
         f"Total Matches: {total_matches}\n"
@@ -673,7 +673,7 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
         f"In Progress: {pending_matches}\n"
         f"Upcoming (unpicked): {unpicked_matches}"
     )
-    
+
     embed.description = stats
     return embed
 
@@ -711,19 +711,19 @@ async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
         color=color
     )
     embed.set_footer(text="Bot will be offline in 10 seconds")
-    
+
     view = ShutdownView()
     await interaction.response.send_message(embed=embed, view=view)
-    
+
     # Wait for potential cancel button press
     timeout = await view.wait()
-    
+
     if not timeout:  # If button was pressed
         return
-        
+
     # Send announcement before shutting down
     await bot.announcer.announce_bot_status("offline", shutdown_type)
-    
+
     # Send final message to command channel
     final_embed = discord.Embed(
         title="💤 Bot Shut Down",
@@ -731,11 +731,11 @@ async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
         color=discord.Color.dark_grey()
     )
     await interaction.channel.send(embed=final_embed)
-    
+
     # Cancel the status update task before shutting down
     if bot.status_task:
         bot.status_task.cancel()
-    
+
     # Proper shutdown sequence
     await bot.change_presence(status=discord.Status.invisible)
     await bot.close()
@@ -747,11 +747,11 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
     """Command to make picks for matches within the next 48 hours"""
     guild_id = interaction.guild_id
     bot_logger.info("Pick command used by %s (ID: %s) in guild: %s (ID: %s)", interaction.user.name, interaction.user.id, interaction.guild.name, guild_id)
-    
+
     upcoming_matches = bot.db.get_upcoming_matches(hours=48)
     matches_to_close = []
     active_matches = []
-    
+
     if not upcoming_matches:
         embed = discord.Embed(
             title="No Active Matches",
@@ -765,7 +765,7 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
         match_id, team_a, team_b, _, _, _, _, _ = match
         if team_a == 'TBD' or team_b == 'TBD':
             matches_to_close.append(match_id)
-        
+
     for match_id in matches_to_close:
         bot.db.close_match(match_id)
 
@@ -784,11 +784,11 @@ async def get_stats(interaction: discord.Interaction):  # Renamed from stats to 
     bot_logger.info("Stats command used by %s (ID: %s) in guild: %s", 
                    interaction.user.name, interaction.user.id, interaction.guild.name)
     user_stats = bot.db.get_user_stats(interaction.guild_id, interaction.user.id)  # Renamed from stats to user_stats
-    
+
     # Create ratio string for correct/completed picks
     completed_ratio = f"{user_stats['correct_picks']}/{user_stats['completed_picks']}" \
                     if user_stats['completed_picks'] > 0 else "0/0"
-    
+
     embed = discord.Embed(
         title="Your Pick'em Stats",
         color=discord.Color.blue()
@@ -796,11 +796,11 @@ async def get_stats(interaction: discord.Interaction):  # Renamed from stats to 
     embed.add_field(name="Total Picks", value=str(user_stats["total_picks"]))
     embed.add_field(name="Completed Matches", value=completed_ratio)
     embed.add_field(name="Accuracy", value=f"{user_stats['accuracy']:.1%}")
-    
+
     # Add active picks count
     active_picks = user_stats["total_picks"] - user_stats["completed_picks"]
     embed.add_field(name="Active Picks", value=str(active_picks), inline=False)
-    
+
     await interaction.response.send_message(embed=embed)
 
 # Modify set_winner command to use the announcer
@@ -813,13 +813,13 @@ async def set_winner(interaction: discord.Interaction, match_id: int, winner: st
         if interaction.user.id != USER_ID:
             await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
             return
-        
+
         # Get match details before updating
         match_details = bot.db.get_match_details(match_id)
         if not match_details:
             await interaction.response.send_message("❌ Match not found!", ephemeral=True)
             return
-            
+
         success = bot.db.update_match_result(match_id, winner)
         if success:
             embed = discord.Embed(
@@ -828,7 +828,7 @@ async def set_winner(interaction: discord.Interaction, match_id: int, winner: st
                 color=discord.Color.green()
             )
             await interaction.response.send_message(embed=embed)
-            
+
             try:
                 # Send announcement
                 team_a, team_b = match_details['team_a'], match_details['team_b']
@@ -838,7 +838,7 @@ async def set_winner(interaction: discord.Interaction, match_id: int, winner: st
                 logging.error("Failed to announce match result: %s", announce_error)
         else:
             await interaction.response.send_message("❌ Failed to update match result.", ephemeral=True)
-            
+
     except sqlite3.Error as db_sqlite_error:
         await interaction.response.send_message(
             f"❌ Database error: {str(db_sqlite_error)}",
@@ -887,7 +887,7 @@ async def create_match(
 ):
     """Create a new match in the database"""
     bot_logger.info("Create match command initiated by %s (ID: %s)", interaction.user.name, interaction.user.id)
-    
+
     if interaction.user.id != USER_ID:
         bot_logger.warning("Unauthorized create match attempt by %s (ID: %s)", interaction.user.name, interaction.user.id)
         await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
@@ -905,17 +905,17 @@ async def create_match(
                 ephemeral=True
             )
             return
-        
+
         bot_logger.info("Creating match: %s vs %s at %s, Type: %s, League: %s", team_a, team_b, date_obj, match_name, league_name)
-        
+
         # Get league ID (use default league if not found)
         league_id = 1  # Default league ID
-        
+
         if team_a == "TBD" or team_b == "TBD":
             is_active = 0
         else:
             is_active = 1
-        
+
         # Create the match with all required parameters
         match_id = bot.db.add_match(
             league_id=league_id,
@@ -925,7 +925,7 @@ async def create_match(
             is_active=is_active,
             match_name=match_name
         )
-        
+
         if match_id:
             bot_logger.info("Match created successfully with ID: %d", match_id)
             embed = discord.Embed(
@@ -938,12 +938,12 @@ async def create_match(
             embed.add_field(name="Type", value=match_name, inline=True)
             embed.add_field(name="Date/Time", value=f"{match_date} at {match_time}", inline=False)
             embed.add_field(name="League", value=league_name, inline=False)
-            
+
             await interaction.response.send_message(embed=embed)
         else:
             bot_logger.error("Failed to create match: Database returned None")
             await interaction.response.send_message("❌ Failed to create match", ephemeral=True)
-            
+
     except sqlite3.Error as db_error:
         bot_logger.error("Database error creating match: %s", db_error)
         await interaction.response.send_message(
@@ -968,7 +968,7 @@ async def show_matches(interaction: discord.Interaction):  # Renamed from matche
                    interaction.user.name, interaction.user.id, interaction.guild.name)
     # Display matches organized by day with navigation
     all_matches = bot.db.get_all_matches()
-    
+
     if not all_matches:
         await interaction.response.send_message("No matches found.", ephemeral=True)
         return
@@ -992,7 +992,7 @@ async def show_matches(interaction: discord.Interaction):  # Renamed from matche
     # Create initial embed and view
     initial_embed = create_matches_embed(matches_by_day[current_date.date()], current_date)
     view = MatchesView(matches_by_day, current_date)
-    
+
     await interaction.response.send_message(embed=initial_embed, view=view)
 
 @bot.tree.command(name="activepicks", description="View your active picks for upcoming matches")
@@ -1002,13 +1002,13 @@ async def activepicks(interaction: discord.Interaction):
     # Display all active picks for the user
     guild_id = interaction.guild_id
     user_id = interaction.user.id
-    
+
     # Get user's display name (nickname if set, otherwise username)
     user_display_name = interaction.user.display_name
-    
+
     # Get active picks from database
     active_picks = bot.db.get_active_picks(guild_id, user_id)
-    
+
     if not active_picks:
         embed = discord.Embed(
             title=f"{user_display_name}'s Active Picks",
@@ -1017,20 +1017,20 @@ async def activepicks(interaction: discord.Interaction):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
-    
+
     embed = discord.Embed(
         title=f"{user_display_name}'s Active Picks",
         description=f"Currently has {len(active_picks)} active picks",
         color=discord.Color.blue()
     )
-    
+
     # Rest of the embed creation remains the same
     for pick in active_picks:
         _, team_a, team_b, match_date, picked_team, league_name, league_region, match_name = pick
-        
+
         # Format match date
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
-        
+
         # Create field for each pick
         embed.add_field(
             name=f"{league_name} - {get_discord_timestamp(match_datetime, 'f')}",
@@ -1041,7 +1041,7 @@ async def activepicks(interaction: discord.Interaction):
                   f"📊 {match_name}",
             inline=False
         )
-    
+
     await interaction.response.send_message(embed=embed)
 
 # Add this new class after other View classes
@@ -1093,7 +1093,7 @@ class LeaderboardView(ui.View):
 
         # Get leaderboard data
         leaderboard_data = self.db.get_leaderboard_by_timeframe(self.guild_id, self.current_timeframe)
-        
+
         if not leaderboard_data:
             embed.description = f"No picks found for {timeframe_titles[self.current_timeframe].lower()} leaderboard!"
             return embed
@@ -1109,7 +1109,7 @@ class LeaderboardView(ui.View):
 
             member = guild.get_member(user_id)
             name = member.display_name if member else f"User {user_id}"
-            
+
             # Add medal emoji for top 3
             medal = ""
             if rank == 1:
@@ -1118,13 +1118,13 @@ class LeaderboardView(ui.View):
                 medal = "🥈 "
             elif rank == 3:
                 medal = "🥉 "
-            
+
             # Format the value based on timeframe
             if self.current_timeframe == 'all':
                 value = f"✅ Accuracy: {accuracy:.1%} ({correct_picks}/{completed_picks})"
             else:
                 value = f"✅ Correct: {correct_picks}/{completed_picks} ({accuracy:.1%})"
-            
+
             embed.add_field(
                 name=f"{medal}#{rank} - {name}",
                 value=value,
@@ -1148,13 +1148,13 @@ async def leaderboard(interaction: discord.Interaction):
     # Display the server's leaderboard with timeframe options
     guild_id = interaction.guild_id
     guild_name = interaction.guild.name
-    
+
     # Create view with initial state
     view = LeaderboardView(guild_id, guild_name, bot.db)
-    
+
     # Create initial embed
     initial_embed = await view.create_leaderboard_embed(interaction.guild)
-    
+
     await interaction.response.send_message(embed=initial_embed, view=view)
 
 @bot.tree.command(name="summary", description="View your daily Pick'em summary")
@@ -1164,10 +1164,10 @@ async def summary(interaction: discord.Interaction):
     # Display a comprehensive daily summary of matches and picks
     guild_id = interaction.guild_id
     user_id = interaction.user.id
-    
+
     # Get all matches
     all_matches = bot.db.get_all_matches()
-    
+
     if not all_matches:
         embed = discord.Embed(
             title="📊 Pick'em Summary",
@@ -1196,7 +1196,7 @@ async def summary(interaction: discord.Interaction):
     # Create initial embed and view
     initial_embed = create_summary_embed(user_id, guild_id, matches_by_day[current_date.date()], current_date, bot.db)
     view = SummaryView(user_id, guild_id, matches_by_day, bot.db, current_date)
-    
+
     await interaction.response.send_message(embed=initial_embed, view=view)
 
 # Update update_match command
@@ -1245,7 +1245,7 @@ async def handle_update_result(interaction: discord.Interaction, success: bool, 
     if success:
         bot_logger.info("Match %d updated by %s (ID: %s)", 
                        match_id, interaction.user.name, interaction.user.id)
-        
+
         # Send update announcement
         await bot.announcer.announce_match_update(
             match_id,
@@ -1267,12 +1267,12 @@ async def handle_update_result(interaction: discord.Interaction, success: bool, 
 def update_match_active_status(match_id: int):
     """Check team names and if a match is active and update if necessary"""
     match_data = bot.db.get_match_details(match_id)
-    
+
     match_id = match_data['match_id']
     team_a = match_data['team_a']
     team_b = match_data['team_b']
     is_active = match_data['is_active']
-        
+
     if is_active == 0 and (team_a != "TBD" or team_b != "TBD"):
         bot.db.open_match(match_id)
     elif is_active == 1 and (team_a == "TBD" or team_b == "TBD"):
@@ -1366,7 +1366,7 @@ class AdminSummaryView(ui.View):
         self.current_date = current_date
         self.dates = sorted(matches_by_day.keys())
         self.current_index = self.dates.index(current_date.date())
-        
+
         # Disable buttons if at start/end of date range
         self.previous_button.disabled = self.current_index == 0
         self.next_button.disabled = self.current_index == len(self.dates) - 1
@@ -1387,11 +1387,11 @@ class AdminSummaryView(ui.View):
 
     async def update_message(self, interaction: discord.Interaction):
         embed = create_admin_summary_embed(self.matches[self.dates[self.current_index]], self.current_date)
-        
+
         # Update button states
         self.previous_button.disabled = self.current_index == 0
         self.next_button.disabled = self.current_index == len(self.dates) - 1
-        
+
         await interaction.response.edit_message(embed=embed, view=self)
 
 # Add this new helper function near other embed creation functions
@@ -1400,7 +1400,7 @@ def create_admin_summary_embed(matches: list, date: datetime) -> discord.Embed:
         title=f"🔧 Admin Summary for {date.strftime('%B %d, %Y')}",
         color=discord.Color.dark_blue()
     )
-    
+
     if not matches:
         embed.description = "No matches scheduled for this day."
         return embed
@@ -1408,7 +1408,7 @@ def create_admin_summary_embed(matches: list, date: datetime) -> discord.Embed:
     for match in matches:
         match_id, team_a, team_b, winner, match_date, _, league_name, _, match_name = match
         match_time = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
-        
+
         status = "🟢 Open" if not winner else "🔴 Closed"
         if match_time <= datetime.now():
             status = "🟡 In Progress" if not winner else "🔴 Completed"
@@ -1420,7 +1420,7 @@ def create_admin_summary_embed(matches: list, date: datetime) -> discord.Embed:
             f"📊 {match_name}\n"
             f"{'✅ Winner: ' + winner if winner else '❌ No Winner Set'}"
         )
-        
+
         embed.add_field(
             name=f"`{match_id}` • {status}",
             value=field_value,
@@ -1429,7 +1429,7 @@ def create_admin_summary_embed(matches: list, date: datetime) -> discord.Embed:
 
     # Add command help footer
     embed.set_footer(text="/update_match <id> - Edit match details\n/set_winner <id> - Set match winner")
-    
+
     return embed
 
 # Replace the existing admin_summary command with this updated version
@@ -1444,7 +1444,7 @@ async def admin_summary(interaction: discord.Interaction):
     try:
         # Get all matches
         all_matches = bot.db.get_all_matches()
-        
+
         # Group matches by day (include all matches, not just future ones)
         matches_by_day = {}
         for match in all_matches:
@@ -1471,7 +1471,7 @@ async def admin_summary(interaction: discord.Interaction):
         # Create initial embed and view
         view = AdminSummaryView(matches_by_day, current_date)
         initial_embed = create_admin_summary_embed(matches_by_day[current_date.date()], current_date)
-        
+
         await interaction.response.send_message(embed=initial_embed, view=view, ephemeral=True)
 
     except Exception as e:  # skipcq: PYL-W0621
@@ -1531,9 +1531,9 @@ async def announce(
         "orange": discord.Color.orange(),
         "purple": discord.Color.purple()
     }
-    
+
     embed_color = colors.get(color.lower(), discord.Color.blue())
-    
+
     # Show preview to the owner
     preview = discord.Embed(
         title="📢 Announcement Preview",
@@ -1550,7 +1550,7 @@ async def announce(
         inline=False
     )
     preview.set_footer(text="Click ✅ to send or ❌ to cancel")
-    
+
     view = AnnouncementConfirmView()
     await interaction.response.send_message(
         "Please confirm the announcement:", 
@@ -1558,10 +1558,10 @@ async def announce(
         view=view,
         ephemeral=True
     )
-    
+
     # Wait for the user's response
     await view.wait()
-    
+
     if view.value is None:
         # Timeout
         timeout = discord.Embed(
@@ -1574,7 +1574,7 @@ async def announce(
         # Confirmed - send the announcement
         try:
             success, fails = await bot.announcer.send_custom_announcement(title, message, embed_color)
-            
+
             result = discord.Embed(
                 title="✅ Announcement Sent",
                 description=f"Sent to {success} servers\nFailed in {fails} servers",
@@ -1621,14 +1621,14 @@ async def on_ready():
     bot_logger.info("Bot owner ID set to: %s", USER_ID)
     bot_logger.debug("Announcer exists: %s", bot.announcer is not None)
     bot_logger.debug("DB has announcer: %s", bot.db.announcer is not None)
-    
+
     guild_info = [f"- {guild.name} (id: {guild.id})" for guild in bot.guilds]
     bot_logger.info("Connected to %d guilds:\n%s", len(bot.guilds), '\n'.join(guild_info))
-    
+
     for guild in bot.guilds:
         channel = await bot.announcer.get_announcement_channel(guild)
         bot_logger.debug("Guild %s has announcement channel: %s", guild.name, channel is not None)
-    
+
     try:
         bot_logger.info("Syncing commands globally...")
         synced = await bot.tree.sync()
@@ -1660,7 +1660,7 @@ async def on_ready():
         bot_logger.info("Startup task cancelled: %s", startup_cancel_error)
     except ConnectionError as startup_conn_error:
         bot_logger.error("Connection error during startup: %s", startup_conn_error)
-    
+
     bot_logger.info("=== Bot Ready Complete ===")
 
 @bot.event
@@ -1681,13 +1681,13 @@ async def on_command_error(ctx, error):
 async def on_guild_join(guild: discord.Guild):
     """Handle new guild joins"""
     bot_logger.info("Joined new guild: %s (ID: %s)", guild.name, guild.id)
-    
+
     try:
         # Sync commands for the new guild
         bot_logger.info("Starting bot...")
         await bot.tree.sync()
         bot_logger.info("Commands synced for guild: %s", guild.name)
-        
+
         # Set up announcement channel
         channel = await bot.announcer.get_announcement_channel(guild)
         if channel:

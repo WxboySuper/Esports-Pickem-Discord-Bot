@@ -19,7 +19,7 @@ def run_async(coro):
             print("Created new event loop")
 
         print(f"Executing coroutine: {coro.__name__ if hasattr(coro, '__name__') else str(coro)}")
-        
+
         if loop.is_running():
             print("Loop is running, using run_coroutine_threadsafe")
             # Create a future in the running loop

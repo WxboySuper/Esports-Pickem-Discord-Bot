@@ -9,16 +9,16 @@ import discord
 async def test_db():
     """Create a temporary test database"""
     db_path = f"test_pickem_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.db"
-    
+
     db = PickemDB(db_path)
     yield db
-    
+
     # Close any open connections
     db = None
-    
+
     # Wait a bit to ensure connections are closed
     await asyncio.sleep(0.1)
-    
+
     # Cleanup
     if os.path.exists(db_path):
         try:

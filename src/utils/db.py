@@ -33,7 +33,7 @@ class PickemDB:
         db_logger.info("Initializing database with path: %s", db_path)
         self.init_db()
         self.migrate_db()
-        
+
         # Try to get announcer from bot instance
         bot = BotInstance.get_bot()
         if bot:
@@ -59,7 +59,7 @@ class PickemDB:
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
-                
+
                 # Modify matches table to include match_name
                 c.execute('''
                     CREATE TABLE IF NOT EXISTS matches (
@@ -75,7 +75,7 @@ class PickemDB:
                         FOREIGN KEY (league_id) REFERENCES leagues (league_id)
                     )
                 ''')
-                
+
                 # Create picks table
                 c.execute('''
                     CREATE TABLE IF NOT EXISTS picks (
@@ -100,7 +100,7 @@ class PickemDB:
         """Handle database migrations"""
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
-            
+
             # Check if default league exists
             c.execute("SELECT COUNT(*) FROM leagues")
             if c.fetchone()[0] == 0:
@@ -118,7 +118,7 @@ class PickemDB:
             # Check if league_id exists in matches
             res = c.execute("PRAGMA table_info(matches)")
             columns = [row[1] for row in res.fetchall()]
-            
+
             if 'league_id' not in columns:
                 # Create new matches table with league_id
                 c.execute("""
@@ -134,25 +134,25 @@ class PickemDB:
                         FOREIGN KEY (league_id) REFERENCES leagues (league_id)
                     )
                 """)
-                
+
                 # Copy existing data
                 c.execute("""
                     INSERT INTO matches_new (match_id, team_a, team_b, winner, match_date, is_active, created_at)
                     SELECT match_id, team_a, team_b, winner, match_date, is_active, created_at
                     FROM matches
                 """)
-                
+
                 # Drop old table and rename new one
                 c.execute("DROP TABLE matches")
                 c.execute("ALTER TABLE matches_new RENAME TO matches")
-                
+
                 # Update all existing matches to use default league
                 c.execute("UPDATE matches SET league_id = ?", (default_league_id,))
 
             # Check if guild_id exists in matches
             res = c.execute("PRAGMA table_info(matches)")
             columns = [row[1] for row in res.fetchall()]
-            
+
             if 'guild_id' in columns:
                 # Create new matches table without guild_id
                 c.execute("""
@@ -177,31 +177,31 @@ class PickemDB:
                 # Replace old table
                 c.execute("DROP TABLE matches")
                 c.execute("ALTER TABLE matches_new RENAME TO matches")
-            
+
             # Check if is_active exists in matches
             if 'is_active' not in columns:
                 c.execute("ALTER TABLE matches ADD COLUMN is_active BOOLEAN DEFAULT 1")
-                
+
             # Check if guild_id exists in picks
             res = c.execute("PRAGMA table_info(picks)")
             columns = [row[1] for row in res.fetchall()]
-            
+
             if 'guild_id' not in columns:
                 c.execute("ALTER TABLE picks ADD COLUMN guild_id INTEGER DEFAULT 0")
-            
+
             # Check if match_name exists in matches
             res = c.execute("PRAGMA table_info(matches)")
             columns = [row[1] for row in res.fetchall()]
-            
+
             if 'match_name' not in columns:
                 c.execute("ALTER TABLE matches ADD COLUMN match_name TEXT NOT NULL DEFAULT 'Groups'")
-            
+
             conn.commit()
 
     def set_announcer(self, announcer):
         """Set the announcer for database events"""
         self.announcer = announcer
-        
+
     def refresh_announcer(self):
         """Refresh announcer from bot instance"""
         bot = BotInstance.get_bot()
@@ -265,7 +265,7 @@ class PickemDB:
                 db_logger.info("Match created successfully with ID: %d", match_id)
 
                 return match_id
-                
+
         except sqlite3.Error as e:
             db_logger.error("Failed to add match: %s", e, exc_info=True)
             return None
@@ -284,18 +284,18 @@ class PickemDB:
                     FROM matches 
                     WHERE match_id = ?
                 """, (match_id,))
-                
+
                 match_data = c.fetchone()
                 if not match_data:
                     db_logger.warning("Match %d not found", match_id)
                     return False
-                    
+
                 _, winner = match_data
-                
+
                 if winner is not None:
                     db_logger.warning("Match %d already has a winner", match_id)
                     return False
-                    
+
                 # Make the pick
                 try:
                     c.execute(
@@ -308,7 +308,7 @@ class PickemDB:
                 except sqlite3.Error as e:
                     db_logger.error("Failed to record pick: %s", e)
                     return False
-                    
+
         except sqlite3.Error as e:
             db_logger.error("Database error: %s", e)
             return False
@@ -332,7 +332,7 @@ class PickemDB:
                 conn.commit()
                 db_logger.info("Match %d result updated successfully", match_id)
                 return True
-                
+
         except sqlite3.Error as e:
             db_logger.error("Failed to update match result: %s", e, exc_info=True)
             return False
@@ -377,15 +377,15 @@ class PickemDB:
                     SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct_picks
                 FROM user_picks
             """, (user_id, guild_id))
-            
+
             result = c.fetchone()
             total_picks = result[0] or 0
             completed_picks = result[1] or 0
             correct_picks = result[2] or 0
-            
+
             # Calculate accuracy based only on completed matches
             accuracy = correct_picks / completed_picks if completed_picks > 0 else 0
-            
+
             return {
                 "total_picks": total_picks,
                 "completed_picks": completed_picks,
@@ -417,7 +417,7 @@ class PickemDB:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
-                
+
                 if timeframe == 'all':
                     # For all-time, sort by percentage with minimum 10 completed picks
                     query = """
@@ -448,13 +448,13 @@ class PickemDB:
                         WHERE p.guild_id = ? 
                         AND m.winner IS NOT NULL
                     """
-                    
+
                     # Add timeframe condition
                     if timeframe == 'daily':
                         base_query += " AND date(m.match_date) = date('now', 'localtime')"
                     elif timeframe == 'weekly':
                         base_query += " AND m.match_date >= datetime('now', '-7 days')"
-                    
+
                     # Complete the query
                     query = base_query + """
                         GROUP BY p.user_id
@@ -462,7 +462,7 @@ class PickemDB:
                         ORDER BY correct_picks DESC, completed_picks ASC
                         LIMIT ?
                     """
-                
+
                 result = c.execute(query, (guild_id, limit)).fetchall()
                 db_logger.debug("Retrieved %d leaderboard entries", len(result))
                 return result
@@ -561,7 +561,7 @@ class PickemDB:
         except sqlite3.Error as e:
             logging.error("Database error: %s", e)
             return False
-    
+
     def open_match(self, match_id: int) -> bool:
         """Re-open a match for picks"""
         try:
@@ -582,16 +582,16 @@ class PickemDB:
         """Get global statistics for the dashboard"""
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
-            
+
             # Get total matches
             total_matches = c.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
-            
+
             # Get total users across all guilds
             total_users = c.execute("SELECT COUNT(DISTINCT user_id) FROM picks").fetchone()[0]
-            
+
             # Get total picks across all guilds
             total_picks = c.execute("SELECT COUNT(*) FROM picks").fetchone()[0]
-            
+
             # Get completed matches and correct picks
             c.execute("""
                 SELECT 
@@ -603,7 +603,7 @@ class PickemDB:
                 WHERE m.winner IS NOT NULL
             """)
             completed_stats = c.fetchone()
-            
+
             return {
                 "total_matches": total_matches,
                 "total_users": total_users,
@@ -647,7 +647,7 @@ class PickemDB:
                 AND datetime(m.match_date) <= datetime('now', 'localtime', ?||' hours')
                 ORDER BY m.match_date ASC
             """, (str(hours),)).fetchall()
-    
+
     def get_active_picks(self, guild_id: int, user_id: int) -> list:
         """Get all active picks for a user in a guild"""
         query = """
