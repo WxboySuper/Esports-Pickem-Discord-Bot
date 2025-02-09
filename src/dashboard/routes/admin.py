@@ -19,7 +19,8 @@ def index():
         picks = db.get_recent_picks(20)  # Get last 20 picks
         return render_template('dashboard.html', picks=picks)
     except Exception as e:
-        return f"Error loading dashboard: {str(e)}", 500
+        logging.error(f"Error loading dashboard: {e}", exc_info=True)
+        return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
 @bp.route('/stats')
 def admin_stats():
