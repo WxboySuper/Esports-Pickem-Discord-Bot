@@ -12,7 +12,6 @@ sys.path.append(str(bot_path))
 from bot.bot import bot  # Import the bot instance
 
 bp = Blueprint('api', __name__, url_prefix='/api')
-user = user.User()
 
 @bp.route('/')
 def index():

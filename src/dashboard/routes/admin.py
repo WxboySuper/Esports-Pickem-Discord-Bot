@@ -7,11 +7,11 @@ import traceback
 
 # Import directly from utils
 from utils.db import PickemDB
-from models.user import User  # Import the User class
+from models.user import User as user
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 db = PickemDB()
-user = User()
+
 
 @bp.route('/')
 def index():
