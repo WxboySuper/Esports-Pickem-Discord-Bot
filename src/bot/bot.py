@@ -137,7 +137,8 @@ class AnnouncementManager:
     def __init__(self, bot_instance):  # Renamed parameter from 'bot' to 'bot_instance'
         self.bot = bot_instance  # More explicit naming of the instance
 
-    async def get_announcement_channel(self, guild):
+    @staticmethod
+    async def get_announcement_channel(guild):
         """Find the pickem-updates channel in a guild"""
         channel = discord.utils.get(guild.text_channels, name="pickem-updates")
         if not channel:
