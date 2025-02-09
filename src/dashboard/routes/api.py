@@ -28,7 +28,7 @@ def get_leaderboard():
     """Get global or guild-specific leaderboard"""
     guild_id = request.args.get('guild_id', type=int)
     limit = request.args.get('limit', default=10, type=int)
-    
+
     try:
         leaderboard = user.get_leaderboard(guild_id, limit)
         return jsonify({
@@ -69,10 +69,10 @@ def create_match():
         team_b = data.get('team_b')
         match_date = data.get('match_date')
         league_id = data.get('league_id', 1)  # Default to league_id 1 if not provided
-        
+
         # Create match in database
         match_id = bot.db.add_match(league_id, team_a, team_b, match_date)
-        
+
         if match_id and bot.is_ready():
             # Get league name for announcement
             league_name = "Unknown League"  # Default value
@@ -82,7 +82,7 @@ def create_match():
                 result = cursor.fetchone()
                 if result:
                     league_name = result[0]
-            
+
             # Create announcement if neither team is TBD
             if "tbd" not in team_a.lower() and "tbd" not in team_b.lower():
                 asyncio.run_coroutine_threadsafe(
@@ -91,13 +91,13 @@ def create_match():
                     ),
                     bot.loop
                 )
-        
+
         return jsonify({
             'success': True,
             'match_id': match_id,
             'message': 'Match created successfully'
         }), 201
-        
+
     except Exception as e:
         return jsonify({
             'success': False,

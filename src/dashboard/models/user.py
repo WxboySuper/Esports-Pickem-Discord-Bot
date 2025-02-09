@@ -16,7 +16,7 @@ def get_user_by_id(user_id):
 def get_leaderboard(guild_id=None, limit=10):
     """
     Get global or guild-specific leaderboard
-    
+
     Args:
         guild_id (int, optional): Specific guild to get leaderboard for
         limit (int): Number of users to return
@@ -24,7 +24,7 @@ def get_leaderboard(guild_id=None, limit=10):
     try:
         if guild_id:
             return db.get_leaderboard(guild_id, limit)
-        
+
         # For global leaderboard, combine all guilds
         with sqlite3.connect(db.db_path) as conn:
             c = conn.cursor()
@@ -44,7 +44,7 @@ def get_leaderboard(guild_id=None, limit=10):
                     END DESC
                 LIMIT ?
             """, ('correct_picks', limit,)).fetchall()
-            
+
     except Exception as e:
         logging.error("Error getting leaderboard %s", e)
         return {
@@ -58,7 +58,7 @@ def get_user_stats(user_id, guild_id=None):
     try:
         if guild_id:
             return db.get_user_stats(guild_id, user_id)
-        
+
         # For global stats
         with sqlite3.connect(db.db_path) as conn:
             c = conn.cursor()
@@ -78,19 +78,19 @@ def get_user_stats(user_id, guild_id=None):
                     SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct_picks
                 FROM user_picks
             """, (user_id,))
-            
+
             result = c.fetchone()
             total_picks = result[0] or 0
             completed_picks = result[1] or 0
             correct_picks = result[2] or 0
-            
+
             return {
                 "total_picks": total_picks,
                 "completed_picks": completed_picks,
                 "correct_picks": correct_picks,
                 "accuracy": correct_picks / completed_picks if completed_picks > 0 else 0
             }
-            
+
     except Exception as e:
         print(f"Error getting user stats: {e}")
         return {

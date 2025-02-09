@@ -44,7 +44,7 @@ def admin_stats():
     try:
         stats = db.get_global_stats()
         guilds = db.get_guild_list()
-        
+
         return render_template(
             'admin/stats.html',
             stats=stats,
@@ -61,7 +61,7 @@ def api_stats():
     try:
         stats = db.get_global_stats()
         guilds = db.get_guild_list()
-        
+
         return jsonify({
             'success': True,
             'stats': stats,
@@ -101,7 +101,7 @@ def matches_page():
 def create_match():
     try:
         data = request.get_json()
-        
+
         admin_logger.info("Created match with data: %s", data)
 
         league_id = data.get('league_id')
@@ -168,10 +168,10 @@ def leaderboard():
         board_type = request.args.get('type', 'global')
         guild_id = request.args.get('guild_id', type=int)
         
-        # Get leaderboard data directly from user model
+# Get leaderboard data directly from user model
         leaderboard_data = User.get_leaderboard(guild_id if board_type == 'guild' else None)
         
-        # Format leaderboard data for template
+# Format leaderboard data for template
         formatted_leaderboard = [
             {
                 'user_id': entry[0],
@@ -184,7 +184,7 @@ def leaderboard():
             for entry in leaderboard_data
         ]
         
-        # Get global stats for sidebar
+# Get global stats for sidebar
         global_stats = db.get_global_stats()
         stats = {
             'total_players': global_stats['total_users'],
@@ -192,7 +192,7 @@ def leaderboard():
             'avg_accuracy': global_stats['global_accuracy']
         }
         
-        # Get list of guilds for dropdown
+# Get list of guilds for dropdown
         guilds = db.get_guild_list()
         
         return render_template(
