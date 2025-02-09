@@ -679,7 +679,7 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
     type="Type of Shutdown Message. Options: [normal, update, restart, bugfix]"
 )
 @app_commands.guild_only()
-async def shutdown_bot(interaction: discord.Interaction, type: str):
+async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
     """Shuts down the bot"""
     bot_logger.info("Shutdown command initiated by %s (ID: %s) with type: %s", interaction.user.name, interaction.user.id, type)
     if interaction.user.id != USER_ID:

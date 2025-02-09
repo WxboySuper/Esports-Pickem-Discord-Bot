@@ -760,5 +760,5 @@ def handle_db_error(func):
             return func(*args, **kwargs)
         except sqlite3.Error as e:
             db_logger.error(f"Database error in {func.__name__}: {e}", exc_info=True)
-            return None
+            return
     return wrapper
