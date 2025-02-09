@@ -5,7 +5,7 @@ import traceback
 
 # Import directly from utils
 from utils.db import PickemDB
-from models.user import User as user
+from models.user import User
 
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 db = PickemDB()
@@ -151,7 +151,7 @@ def leaderboard():
         guild_id = request.args.get('guild_id', type=int)
         
         # Get leaderboard data directly from user model
-        leaderboard_data = user.get_leaderboard(guild_id if board_type == 'guild' else None)
+        leaderboard_data = User.get_leaderboard(guild_id if board_type == 'guild' else None)
         
         # Format leaderboard data for template
         formatted_leaderboard = [
@@ -226,7 +226,7 @@ def add_league():
         )
         return jsonify({'success': True, 'league_id': league_id}), 201
     except Exception as e:
-        logging.error(f"Error adding league: {str(e)}")
+        logging.error("Error adding league: %s", str(e))
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 400
 
 @bp.route('/leagues/<int:league_id>', methods=['PUT'])
@@ -243,5 +243,5 @@ def update_league(league_id):
         )
         return jsonify({'success': success}), 200 if success else 400
     except Exception as e:
-        logging.error(f"Error updating league: {str(e)}")
+        logging.error("Error updating league: %s", str(e))
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 400

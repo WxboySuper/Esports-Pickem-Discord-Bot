@@ -37,7 +37,12 @@ def get_leaderboard(guild_id=None, limit=10):
                     COUNT(DISTINCT guild_id) as guild_count
                 FROM picks
                 GROUP BY user_id
-                ORDER BY ? DESC
+                ORDER BY
+                    CASE ?
+                        WHEN 'correct_picks' THEN correct_picks
+                        WHEN 'total_picks' THEN total_picks
+                        ELSE correct_picks
+                    END DESC
                 LIMIT ?
             """, ('correct_picks', limit,)).fetchall()
             
@@ -90,8 +95,8 @@ def get_user_stats(user_id, guild_id=None):
     except Exception as e:
         print(f"Error getting user stats: {e}")
         return {
-            "Success": False,
-            "Error": str(e),
+            "success": False,
+            "error": str(e),
             "total_picks": 0,
             "completed_picks": 0,
             "correct_picks": 0,
