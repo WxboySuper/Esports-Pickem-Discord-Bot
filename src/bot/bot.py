@@ -544,13 +544,10 @@ def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
         # Format status/winner text
         if winner:
             status = f"Winner: ||{winner}||"
-            color = discord.Color.green()
         elif match_datetime <= datetime.now():
             status = "Match Ongoing"
-            color = discord.Color.orange()
         else:
             status = f"Starts {get_discord_timestamp(match_datetime, 'R')}"
-            color = discord.Color.blue()
             
         embed.add_field(
             name=f"{league_name} - {get_discord_timestamp(match_datetime, 'T')}",
