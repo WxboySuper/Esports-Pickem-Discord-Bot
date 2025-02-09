@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+
 def setup_path():
     """Add the project root directory to Python path"""
     # Get the project root directory

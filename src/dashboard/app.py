@@ -13,6 +13,7 @@ import os
 from utils.db import PickemDB
 from utils.bot_instance import BotInstance
 
+
 def create_app():
     # skipcq: PYL-W0621
     app = Flask(__name__, 

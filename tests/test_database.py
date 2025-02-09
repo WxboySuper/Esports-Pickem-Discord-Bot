@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta
 import sqlite3
 
+
 def test_db_initialization(test_db):
     """Test database initialization"""
     assert test_db is not None
     assert isinstance(test_db.db_path, str)
     assert test_db.db_path.startswith("test_pickem_")
     assert test_db.db_path.endswith(".db")
+
 
 def test_add_match(test_db, sample_match_data):
     """Test adding a match"""
@@ -19,6 +21,7 @@ def test_add_match(test_db, sample_match_data):
     )
     assert match_id is not None
     assert match_id > 0
+
 
 def test_make_pick(test_db, sample_match_data):
     """Test making a pick"""
@@ -44,6 +47,7 @@ def test_make_pick(test_db, sample_match_data):
     pick = test_db.get_user_pick(123, 456, match_id)
     assert pick == sample_match_data['team_a']
 
+
 def test_update_match_result(test_db, sample_match_data):
     """Test updating match result"""
     # Add a match
@@ -58,6 +62,7 @@ def test_update_match_result(test_db, sample_match_data):
     # Update result
     success = test_db.update_match_result(match_id, sample_match_data['team_a'])
     assert success is True
+
 
 def test_get_leaderboard(test_db, sample_match_data):
     """Test leaderboard functionality"""
@@ -155,6 +160,7 @@ def test_get_leaderboard(test_db, sample_match_data):
     assert entry[1] == 10, "Expected 10 completed picks"
     assert entry[2] == 10, "Expected 10 correct picks"
     assert entry[3] == 1.0, "Expected perfect accuracy"
+
 
 def test_invalid_operations(test_db):
     """Test handling of invalid operations"""

@@ -29,6 +29,7 @@ admin_logger.addHandler(admin_file_handler)
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 db = PickemDB()
 
+
 @bp.route('/')
 def index():
     try:
@@ -37,6 +38,7 @@ def index():
     except Exception as e:
         admin_logger.error("Error loading dashboard: %s", e)
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
+
 
 @bp.route('/stats')
 def admin_stats():
@@ -54,6 +56,7 @@ def admin_stats():
     except Exception as e:
         admin_logger.error("Error loading admin stats: %s", e)
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
+
 
 @bp.route('/api/stats')
 def api_stats():
@@ -73,6 +76,7 @@ def api_stats():
             'success': False,
             'error': str(e)}
         ), 500
+
 
 @bp.route('/matches')
 def matches_page():
@@ -96,6 +100,7 @@ def matches_page():
     except Exception as e:
         admin_logger.error("Error loading matches: %s", e)
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
+
 
 @bp.route('/matches', methods=['POST'])
 def create_match():
@@ -131,6 +136,7 @@ def create_match():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 
+
 @bp.route('/matches/<int:match_id>', methods=['PUT'])
 def update_match(match_id):
     try:
@@ -160,6 +166,7 @@ def update_match(match_id):
     except Exception as e:
         admin_logger.error("Error updating match: %s", e)
         return jsonify({'error': str(e)}), 400
+
 
 @bp.route('/leaderboard')
 def leaderboard():
@@ -207,6 +214,7 @@ def leaderboard():
         admin_logger.error("Error loading admin leaderboard: %s", {str(e)})
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
+
 @bp.route('/leagues')
 def leagues_page():
     """League management page"""
@@ -232,6 +240,7 @@ def leagues_page():
         admin_logger.error("Error loading leagues: %s", {str(e)})
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
+
 @bp.route('/leagues', methods=['POST'])
 def add_league():
     """Add a new league"""
@@ -246,6 +255,7 @@ def add_league():
     except Exception as e:
         admin_logger.error("Error adding league: %s", str(e))
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 400
+
 
 @bp.route('/leagues/<int:league_id>', methods=['PUT'])
 def update_league(league_id):

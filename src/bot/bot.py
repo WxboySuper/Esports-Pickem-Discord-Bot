@@ -32,6 +32,7 @@ logs_dir.mkdir(exist_ok=True)
 log_filename = f"bot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 log_filepath = logs_dir / log_filename
 
+
 # Fix the CustomFormatter class
 class CustomFormatter(logging.Formatter):
     """Custom formatter with colors for console output"""
@@ -77,6 +78,7 @@ logger.addHandler(file_handler)
 # Create module logger
 bot_logger = logging.getLogger('bot')
 
+
 # Add this helper function near the top of the file after imports
 def get_discord_timestamp(dt: datetime, style: str = 'R') -> str:
     """Convert datetime to Discord timestamp
@@ -91,6 +93,7 @@ def get_discord_timestamp(dt: datetime, style: str = 'R') -> str:
     """
     return f"<t:{int(dt.timestamp())}:{style}>"
 
+
 # Add this helper function near the top with other helpers
 def parse_datetime(date_str: str, time_str: str) -> datetime:
     """Convert date and AM/PM time to datetime object"""
@@ -103,6 +106,7 @@ def parse_datetime(date_str: str, time_str: str) -> datetime:
         return datetime.combine(date_obj, time_obj)
     except ValueError as date_error:
         raise ValueError("Invalid date/time format. Use: YYYY-MM-DD for date and HH:MM AM/PM for time") from date_error
+
 
 # Add this helper function near other helpers at the top of the file
 def ensure_datetime(date_value) -> datetime:
@@ -125,6 +129,7 @@ bot_logger.info("Running in %s mode", {'PRODUCTION' if config.is_production else
 TOKEN = config.DISCORD_TOKEN
 APP_ID = config.APP_ID
 
+
 def validate_user_id(user_id: str) -> int:
     """Validate and convert user ID to integer"""
     if not user_id:
@@ -136,6 +141,7 @@ def validate_user_id(user_id: str) -> int:
 
 
 USER_ID = validate_user_id(os.getenv("OWNER_USER_DISCORD_ID"))
+
 
 class AnnouncementManager:
     def __init__(self, bot_instance):  # Renamed parameter from 'bot' to 'bot_instance'
@@ -318,6 +324,7 @@ class AnnouncementManager:
 
         return success_count, fail_count
 
+
 class CustomBot(commands.Bot):
     def __init__(self):
         super().__init__(
@@ -387,6 +394,7 @@ class CustomBot(commands.Bot):
 bot = CustomBot()
 BotInstance.set_bot(bot)  # Store bot instance globally
 
+
 class StartupView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)  # Button won't timeout
@@ -402,6 +410,7 @@ class StartupView(ui.View):
         else:
             await interaction.response.send_message("Pick command not found!", ephemeral=True)
 
+
 class ShutdownView(ui.View):
     def __init__(self):
         super().__init__(timeout=10)  # Button disappears after 10 seconds
@@ -410,6 +419,7 @@ class ShutdownView(ui.View):
     async def cancel_button(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.send_message("Shutdown cancelled!", ephemeral=True)
         self.stop()
+
 
 class MatchPicksView(ui.View):
     def __init__(self, guild_id: int, matches: list, db: PickemDB):
@@ -496,6 +506,7 @@ class MatchPicksView(ui.View):
         )
         return embed
 
+
 class MatchesView(ui.View):
     def __init__(self, matches_by_day: dict, current_date: datetime):
         super().__init__(timeout=300)  # 5 minute timeout
@@ -530,6 +541,7 @@ class MatchesView(ui.View):
         self.next_button.disabled = self.current_index == len(self.dates) - 1
 
         await interaction.response.edit_message(embed=embed, view=self)
+
 
 def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
     embed = discord.Embed(
@@ -568,6 +580,7 @@ def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
         embed.description = "No matches scheduled for this day."
 
     return embed
+
 
 class SummaryView(ui.View):
     def __init__(self, user_id: int, guild_id: int, matches_by_day: dict, db: PickemDB, current_date: datetime):
@@ -612,6 +625,7 @@ class SummaryView(ui.View):
         self.next_button.disabled = self.current_index == len(self.dates) - 1
 
         await interaction.response.edit_message(embed=embed, view=self)
+
 
 def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datetime, db: PickemDB) -> discord.Embed:
     embed = discord.Embed(
@@ -677,6 +691,7 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
     embed.description = stats
     return embed
 
+
 @bot.tree.command(name="shutdown", description="Shutdown the bot")
 @app_commands.describe(
     type="Type of Shutdown Message. Options: [normal, update, restart, bugfix]"
@@ -740,6 +755,7 @@ async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
     await bot.change_presence(status=discord.Status.invisible)
     await bot.close()
 
+
 # Replace the pick command implementation
 @bot.tree.command(name="pick", description="Make picks for upcoming matches (next 48 hours)")
 @app_commands.guild_only()
@@ -779,6 +795,7 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
     embed = view.create_pick_embed()
     await interaction.response.send_message(embed=embed, view=view)
 
+
 # Update other commands to include guild_id
 @bot.tree.command(name="stats", description="View your pick'em statistics")
 async def get_stats(interaction: discord.Interaction):  # Renamed from stats to get_stats
@@ -803,6 +820,7 @@ async def get_stats(interaction: discord.Interaction):  # Renamed from stats to 
     embed.add_field(name="Active Picks", value=str(active_picks), inline=False)
 
     await interaction.response.send_message(embed=embed)
+
 
 # Modify set_winner command to use the announcer
 @bot.tree.command(name="set_winner", description="Set the winner for a match [Owner Only]")
@@ -866,6 +884,7 @@ async def set_winner(interaction: discord.Interaction, match_id: int, winner: st
             ephemeral=True
         )
         logging.error("Error setting match winner: %s", unexpected_cmd_error, exc_info=True)
+
 
 # Update create_match command
 @bot.tree.command(name="create_match", description="Create a new match [Owner Only]")
@@ -963,6 +982,7 @@ async def create_match(
             ephemeral=True
         )
 
+
 @bot.tree.command(name="matches", description="Show matches by day")
 async def show_matches(interaction: discord.Interaction):  # Renamed from matches to show_matches
     bot_logger.info("Matches command used by %s (ID: %s) in guild: %s", 
@@ -995,6 +1015,7 @@ async def show_matches(interaction: discord.Interaction):  # Renamed from matche
     view = MatchesView(matches_by_day, current_date)
 
     await interaction.response.send_message(embed=initial_embed, view=view)
+
 
 @bot.tree.command(name="activepicks", description="View your active picks for upcoming matches")
 @app_commands.guild_only()
@@ -1044,6 +1065,7 @@ async def activepicks(interaction: discord.Interaction):
         )
 
     await interaction.response.send_message(embed=embed)
+
 
 # Add this new class after other View classes
 class LeaderboardView(ui.View):
@@ -1141,6 +1163,7 @@ class LeaderboardView(ui.View):
 
         return embed
 
+
 # Replace the existing leaderboard command with this updated version
 @bot.tree.command(name="leaderboard", description="View the server's Pick'em leaderboard")
 @app_commands.guild_only()
@@ -1157,6 +1180,7 @@ async def leaderboard(interaction: discord.Interaction):
     initial_embed = await view.create_leaderboard_embed(interaction.guild)
 
     await interaction.response.send_message(embed=initial_embed, view=view)
+
 
 @bot.tree.command(name="summary", description="View your daily Pick'em summary")
 @app_commands.guild_only()
@@ -1200,6 +1224,7 @@ async def summary(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=initial_embed, view=view)
 
+
 # Update update_match command
 async def validate_update_match_request(interaction: discord.Interaction, match_id: int) -> tuple[dict, dict]:
     """Validate update request and get match details"""
@@ -1217,12 +1242,14 @@ async def validate_update_match_request(interaction: discord.Interaction, match_
     old_details['match_date'] = ensure_datetime(old_details['match_date'])
     return old_details, old_details.copy()
 
+
 def update_match_teams(new_details: dict, team_a: str, team_b: str) -> None:
     """Update team names if provided"""
     if team_a.lower() != 'keep':
         new_details['team_a'] = team_a
     if team_b.lower() != 'keep':
         new_details['team_b'] = team_b
+
 
 def update_match_datetime(new_details: dict, old_details: dict, match_date: str, match_time: str) -> bool:
     """Update match date/time if provided"""
@@ -1239,6 +1266,7 @@ def update_match_datetime(new_details: dict, old_details: dict, match_date: str,
         return True
     except ValueError:
         return False
+
 
 async def handle_update_result(interaction: discord.Interaction, success: bool, match_id: int, 
                              old_details: dict, new_details: dict) -> None:
@@ -1265,6 +1293,7 @@ async def handle_update_result(interaction: discord.Interaction, success: bool, 
     else:
         await interaction.response.send_message("❌ Failed to update match", ephemeral=True)
 
+
 def update_match_active_status(match_id: int):
     """Check team names and if a match is active and update if necessary"""
     match_data = bot.db.get_match_details(match_id)
@@ -1280,6 +1309,7 @@ def update_match_active_status(match_id: int):
         bot.db.close_match(match_id)
     else:
         pass
+
 
 @bot.tree.command(name="update_match", description="Update match details [Owner Only]")
 @app_commands.describe(
@@ -1359,6 +1389,7 @@ async def update_match(
         )
         bot_logger.error("Error updating match: %s", unexpected_cmd_error)
 
+
 # Add this new class after other View classes
 class AdminSummaryView(ui.View):
     def __init__(self, matches_by_day: dict, current_date: datetime):
@@ -1394,6 +1425,7 @@ class AdminSummaryView(ui.View):
         self.next_button.disabled = self.current_index == len(self.dates) - 1
 
         await interaction.response.edit_message(embed=embed, view=self)
+
 
 # Add this new helper function near other embed creation functions
 def create_admin_summary_embed(matches: list, date: datetime) -> discord.Embed:
@@ -1432,6 +1464,7 @@ def create_admin_summary_embed(matches: list, date: datetime) -> discord.Embed:
     embed.set_footer(text="/update_match <id> - Edit match details\n/set_winner <id> - Set match winner")
 
     return embed
+
 
 # Replace the existing admin_summary command with this updated version
 @bot.tree.command(name="admin_summary", description="View administrative summary [Owner Only]")
@@ -1482,6 +1515,7 @@ async def admin_summary(interaction: discord.Interaction):
         )
         logging.error("Error in admin summary: %s", e)
 
+
 class AnnouncementConfirmView(ui.View):
     def __init__(self):
         super().__init__(timeout=60.0)
@@ -1498,6 +1532,7 @@ class AnnouncementConfirmView(ui.View):
         self.value = False
         self.stop()
         await interaction.response.defer()
+
 
 @bot.tree.command(
     name="announce", 
@@ -1604,6 +1639,7 @@ async def announce(
         )
         await interaction.edit_original_response(content="", embed=cancel, view=None)
 
+
 async def prompt_online_announcement():
     """Prompt user for online announcement"""
     print("\nSend online announcement?")
@@ -1613,6 +1649,7 @@ async def prompt_online_announcement():
         response = input("Choice (y/n): ").lower()
         if response in ['y', 'n']:
             return response == 'y'
+
 
 @bot.event
 async def on_ready():
@@ -1664,9 +1701,11 @@ async def on_ready():
 
     bot_logger.info("=== Bot Ready Complete ===")
 
+
 @bot.event
 async def on_error(event, *args, **kwargs):
     bot_logger.error("An error occurred in %s", event, exc_info=True)
+
 
 # Add specific error handler for voice-related errors
 @bot.event
@@ -1677,6 +1716,7 @@ async def on_command_error(ctx, error):
         else:
             await ctx.send(f"An error occurred: {str(error)}")
     logging.error("Command error: %s", error, exc_info=True)
+
 
 @bot.event
 async def on_guild_join(guild: discord.Guild):
@@ -1710,6 +1750,7 @@ async def on_guild_join(guild: discord.Guild):
         bot_logger.error("Database error setting up guild %s: %s", guild.name, guild_db_error)
     except Exception as guild_error:
         bot_logger.error("Error setting up new guild %s: %s", guild.name, guild_error)
+
 
 # Add the help command after your other commands
 @bot.tree.command(name="help", description="Show available commands and bot information")

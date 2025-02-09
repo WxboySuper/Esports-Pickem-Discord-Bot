@@ -9,9 +9,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../../bot'))
 
 db = PickemDB()
 
+
 def get_user_by_id(user_id):
     # TODO: Implement database connection
     return {"id": user_id, "name": f"User {user_id}"}
+
 
 def get_leaderboard(guild_id=None, limit=10):
     """
@@ -52,6 +54,7 @@ def get_leaderboard(guild_id=None, limit=10):
             'error': str(e),
             'data': []
         }
+
 
 def get_user_stats(user_id, guild_id=None):
     """Get user statistics globally or for specific guild"""

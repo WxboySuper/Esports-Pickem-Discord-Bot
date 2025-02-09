@@ -5,6 +5,7 @@ from src.utils.db import PickemDB
 import asyncio
 import discord
 
+
 @pytest.fixture(scope="function")
 async def test_db():
     """Create a temporary test database"""
@@ -26,6 +27,7 @@ async def test_db():
         except PermissionError:
             pass  # Ignore if file is still locked
 
+
 @pytest.fixture
 def sample_match_data():
     """Provide sample match data for tests"""
@@ -38,6 +40,7 @@ def sample_match_data():
         'league_name': 'Test League'
     }
 
+
 @pytest.fixture
 def mock_bot(mocker):
     """Create a mock bot instance"""
@@ -46,6 +49,7 @@ def mock_bot(mocker):
     mock.user = mocker.MagicMock(spec=discord.ClientUser)
     mock.user.name = "Test Bot"
     return mock
+
 
 @pytest.fixture
 def mock_interaction(mocker):

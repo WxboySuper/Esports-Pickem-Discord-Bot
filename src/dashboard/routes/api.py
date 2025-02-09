@@ -7,9 +7,11 @@ from bot.bot import bot
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
+
 @bp.route('/')
 def index():
     return {'message': 'API endpoint'}
+
 
 @bp.route('/picks/<user_id>', methods=['GET'])
 def get_user_picks(user_id):
@@ -22,6 +24,7 @@ def get_user_picks(user_id):
         picks = pick.get_picks_by_user(user_id)
         return jsonify({'user_id': user_id, 'picks': picks}), 200
     return jsonify({'error': 'User not found'}), 404
+
 
 @bp.route('/leaderboard')
 def get_leaderboard():
@@ -49,6 +52,7 @@ def get_leaderboard():
             'error': str(e)
         }), 500
 
+
 # TODO: Complete the implementation
 @bp.route('/match/<match_id>/result', methods=['POST'])
 # skipcq: PYL-W0613
@@ -59,6 +63,7 @@ def submit_match_result(match_id):
         # Logic to update match result in the database
         return jsonify({'message': 'Match result submitted successfully'}), 200
     return jsonify({'error': 'Winner not provided'}), 400
+
 
 @bp.route('/match/create', methods=['POST'])
 def create_match():

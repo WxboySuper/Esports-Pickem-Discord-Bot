@@ -1,5 +1,6 @@
 import sqlite3
 
+
 class Pick:
     DB_PATH = "pickem.db"  # Use the same database as the Discord bot
 

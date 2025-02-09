@@ -4,6 +4,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+
 def run_async(coro):
     """Run an async function from a synchronous context"""
     print("\n=== Starting Async Operation ===")

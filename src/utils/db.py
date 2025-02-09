@@ -26,6 +26,7 @@ db_logger.addHandler(db_file_handler)
 
 logger = logging.getLogger(__name__)
 
+
 class PickemDB:
     def __init__(self, db_path="pickem.db"):
         self.db_path = db_path
@@ -754,6 +755,7 @@ class PickemDB:
     def __del__(self):
         """Cleanup when database object is destroyed"""
         db_logger.info("Database connection closed")
+
 
 # Add a function to handle database errors
 def handle_db_error(func):

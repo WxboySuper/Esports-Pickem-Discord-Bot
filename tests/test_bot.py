@@ -4,10 +4,12 @@ from datetime import datetime
 from unittest.mock import AsyncMock  # Add this import
 from src.bot.bot import AnnouncementManager, create_matches_embed, create_admin_summary_embed
 
+
 def test_announcement_manager_init(mock_bot):
     """Test AnnouncementManager initialization"""
     announcer = AnnouncementManager(mock_bot)
     assert announcer.bot == mock_bot
+
 
 @pytest.mark.asyncio
 async def test_announce_new_match(mock_bot, mocker):
@@ -41,6 +43,7 @@ async def test_announce_new_match(mock_bot, mocker):
     
     assert mock_channel.send.call_count == 1
 
+
 def test_create_matches_embed(sample_match_data):
     """Test matches embed creation"""
     matches = [(
@@ -59,6 +62,7 @@ def test_create_matches_embed(sample_match_data):
     assert isinstance(embed, discord.Embed)
     assert len(embed.fields) > 0
 
+
 def test_create_admin_summary_embed(sample_match_data):
     """Test admin summary embed creation"""
     matches = [(
@@ -75,6 +79,7 @@ def test_create_admin_summary_embed(sample_match_data):
     embed = create_admin_summary_embed(matches, datetime.now())
     assert isinstance(embed, discord.Embed)
     assert len(embed.fields) > 0
+
 
 @pytest.mark.asyncio
 async def test_command_handlers(mock_interaction, test_db):

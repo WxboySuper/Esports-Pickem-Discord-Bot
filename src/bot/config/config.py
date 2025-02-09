@@ -5,6 +5,7 @@ load_dotenv()
 
 from typing import Literal, Union
 
+
 class Config:
     """Base configuration class"""
     ENV_TYPE = Literal['prod', 'test']
@@ -20,6 +21,7 @@ class Config:
         if Config.BOT_ENV == 'test':
             return TestConfig()
         return ProdConfig()
+
 
 class BaseEnvConfig(Config):
     """Base class for environment-specific configs"""
@@ -71,6 +73,7 @@ class BaseEnvConfig(Config):
         except ValueError as val_error:
             raise ValueError("OWNER_USER_DISCORD_ID must be a valid integer") from val_error
 
+
 class ProdConfig(BaseEnvConfig):
     def __init__(self) -> None:
         super().__init__('PROD')
@@ -82,6 +85,7 @@ class ProdConfig(BaseEnvConfig):
     @property
     def is_production(self) -> bool:
         return True
+
 
 class TestConfig(BaseEnvConfig):
     """Test configuration"""
