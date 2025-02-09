@@ -983,7 +983,7 @@ async def show_matches(interaction: discord.Interaction):  # Renamed from matche
 
     # Start with current day or nearest future day
     current_date = datetime.now()
-    future_dates = [d for d in matches_by_day.keys() if d >= current_date.date()]
+    future_dates = [d for d in matches_by_day if d >= current_date.date()]
     if future_dates:
         current_date = datetime.combine(min(future_dates), datetime.min.time())
     else:
@@ -1191,7 +1191,7 @@ async def summary(interaction: discord.Interaction):
 
     # Start with current day or nearest future day
     current_date = datetime.now()
-    future_dates = [d for d in matches_by_day.keys() if d >= current_date.date()]
+    future_dates = [d for d in matches_by_day if d >= current_date.date()]
     if future_dates:
         current_date = datetime.combine(min(future_dates), datetime.min.time())
     else:
