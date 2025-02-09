@@ -137,7 +137,8 @@ class AnnouncementManager:
     def __init__(self, bot_instance):  # Renamed parameter from 'bot' to 'bot_instance'
         self.bot = bot_instance  # More explicit naming of the instance
 
-    async def get_announcement_channel(self, guild):
+    @staticmethod
+    async def get_announcement_channel(guild):
         """Find the pickem-updates channel in a guild"""
         channel = discord.utils.get(guild.text_channels, name="pickem-updates")
         if not channel:
@@ -544,13 +545,10 @@ def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
         # Format status/winner text
         if winner:
             status = f"Winner: ||{winner}||"
-            color = discord.Color.green()
         elif match_datetime <= datetime.now():
             status = "Match Ongoing"
-            color = discord.Color.orange()
         else:
             status = f"Starts {get_discord_timestamp(match_datetime, 'R')}"
-            color = discord.Color.blue()
             
         embed.add_field(
             name=f"{league_name} - {get_discord_timestamp(match_datetime, 'T')}",
