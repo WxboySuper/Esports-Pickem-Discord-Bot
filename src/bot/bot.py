@@ -681,13 +681,13 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
 @app_commands.guild_only()
 async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
     """Shuts down the bot"""
-    bot_logger.info("Shutdown command initiated by %s (ID: %s) with type: %s", interaction.user.name, interaction.user.id, type)
+    bot_logger.info("Shutdown command initiated by %s (ID: %s) with type: %s", interaction.user.name, interaction.user.id, shutdown_type)
     if interaction.user.id != USER_ID:
         await interaction.response.send_message("❌ This command is only available to the bot owner!", ephemeral=True)
         return
 
     valid_types = ["normal", "update", "restart", "bugfix"]
-    if type not in valid_types:
+    if shutdown_type not in valid_types:
         await interaction.response.send_message(
             f"❌ Invalid shutdown type. Please use one of: {', '.join(valid_types)}",
             ephemeral=True
@@ -701,7 +701,7 @@ async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
         "bugfix": ("🔄 Bot Bugfix Initiated", discord.Color.orange())
     }
 
-    title, color = messages[type]
+    title, color = messages[shutdown_type]
     embed = discord.Embed(
         title=title,
         description="Bot is preparing to shutdown...",
@@ -719,7 +719,7 @@ async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
         return
         
     # Send announcement before shutting down
-    await bot.announcer.announce_bot_status("offline", type)
+    await bot.announcer.announce_bot_status("offline", shutdown_type)
     
     # Send final message to command channel
     final_embed = discord.Embed(
