@@ -207,7 +207,7 @@ def leaderboard():
             current_year=datetime.now().year
         )
     except Exception as e:
-        admin_logger.error(f"Error loading admin leaderboard: {str(e)}")
+        admin_logger.error("Error loading admin leaderboard: %s", {str(e)})
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
 @bp.route('/leagues')
@@ -232,7 +232,7 @@ def leagues_page():
             current_year=datetime.now().year
         )
     except Exception as e:
-        admin_logger.error(f"Error loading leagues: {str(e)}")
+        admin_logger.error("Error loading leagues: %s", {str(e)})
         return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
 
 @bp.route('/leagues', methods=['POST'])
