@@ -57,7 +57,7 @@ def api_stats():
         ), 500
 
 @bp.route('/matches')
-def matches():
+def matches_page():
     try:
         matches = db.get_all_matches()
         leagues = db.get_leagues(active_only=True)  # Get active leagues
@@ -191,12 +191,12 @@ def leaderboard():
         return f"Error loading leaderboard: {str(e)}", 500
 
 @bp.route('/leagues')
-def leagues():
+def leagues_page():
     """League management page"""
     try:
         leagues_data = db.get_leagues(active_only=False)
         # Convert tuples to dictionaries for template
-        leagues = [
+        leagues_info = [
             {
                 'league_id': league[0],
                 'name': league[1],
@@ -208,7 +208,7 @@ def leagues():
         ]
         return render_template(
             'admin/leagues.html',
-            leagues=leagues,
+            leagues=leagues_info,
             current_year=datetime.now().year
         )
     except Exception as e:
