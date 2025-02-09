@@ -1,6 +1,8 @@
 import sys
 import os
 from datetime import datetime
+import sqlite3
+import logging
 
 # Update import path to use bot's database
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../bot'))
@@ -25,7 +27,7 @@ def get_leaderboard(guild_id=None, limit=10):
             return db.get_leaderboard(guild_id, limit)
         
         # For global leaderboard, combine all guilds
-        with db._get_connection() as conn:
+        with sqlite3.connect(db.db_path) as conn:
             c = conn.cursor()
             return c.execute("""
                 SELECT 
@@ -35,13 +37,22 @@ def get_leaderboard(guild_id=None, limit=10):
                     COUNT(DISTINCT guild_id) as guild_count
                 FROM picks
                 GROUP BY user_id
-                ORDER BY correct_picks DESC
+                ORDER BY
+                    CASE ?
+                        WHEN 'correct_picks' THEN correct_picks
+                        WHEN 'total_picks' THEN total_picks
+                        ELSE correct_picks
+                    END DESC
                 LIMIT ?
-            """, (limit,)).fetchall()
+            """, ('correct_picks', limit,)).fetchall()
             
     except Exception as e:
-        print(f"Error getting leaderboard: {e}")
-        return []
+        logging.error("Error getting leaderboard %s", e)
+        return {
+            'success': False,
+            'error': str(e),
+            'data': []
+        }
 
 def get_user_stats(user_id, guild_id=None):
     """Get user statistics globally or for specific guild"""
@@ -50,7 +61,7 @@ def get_user_stats(user_id, guild_id=None):
             return db.get_user_stats(guild_id, user_id)
         
         # For global stats
-        with db._get_connection() as conn:
+        with sqlite3.connect(db.db_path) as conn:
             c = conn.cursor()
             c.execute("""
                 WITH user_picks AS (
@@ -84,6 +95,8 @@ def get_user_stats(user_id, guild_id=None):
     except Exception as e:
         print(f"Error getting user stats: {e}")
         return {
+            "success": False,
+            "error": str(e),
             "total_picks": 0,
             "completed_picks": 0,
             "correct_picks": 0,

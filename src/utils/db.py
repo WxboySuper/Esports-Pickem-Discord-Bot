@@ -25,8 +25,6 @@ db_file_handler.setFormatter(
 )
 db_logger.addHandler(db_file_handler)
 
-# Add to imports
-import logging
 logger = logging.getLogger(__name__)
 
 class PickemDB:

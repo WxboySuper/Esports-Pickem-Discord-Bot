@@ -2,14 +2,8 @@ from flask import Blueprint, jsonify, request
 from dashboard.models import user
 from dashboard.models import pick  # Use absolute imports instead of relative
 import asyncio
-import sys
-import os
-from pathlib import Path
 
-# Add the bot's directory to Python path
-bot_path = Path(__file__).parent.parent.parent
-sys.path.append(str(bot_path))
-from bot.bot import bot  # Import the bot instance
+from bot.bot import bot
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -19,8 +13,8 @@ def index():
 
 @bp.route('/picks/<user_id>', methods=['GET'])
 def get_user_picks(user_id):
-    user = user.get_user_by_id(user_id)
-    if user:
+    user_info = user.get_user_by_id(user_id)
+    if user_info:
         picks = pick.get_picks_by_user(user_id)
         return jsonify({'user_id': user_id, 'picks': picks}), 200
     return jsonify({'error': 'User not found'}), 404
