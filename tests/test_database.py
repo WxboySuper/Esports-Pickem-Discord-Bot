@@ -109,12 +109,14 @@ def test_get_leaderboard(test_db, sample_match_data):
         c = conn.cursor()
         
         # Check matches
+        # skipcq: PYL-C0209
         matches_count = c.execute("SELECT COUNT(*) FROM matches WHERE match_id IN ({})".format(
             ','.join('?' * len(match_ids))
         ), match_ids).fetchone()[0]
         assert matches_count == 10, f"Expected 10 matches, got {matches_count}"
         
         # Check picks
+        # skipcq: PYL-C0209
         picks_count = c.execute(
             "SELECT COUNT(*) FROM picks WHERE guild_id = ? AND match_id IN ({})"
             .format(','.join('?' * len(match_ids))), 
@@ -123,6 +125,7 @@ def test_get_leaderboard(test_db, sample_match_data):
         assert picks_count == 10, f"Expected 10 picks, got {picks_count}"
         
         # Check winners are set
+        # skipcq: PYL-C0209
         winners_count = c.execute(
             "SELECT COUNT(*) FROM matches WHERE winner IS NOT NULL AND match_id IN ({})"
             .format(','.join('?' * len(match_ids))),
@@ -131,6 +134,7 @@ def test_get_leaderboard(test_db, sample_match_data):
         assert winners_count == 10, f"Expected 10 winners set, got {winners_count}"
         
         # Check correct picks
+        # skipcq: PYL-C0209
         correct_picks = c.execute("""
             SELECT COUNT(*) 
             FROM picks p
