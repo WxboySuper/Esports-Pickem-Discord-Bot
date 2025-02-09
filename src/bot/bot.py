@@ -533,11 +533,11 @@ def create_matches_embed(matches: list, date: datetime) -> discord.Embed:
     
     for match_data in matches:  # Rename match to match_data
         try:
-            match_id, team_a, team_b, winner, match_date, _, league_name, league_region, match_name = match_data
+            _, team_a, team_b, winner, match_date, _, league_name, league_region, match_name = match_data
         except ValueError:
             # Fallback for matches without match_name
-            match_id, team_a, team_b, winner, match_date, _, league_name, league_region = match_data
-            match_name = "Groups"  # Default value
+            _, team_a, team_b, winner, match_date, _, league_name, league_region = match_data
+            match_name = "N/A"  # Default value
             
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
         
@@ -641,18 +641,15 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
             status = "✅ Correct!" if user_pick == winner else "❌ Incorrect"
             if user_pick == winner:
                 correct_picks += 1
-            color = discord.Color.green() if user_pick == winner else discord.Color.red()
             pick_str = f"You picked: **{user_pick}**\nWinner: ||{winner}||"
         elif match_datetime <= datetime.now():  # Ongoing match
             pending_matches += 1
             status = "🔄 In Progress"
-            color = discord.Color.orange()
             pick_str = f"You picked: **{user_pick}**" if user_pick else "❌ No pick made"
         else:  # Future match
             if not user_pick:
                 unpicked_matches += 1
             status = "⏰ Upcoming"
-            color = discord.Color.blue()
             pick_str = f"You picked: **{user_pick}**" if user_pick else "❌ No pick made"
             
         embed.add_field(
@@ -1026,14 +1023,10 @@ async def activepicks(interaction: discord.Interaction):
     
     # Rest of the embed creation remains the same
     for pick in active_picks:
-        match_id, team_a, team_b, match_date, picked_team, league_name, league_region, match_name = pick
+        _, team_a, team_b, match_date, picked_team, league_name, league_region, match_name = pick
         
         # Format match date
         match_datetime = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
-        
-        # Calculate time until match
-        time_until = match_datetime - datetime.now()
-        hours_remaining = int(time_until.total_seconds() / 3600)
         
         # Create field for each pick
         embed.add_field(
@@ -1410,7 +1403,7 @@ def create_admin_summary_embed(matches: list, date: datetime) -> discord.Embed:
         return embed
 
     for match in matches:
-        match_id, team_a, team_b, winner, match_date, _, league_name, league_region, match_name = match
+        match_id, team_a, team_b, winner, match_date, _, league_name, _, match_name = match
         match_time = datetime.strptime(str(match_date), '%Y-%m-%d %H:%M:%S')
         
         status = "🟢 Open" if not winner else "🔴 Closed"

@@ -288,7 +288,7 @@ class PickemDB:
                     db_logger.warning(f"Match {match_id} not found")
                     return False
                     
-                match_date, winner = match_data
+                _, winner = match_data
                 
                 if winner is not None:
                     db_logger.warning(f"Match {match_id} already has a winner")
