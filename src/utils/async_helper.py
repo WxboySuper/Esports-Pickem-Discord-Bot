@@ -27,13 +27,11 @@ def run_async(coro):
             result = future.result(timeout=30)  # Add timeout to prevent hanging
             print(f"Operation completed with result: {result}")
             return result
-        else:
-            print("Loop is not running, using run_until_complete")
-            # If loop isn't running, run it until complete
-            result = loop.run_until_complete(coro)
-            print(f"Operation completed with result: {result}")
-            return result
-            
+        print("Loop is not running, using run_until_complete")
+        # If loop isn't running, run it until complete
+        result = loop.run_until_complete(coro)
+        print(f"Operation completed with result: {result}")
+        return result
     except asyncio.TimeoutError:
         print("Async operation timed out")
         return None
