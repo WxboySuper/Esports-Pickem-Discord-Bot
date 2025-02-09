@@ -123,9 +123,8 @@ def create_match():
         if match_id:
             admin_logger.info("Match created successfully: %s", match_id)
             return jsonify({'id': match_id}), 201
-        else:
-            admin_logger.error("Failed to create match")
-            return jsonify({'error': 'Failed to create match'}), 400
+        admin_logger.error("Failed to create match")
+        return jsonify({'error': 'Failed to create match'}), 400
 
     except Exception as e:
         admin_logger.error("Error creating match: %s", e)
