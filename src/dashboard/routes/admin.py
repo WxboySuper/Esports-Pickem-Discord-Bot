@@ -156,10 +156,10 @@ def update_match(match_id):
 
     except KeyError as e:
         admin_logger.error("Missing required field: %s", e)
-        return jsonify({'error': f'Missing required field: {str(e)}'}), 400
+        return jsonify({'error': 'Missing required field'}), 400
     except Exception as e:
         admin_logger.error("Error updating match: %s", e)
-        return jsonify({'error': str(e)}), 400
+        return jsonify({'error': 'An internal error has occurred'}), 400
 
 @bp.route('/leaderboard')
 def leaderboard():
