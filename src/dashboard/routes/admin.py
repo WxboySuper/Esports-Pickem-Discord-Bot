@@ -71,7 +71,7 @@ def api_stats():
         admin_logger.error("Error loading API stats: %s", e)
         return jsonify({
             'success': False,
-            'error': str(e)}
+            'error': "An internal error has occurred. Please try again later."}
         ), 500
 
 @bp.route('/matches')
