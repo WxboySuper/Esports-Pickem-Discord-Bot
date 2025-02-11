@@ -107,7 +107,7 @@ def create_match():
         }), 201
 
     except Exception as e:
-        logging.error("Error in create_match: %s", str(e))
+        logging.error("Error in create_match: %s", str(e), exc_info=True)
         return jsonify({
             'success': False,
             'error': 'An internal error has occurred.'
