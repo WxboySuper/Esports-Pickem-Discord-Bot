@@ -2,8 +2,15 @@ from flask import Blueprint, jsonify, request
 from dashboard.models import user
 from dashboard.models import pick  # Use absolute imports instead of relative
 import asyncio
-
+import logging
 from bot.bot import bot
+
+# Configure logging
+logging.basicConfig(
+    level=logging.ERROR,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -44,9 +51,10 @@ def get_leaderboard():
             ]
         })
     except Exception as e:
+        logging.error("Error in get_leaderboard: %s", str(e))
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'An internal error has occurred.'
         }), 500
 
 # TODO: Complete the implementation
@@ -99,7 +107,8 @@ def create_match():
         }), 201
 
     except Exception as e:
+        logging.error("Error in create_match: %s", str(e), exc_info=True)
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'An internal error has occurred.'
         }), 500
