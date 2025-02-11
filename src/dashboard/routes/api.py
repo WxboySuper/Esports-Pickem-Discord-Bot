@@ -3,6 +3,13 @@ from dashboard.models import user
 from dashboard.models import pick  # Use absolute imports instead of relative
 import asyncio
 import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.ERROR,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 from bot.bot import bot
 
 bp = Blueprint('api', __name__, url_prefix='/api')
