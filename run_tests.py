@@ -36,7 +36,7 @@ def run_tests():
 
     # Discover and run tests
     loader = unittest.TestLoader()
-    tests = loader.discover('Tests')
+    tests = loader.discover('tests')
     runner = unittest.TextTestRunner()
     test_result = runner.run(tests)
     if not test_result.wasSuccessful():
