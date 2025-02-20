@@ -31,7 +31,7 @@ def get_leaderboard(guild_id=None, limit=10):
         with sqlite3.connect(db.db_path) as conn:
             c = conn.cursor()
             return c.execute("""
-                SELECT 
+                SELECT
                     user_id,
                     COUNT(*) as total_picks,
                     SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct_picks,
@@ -67,7 +67,7 @@ def get_user_stats(user_id, guild_id=None):
             c = conn.cursor()
             c.execute("""
                 WITH user_picks AS (
-                    SELECT 
+                    SELECT
                         p.pick_id,
                         p.is_correct,
                         m.winner IS NOT NULL as is_completed
@@ -75,7 +75,7 @@ def get_user_stats(user_id, guild_id=None):
                     JOIN matches m ON p.match_id = m.match_id
                     WHERE p.user_id = ?
                 )
-                SELECT 
+                SELECT
                     COUNT(*) as total_picks,
                     SUM(CASE WHEN is_completed = 1 THEN 1 ELSE 0 END) as completed_picks,
                     SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct_picks

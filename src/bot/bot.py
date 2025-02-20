@@ -762,7 +762,7 @@ async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
 async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pick
     """Command to make picks for matches within the next 48 hours"""
     guild_id = interaction.guild_id
-    bot_logger.info("Pick command used by %s (ID: %s) in guild: %s (ID: %s)",
+    bot_logger.info("Pick command used by %s (ID: %s) in guild: %s",
                     interaction.user.name, interaction.user.id, interaction.guild.name, guild_id)
 
     upcoming_matches = bot.db.get_upcoming_matches(hours=48)
@@ -799,7 +799,7 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
 # Update other commands to include guild_id
 @bot.tree.command(name="stats", description="View your pick'em statistics")
 async def get_stats(interaction: discord.Interaction):  # Renamed from stats to get_stats
-    bot_logger.info("Stats command used by %s (ID: %s) in guild: %s", 
+    bot_logger.info("Stats command used by %s (ID: %s) in guild: %s",
                    interaction.user.name, interaction.user.id, interaction.guild.name)
     user_stats = bot.db.get_user_stats(interaction.guild_id, interaction.user.id)  # Renamed from stats to user_stats
 
@@ -985,7 +985,7 @@ async def create_match(
 
 @bot.tree.command(name="matches", description="Show matches by day")
 async def show_matches(interaction: discord.Interaction):  # Renamed from matches to show_matches
-    bot_logger.info("Matches command used by %s (ID: %s) in guild: %s", 
+    bot_logger.info("Matches command used by %s (ID: %s) in guild: %s",
                    interaction.user.name, interaction.user.id, interaction.guild.name)
     # Display matches organized by day with navigation
     all_matches = bot.db.get_all_matches()
@@ -1272,7 +1272,7 @@ async def handle_update_result(interaction: discord.Interaction, success: bool, 
                              old_details: dict, new_details: dict) -> None:
     """Handle the result of the update operation"""
     if success:
-        bot_logger.info("Match %d updated by %s (ID: %s)", 
+        bot_logger.info("Match %d updated by %s (ID: %s)",
                        match_id, interaction.user.name, interaction.user.id)
 
         # Send update announcement
@@ -1330,7 +1330,7 @@ async def update_match(
     match_name: str
 ):
     """Update match details and announce changes"""
-    bot_logger.info("Update match command initiated by %s (ID: %s) for match %d", 
+    bot_logger.info("Update match command initiated by %s (ID: %s) for match %d",
                    interaction.user.name, interaction.user.id, match_id)
 
     try:
