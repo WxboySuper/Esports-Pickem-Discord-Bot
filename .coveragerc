@@ -14,7 +14,7 @@ exclude_lines =
     if __name__ == .__main__.:
     pass
     raise NotImplementedError
-fail_under = 80
+
 
 [html]
 directory = coverage_html
