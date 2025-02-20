@@ -25,30 +25,7 @@ path_helper.setup_path()
 # Load environment variables
 load_dotenv()
 
-
-# Define CustomFormatter class first
 bot_logger = logging.getLogger('bot')
-class CustomFormatter(logging.Formatter):
-    """Custom formatter with colors for console output"""
-    grey = "\x1b[38;20m"
-    yellow = "\x1b[33;20m"
-    red = "\x1b[31;20m"
-    bold_red = "\x1b[31;1m"
-    reset = "\x1b[0m"
-
-    FORMATS = {
-        logging.DEBUG: grey + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
-        logging.INFO: grey + "%(asctime)s - %(levelname)s - %(name)s" + reset,
-        logging.WARNING: yellow + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
-        logging.ERROR: red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset,
-        logging.CRITICAL: bold_red + "%(asctime)s - %(levelname)s - %(name)s - %(message)s" + reset
-    }
-
-    def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno)
-        formatter = logging.Formatter(log_fmt, datefmt="%Y-%m-%d %H:%M:%S")
-        return formatter.format(record)
-
 
 # Create logs directory if it doesn't exist
 logs_dir = Path(__file__).parent.parent.parent / "logs"
@@ -76,12 +53,6 @@ logger.handlers.clear()  # Remove any existing handlers
 
 # Add handlers
 logger.addHandler(file_handler)
-
-# Only add console handler if not in test mode
-if not any(arg.startswith('test') for arg in sys.argv):
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(CustomFormatter())
-    logger.addHandler(console_handler)
 
 
 # Add this helper function near the top of the file after imports

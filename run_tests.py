@@ -2,36 +2,37 @@ import unittest
 import coverage
 import sys
 import logging
-from logging.handlers import RotatingFileHandler
 import asyncio
 from pathlib import Path
 from typing import Tuple
 
 def setup_logging() -> logging.Logger:
     """Configure logging for test runner with rotating file handler"""
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    # Set up logs directory
+    logs_dir = Path(__file__).parent / 'logs'
+    logs_dir.mkdir(exist_ok=True)
 
-    # Create formatter
-    formatter = logging.Formatter(
-        "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+    # Configure root logger first - this affects all loggers
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    # Remove any existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    # Set up file handler for test runner
+    log_file = logs_dir / 'test_runner.log'
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
     )
+    root_logger.addHandler(file_handler)
 
-    # Set up rotating file handler
-    log_file = Path(__file__).parent / 'logs' / 'test_runner.log'
-    file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=5*1024*1024,  # 5MB
-        backupCount=5
-    )
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.INFO)
-
-    # Remove any existing handlers and add our new one
-    logger.handlers.clear()
-    logger.addHandler(file_handler)
-
+    # Get the logger for the test runner
+    logger = logging.getLogger(__name__)
     return logger
 
 def run_test_suite(test_loader: unittest.TestLoader, test_dir: Path) -> Tuple[unittest.TestResult, bool]:
@@ -71,12 +72,7 @@ def run_tests():
     4. Generates coverage reports in both console and HTML format
     """
     # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
-    logger = logging.getLogger(__name__)
+    logger = setup_logging()
 
     logger.info("Starting test run")
 
