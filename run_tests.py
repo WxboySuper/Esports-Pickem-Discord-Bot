@@ -69,67 +69,79 @@ def run_tests():
     1. Starts code coverage tracking
     2. Discovers and executes all tests in the 'tests' directory
     3. Exits with code 1 if any tests fail
-    4. Generates coverage reports in both console and HTML format
+    4. Generates coverage reports in both console and HTML format 
     """
     # Configure logging
     logger = setup_logging()
-
+    
     logger.info("Starting test run")
 
     try:
         # Start coverage tracking
         cov = coverage.Coverage(source=['src'])
         cov.start()
-    except coverage.CoverageException as e:
-        logger.error("Failed to start coverage tracking: %s", str(e))
-        sys.exit(1)
+        
+        # Set up event loop for async tests
+        policy = asyncio.get_event_loop_policy()
+        loop = policy.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Discover and run tests
+            loader = unittest.TestLoader()
+            tests = loader.discover('tests')
+            runner = unittest.TextTestRunner(verbosity=2)
+            
+            # Run tests and capture result
+            test_result = runner.run(tests)
+            
+            # Print test summary
+            logger.info("\nTest Summary:")
+            logger.info("Ran %d tests", test_result.testsRun)
+            logger.info("Failures: %d", len(test_result.failures))
+            logger.info("Errors: %d", len(test_result.errors))
+            
+            # Log any errors or failures
+            if test_result.errors:
+                logger.error("\nTest Errors:")
+                for test, error in test_result.errors:
+                    logger.error("%s:\n%s", test, error)
+                    
+            if test_result.failures:
+                logger.error("\nTest Failures:")
+                for test, failure in test_result.failures:
+                    logger.error("%s:\n%s", test, failure)
+                    
+        finally:
+            # Clean up async resources
+            try:
+                pending = asyncio.all_tasks(loop)
+                if pending:
+                    # Cancel all pending tasks
+                    for task in pending:
+                        task.cancel()
+                    # Wait for cancellation to complete
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            except Exception as e:
+                logger.error("Error during async cleanup: %s", str(e))
+            finally:
+                loop.close()
+                asyncio.set_event_loop(None)
 
-    # Set up event loop for async tests
-    policy = asyncio.get_event_loop_policy()
-    loop = policy.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    try:
-        # Discover and run tests
-        loader = unittest.TestLoader()
-        tests = loader.discover('tests')
-        runner = unittest.TextTestRunner(verbosity=2)
-        test_result = runner.run(tests)
-    finally:
-        # Clean up async resources
-        pending = asyncio.all_tasks(loop)
-        for task in pending:
-            task.cancel()
-
-        group = asyncio.gather(*pending, return_exceptions=True)
-        loop.run_until_complete(group)
-        loop.close()
-        asyncio.set_event_loop(None)
-
-    try:
-        # Stop coverage tracking
+        # Stop coverage and generate reports
         cov.stop()
         cov.save()
+        
+        # Generate coverage reports
+        generate_coverage_report(cov, logger)
+        
+        # Exit with appropriate status code
+        successful = test_result.wasSuccessful()
+        logger.info("\nTest run %s", "successful" if successful else "failed")
+        sys.exit(0 if successful else 1)
 
-        # Generate coverage report
-        logger.info("\nCoverage Summary:")
-        cov.report(show_missing=True)
-
-        # Generate HTML report
-        html_dir = Path('coverage_html')
-        html_dir.mkdir(exist_ok=True)
-        cov.html_report(directory=str(html_dir))
-
-        # Generate XML report for CI
-        cov.xml_report()
-
-        logger.info("Test run completed. Success: %s", test_result.wasSuccessful())
-
-        if not test_result.wasSuccessful():
-            sys.exit(1)
-
-    except coverage.CoverageException as e:
-        logger.error("Failed to generate coverage report: %s", str(e))
+    except Exception as e:
+        logger.error("Error during test execution: %s", str(e), exc_info=True)
         sys.exit(1)
 
 if __name__ == '__main__':

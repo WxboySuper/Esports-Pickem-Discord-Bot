@@ -10,13 +10,7 @@ import time
 class TestDatabase(unittest.TestCase):
     def setUp(self):
         """Set up test database before each test"""
-        # Create a mock bot instance
-        self.mock_bot = MagicMock()
-        self.mock_user = MagicMock()
-        self.mock_user.name = "Test User"
-        self.mock_bot.get_user.return_value = self.mock_user
-
-        # Create sample match data
+        # Create sample match data before database initialization
         self.sample_match_data = {
             'team_a': 'Team A',
             'team_b': 'Team B',
@@ -25,66 +19,41 @@ class TestDatabase(unittest.TestCase):
             'league_name': 'Test League'
         }
 
-        # Generate unique test database name using timestamp
-        self.db_path = f"test_pickem_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.db"
+        # Use memory database for faster tests
+        self.db_path = ":memory:"
 
-        # Store patches for cleanup
+        # Create patches for cleanup
         self.patches = []
 
-        # Patch BotInstance
+        # Create a mock bot
+        self.mock_bot = MagicMock()
+        self.mock_bot.announcer = MagicMock()
+
+        # Patch BotInstance before database initialization
         self.bot_patcher = self.create_patch(
             'src.utils.bot_instance.BotInstance.get_bot',
             return_value=self.mock_bot
         )
 
-        # Initialize database
-        self.db = PickemDB(self.db_path)
+        try:
+            # Initialize database with clean state
+            self.db = PickemDB(self.db_path)
+        except Exception as e:
+            print(f"Failed to initialize database: {e}")
+            raise
 
     def tearDown(self):
         """Clean up test database after each test"""
         # Close database connection
         if hasattr(self, 'db') and self.db is not None:
             try:
-                # Close any open cursors
                 if hasattr(self.db, '_cursor') and self.db._cursor is not None:
                     self.db._cursor.close()
-                # Close the connection
                 if hasattr(self.db, '_conn') and self.db._conn is not None:
                     self.db._conn.close()
                 self.db = None
             except Exception as e:
                 print(f"Error closing database: {e}")
-
-        # Remove test database file with retry logic
-        if hasattr(self, 'db_path') and os.path.exists(self.db_path):
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    # Force close any remaining connections to the file
-                    connections = []
-                    for proc in psutil.process_iter(['pid', 'open_files']):
-                        try:
-                            for file in proc.open_files():
-                                if self.db_path in file.path:
-                                    connections.append(proc)
-                        except (psutil.NoSuchProcess, psutil.AccessDenied):
-                            pass
-
-                    # Terminate processes holding the file
-                    for proc in connections:
-                        try:
-                            proc.terminate()
-                        except psutil.NoSuchProcess:
-                            pass
-
-                    # Try to remove the file
-                    os.remove(self.db_path)
-                    break
-                except (PermissionError, OSError) as e:
-                    if attempt == max_retries - 1:
-                        print(f"Failed to remove database file after {max_retries} attempts: {e}")
-                    else:
-                        time.sleep(0.1)  # Short delay before retry
 
         # Clean up patches
         for p in self.patches:
@@ -99,10 +68,47 @@ class TestDatabase(unittest.TestCase):
 
     def test_db_initialization(self):
         """Test database initialization"""
-        self.assertIsNotNone(self.db)
-        self.assertIsInstance(self.db.db_path, str)
-        self.assertTrue(self.db.db_path.startswith("test_pickem_"))
-        self.assertTrue(self.db.db_path.endswith(".db"))
+        try:
+            # Verify database file exists
+            self.assertTrue(os.path.exists(self.db_path), "Database file was not created")
+
+            # Verify db object properties
+            self.assertIsNotNone(self.db, "Database object is None")
+            self.assertIsInstance(self.db.db_path, str, "Database path is not a string")
+            self.assertTrue(self.db.db_path.endswith(".db"), "Database path doesn't end with .db")
+
+            # Verify database tables exist
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+
+                # Check for required tables
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tables = {row[0] for row in cursor.fetchall()}
+
+                self.assertIn('leagues', tables, "leagues table not found")
+                self.assertIn('matches', tables, "matches table not found")
+                self.assertIn('picks', tables, "picks table not found")
+
+                # Verify table schemas
+                cursor.execute("PRAGMA table_info(leagues)")
+                league_columns = {row[1] for row in cursor.fetchall()}
+                self.assertIn('league_id', league_columns)
+                self.assertIn('name', league_columns)
+
+                cursor.execute("PRAGMA table_info(matches)")
+                match_columns = {row[1] for row in cursor.fetchall()}
+                self.assertIn('match_id', match_columns)
+                self.assertIn('team_a', match_columns)
+                self.assertIn('team_b', match_columns)
+
+                cursor.execute("PRAGMA table_info(picks)")
+                pick_columns = {row[1] for row in cursor.fetchall()}
+                self.assertIn('pick_id', pick_columns)
+                self.assertIn('user_id', pick_columns)
+                self.assertIn('match_id', pick_columns)
+
+        except Exception as e:
+            self.fail(f"Test failed with error: {e}")
 
     def test_add_match(self):
         """Test adding a match"""

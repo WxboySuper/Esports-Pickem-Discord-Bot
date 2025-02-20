@@ -296,6 +296,40 @@ class AnnouncementManager:
 
         return success_count, fail_count
 
+    async def announce_new_match(self, match_id: int, team_a: str, team_b: str, match_date: datetime, league_name: str, match_name: str) -> bool:
+        """Send new match announcement to all guilds"""
+        try:
+            embed = discord.Embed(
+                title="🎮 New Match Scheduled!",
+                color=discord.Color.blue()
+            )
+
+            embed.add_field(
+                name=f"{league_name}",
+                value=(
+                    f"🏆 **{team_a}** vs **{team_b}**\n"
+                    f"⏰ {get_discord_timestamp(match_date, 'F')}\n"
+                    f"📊 {match_name}"
+                ),
+                inline=False
+            )
+            embed.set_footer(text=f"Match ID: {match_id}")
+
+            success = False
+            for guild in self.bot.guilds:
+                if channel := await self.get_announcement_channel(guild):
+                    try:
+                        await channel.send(embed=embed)
+                        success = True
+                    except discord.Forbidden:
+                        continue
+
+            return success
+
+        except Exception as e:
+            logging.error("Error announcing new match: %s", e)
+            return False
+
 class CustomBot(commands.Bot):
     def __init__(self):
         super().__init__(
@@ -917,6 +951,9 @@ async def create_match(
             embed.add_field(name="League", value=league_name, inline=False)
 
             await interaction.response.send_message(embed=embed)
+
+            # Announce the new match
+            await bot.announcer.announce_new_match(match_id, team_a, team_b, date_obj, league_name, match_name)
         else:
             bot_logger.error("Failed to create match: Database returned None")
             await interaction.response.send_message("❌ Failed to create match", ephemeral=True)

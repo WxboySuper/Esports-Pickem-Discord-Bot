@@ -51,27 +51,36 @@ class TestBot(unittest.IsolatedAsyncioTestCase):  # Change to IsolatedAsyncioTes
         """Test match announcement"""
         announcer = AnnouncementManager(self.mock_bot)
 
-        # Mock channel
-        mock_channel = MagicMock()
+        # Mock channel and send method
+        mock_channel = AsyncMock()
         mock_channel.send = AsyncMock()
 
-        # Mock guild
+        # Mock guild and get_announcement_channel
         mock_guild = MagicMock()
         mock_guild.text_channels = [mock_channel]
         self.mock_bot.guilds = [mock_guild]
 
-        # Test announcement
-        success = await announcer.announce_new_match(
-            match_id=1,
-            team_a=self.sample_match_data['team_a'],
-            team_b=self.sample_match_data['team_b'],
-            match_date=self.sample_match_data['match_date'],
-            league_name=self.sample_match_data['league_name'],
-            match_name=self.sample_match_data['match_name']
-        )
+        # Mock get_announcement_channel
+        with patch.object(AnnouncementManager, 'get_announcement_channel', return_value=mock_channel):
+            success = await announcer.announce_new_match(
+                match_id=1,
+                team_a=self.sample_match_data['team_a'],
+                team_b=self.sample_match_data['team_b'],
+                match_date=self.sample_match_data['match_date'],
+                league_name=self.sample_match_data['league_name'],
+                match_name=self.sample_match_data['match_name']
+            )
 
-        self.assertTrue(success)
-        mock_channel.send.assert_called_once()
+            self.assertTrue(success)
+            mock_channel.send.assert_awaited_once()
+
+            # Verify embed content
+            call_args = mock_channel.send.call_args
+            self.assertIsNotNone(call_args)
+            _, kwargs = call_args
+            embed = kwargs.get('embed')
+            self.assertIsInstance(embed, discord.Embed)
+            self.assertEqual(embed.title, "🎮 New Match Scheduled!")
 
     async def test_create_matches_embed(self):
         """Test matches embed creation"""
