@@ -1,61 +1,92 @@
-import pytest
+import unittest
 import os
 from datetime import datetime
-from src.utils.db import PickemDB
-import asyncio
+from unittest.mock import MagicMock, AsyncMock, patch
 import discord
+import sqlite3
+from src.utils.db import PickemDB
 
-@pytest.fixture(scope="function")
-async def test_db():
-    """Create a temporary test database"""
-    db_path = f"test_pickem_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.db"
+class BaseTestCase(unittest.TestCase):
+    """Base test case class with shared setup and helper methods"""
 
-    db = PickemDB(db_path)
-    yield db
+    def setUp(self):
+        """Set up test environment before each test"""
+        # Create unique test database path
+        self.db_path = f"test_pickem_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.db"
+        self.db = PickemDB(self.db_path)
 
-    # Close any open connections
-    db = None
+        # Store patches for cleanup
+        self.patches = []
 
-    # Wait a bit to ensure connections are closed
-    await asyncio.sleep(0.1)
+        # Create sample data and mocks
+        self._create_sample_data()
+        self._create_mocks()
 
-    # Cleanup
-    if os.path.exists(db_path):
-        try:
-            os.remove(db_path)
-        except PermissionError:
-            pass  # Ignore if file is still locked
+    def tearDown(self):
+        """Clean up after each test"""
+        # Close database connection
+        if hasattr(self, 'db') and self.db is not None:
+            try:
+                self.db.close()
+            except Exception:
+                pass
+            self.db = None
 
-@pytest.fixture
-def sample_match_data():
-    """Provide sample match data for tests"""
-    now = datetime.now().replace(microsecond=0)  # Remove microseconds
-    return {
-        'team_a': 'Team A',
-        'team_b': 'Team B',
-        'match_date': now,
-        'match_name': 'Groups',
-        'league_name': 'Test League'
-    }
+        # Remove test database file
+        if hasattr(self, 'db_path') and os.path.exists(self.db_path):
+            try:
+                os.remove(self.db_path)
+            except (PermissionError, OSError):
+                # If file is locked, try to close any remaining connections
+                try:
+                    sqlite3.connect(self.db_path).close()
+                    os.remove(self.db_path)
+                except Exception:
+                    pass
 
-@pytest.fixture
-def mock_bot(mocker):
-    """Create a mock bot instance"""
-    mock = mocker.MagicMock(spec=discord.Client)
-    mock.guilds = []
-    mock.user = mocker.MagicMock(spec=discord.ClientUser)
-    mock.user.name = "Test Bot"
-    return mock
+        # Clean up patches
+        for p in self.patches:
+            p.stop()
+        self.patches.clear()
 
-@pytest.fixture
-def mock_interaction(mocker):
-    """Create a mock Discord interaction"""
-    interaction = mocker.MagicMock(spec=discord.Interaction)
-    interaction.guild_id = 123
-    interaction.user = mocker.MagicMock(spec=discord.Member)
-    interaction.user.id = 456
-    interaction.user.display_name = "Test User"
-    interaction.guild = mocker.MagicMock(spec=discord.Guild)
-    interaction.guild.name = "Test Guild"
-    interaction.response = mocker.AsyncMock()
-    return interaction
+        # Clean up mocks
+        self.mock_bot = None
+        self.mock_interaction = None
+
+    def _create_sample_data(self):
+        """Create sample test data"""
+        now = datetime.now().replace(microsecond=0)
+        self.sample_match_data = {
+            'team_a': 'Team A',
+            'team_b': 'Team B',
+            'match_date': now,
+            'match_name': 'Groups',
+            'league_name': 'Test League'
+        }
+
+    def _create_mocks(self):
+        """Create mock objects used in tests"""
+        # Create mock bot
+        self.mock_bot = MagicMock(spec=discord.Client)
+        self.mock_bot.guilds = []
+        self.mock_bot.user = MagicMock(spec=discord.ClientUser)
+        self.mock_bot.user.name = "Test Bot"
+
+        # Create mock interaction
+        self.mock_interaction = MagicMock(spec=discord.Interaction)
+        self.mock_interaction.guild_id = 123
+        self.mock_interaction.user = MagicMock(spec=discord.Member)
+        self.mock_interaction.user.id = 456
+        self.mock_interaction.user.display_name = "Test User"
+        self.mock_interaction.guild = MagicMock(spec=discord.Guild)
+        self.mock_interaction.guild.name = "Test Guild"
+        self.mock_interaction.response = AsyncMock()
+
+    def create_patch(self, *args, **kwargs):
+        """Helper to create a patch that will be automatically cleaned up"""
+        patcher = patch(*args, **kwargs)
+        self.patches.append(patcher)
+        return patcher.start()
+
+if __name__ == '__main__':
+    unittest.main()

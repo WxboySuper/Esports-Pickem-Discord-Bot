@@ -679,7 +679,7 @@ def create_summary_embed(user_id: int, guild_id: int, matches: list, date: datet
 
 @bot.tree.command(name="shutdown", description="Shutdown the bot")
 @app_commands.describe(
-    type="Type of Shutdown Message. Options: [normal, update, restart, bugfix]"
+    shutdown_type="Type of Shutdown Message. Options: [normal, update, restart, bugfix]"
 )
 @app_commands.guild_only()
 async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
@@ -704,11 +704,10 @@ async def shutdown_bot(interaction: discord.Interaction, shutdown_type: str):
         "bugfix": ("🔄 Bot Bugfix Initiated", discord.Color.orange())
     }
 
-    title, color = messages[shutdown_type]
     embed = discord.Embed(
-        title=title,
+        title=messages[shutdown_type][0],
         description="Bot is preparing to shutdown...",
-        color=color
+        color=messages[shutdown_type][1]
     )
     embed.set_footer(text="Bot will be offline in 10 seconds")
 

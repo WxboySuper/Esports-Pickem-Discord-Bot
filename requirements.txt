@@ -1,9 +1,6 @@
 discord.py[voice]>=2.3.2
-Flask
-Flask-SQLAlchemy
-Flask-Migrate
-python-dotenv
-requests
+Flask>=2.1.1
+requests>=2.26.0
 PyNaCl>=1.5.0
 pytz>=2025.1
 coverage>=7.6.10

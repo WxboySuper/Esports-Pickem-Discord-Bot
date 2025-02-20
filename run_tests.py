@@ -1,28 +1,18 @@
-import coverage
 import unittest
+import coverage
 import sys
 import logging
-
+from pathlib import Path
 
 def run_tests():
-    """
-    Runs all unit tests and generates coverage reports.
-    This function performs the following steps:
-    1. Starts code coverage tracking
-    2. Discovers and executes all tests in the 'Tests' directory
-    3. Exits with code 1 if any tests fail
-    4. Generates coverage reports in both console and HTML format
-    Returns:
-        None
-    Raises:
-        SystemExit: If any tests fail (with exit code 1)
-    Notes:
-        - Tests are discovered automatically from the 'Tests' directory
-        - HTML coverage report is generated in 'coverage_html' directory
-        - Requires the 'coverage' module to be installed
-    """
+    """Run all tests and generate coverage"""
     # Configure logging for tests
     logger = logging.getLogger(__name__)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
     logger.info("Starting test run")
 
@@ -34,31 +24,47 @@ def run_tests():
         logger.error("Failed to start coverage tracking: %s", str(e))
         sys.exit(1)
 
-    # Discover and run tests
-    loader = unittest.TestLoader()
-    tests = loader.discover('tests')
-    runner = unittest.TextTestRunner()
-    test_result = runner.run(tests)
-    if not test_result.wasSuccessful():
-        sys.exit(1)
+    # Find and load tests
+    test_loader = unittest.TestLoader()
+    test_dir = Path(__file__).parent / 'tests'
+
+    # Discover tests pattern
+    pattern = 'test_*.py'
 
     try:
-        # Stop coverage tracking
+        # Discover and load tests
+        suite = test_loader.discover(str(test_dir), pattern=pattern)
+
+        if not list(suite):
+            logger.error(f"No tests found in {test_dir} with pattern {pattern}")
+            sys.exit(1)
+
+        # Run tests
+        runner = unittest.TextTestRunner(verbosity=2)
+        result = runner.run(suite)
+
+        # Stop coverage and generate reports
         cov.stop()
         cov.save()
 
-        # Generate coverage report
+        logger.info("\nCoverage Report:")
         cov.report()
+
         # Generate HTML report
-        cov.html_report(directory='coverage_html')
+        html_dir = Path('coverage_html')
+        html_dir.mkdir(exist_ok=True)
+        cov.html_report(directory=str(html_dir))
+
         # Generate XML report for CI
         cov.xml_report()
-    except coverage.CoverageException as e:
-        logger.error("Failed to generate coverage report: %s", str(e))
+
+        logger.info(f"\nDetailed HTML coverage report: {html_dir}/index.html")
+
+        sys.exit(not result.wasSuccessful())
+
+    except Exception as e:
+        logger.error(f"Error running tests: {str(e)}")
         sys.exit(1)
-
-    logger.info("Test run completed. Success: %s", test_result.wasSuccessful())
-
 
 if __name__ == '__main__':
     run_tests()

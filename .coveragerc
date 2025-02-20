@@ -1,0 +1,17 @@
+[run]
+source = backend/app
+omit = 
+    */site-packages/*
+    */tests/*
+    */__init__.py
+    */path_helper.py
+    run_tests.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    pass
+    raise NotImplementedError
+fail_under=80
