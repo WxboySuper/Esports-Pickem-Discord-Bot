@@ -6,3 +6,4 @@ python-dotenv
 requests
 PyNaCl>=1.5.0
 pytz>=2025.1
+coverage>=7.6.10
