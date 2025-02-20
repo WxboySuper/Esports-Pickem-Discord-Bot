@@ -29,6 +29,7 @@ admin_logger.addHandler(admin_file_handler)
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 db = PickemDB()
 
+
 @bp.route('/')
 def index():
     try:
@@ -36,7 +37,10 @@ def index():
         return render_template('dashboard.html', picks=picks)
     except Exception as e:
         admin_logger.error("Error loading dashboard: %s", e)
-        return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
+        return render_template('error.html',
+                               error="An internal error has occurred",
+                               current_year=datetime.now().year), 500
+
 
 @bp.route('/stats')
 def admin_stats():
@@ -53,7 +57,10 @@ def admin_stats():
         )
     except Exception as e:
         admin_logger.error("Error loading admin stats: %s", e)
-        return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
+        return render_template('error.html',
+                               error="An Internal Error has occured",
+                               current_year=datetime.now().year), 500
+
 
 @bp.route('/api/stats')
 def api_stats():
@@ -74,6 +81,7 @@ def api_stats():
             'error': "An internal error has occurred. Please try again later."}
         ), 500
 
+
 @bp.route('/matches')
 def matches_page():
     try:
@@ -88,14 +96,17 @@ def matches_page():
             for league in leagues
         ]
         return render_template(
-            'admin/matches.html', 
+            'admin/matches.html',
             matches=matches,
             leagues=leagues_data,
             current_year=datetime.now().year
         )
     except Exception as e:
         admin_logger.error("Error loading matches: %s", e)
-        return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
+        return render_template('error.html',
+                               error="An Internal Error has occured",
+                               current_year=datetime.now().year), 500
+
 
 @bp.route('/matches', methods=['POST'])
 def create_match():
@@ -129,7 +140,9 @@ def create_match():
     except Exception as e:
         admin_logger.error("Error creating match: %s", e)
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 400
+        admin_logger.error("Traceback: %s", traceback.format_exc())
+        return jsonify({'error': 'An internal error has occurred'}), 400
+
 
 @bp.route('/matches/<int:match_id>', methods=['PUT'])
 def update_match(match_id):
@@ -160,6 +173,7 @@ def update_match(match_id):
     except Exception as e:
         admin_logger.error("Error updating match: %s", e)
         return jsonify({'error': 'An internal error has occurred'}), 400
+
 
 @bp.route('/leaderboard')
 def leaderboard():
@@ -205,7 +219,10 @@ def leaderboard():
         )
     except Exception as e:
         admin_logger.error("Error loading admin leaderboard: %s", {str(e)})
-        return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
+        return render_template('error.html',
+                               error="An Internal Error has occured",
+                               current_year=datetime.now().year), 500
+
 
 @bp.route('/leagues')
 def leagues_page():
@@ -230,7 +247,10 @@ def leagues_page():
         )
     except Exception as e:
         admin_logger.error("Error loading leagues: %s", {str(e)})
-        return render_template('error.html', error=str(e), current_year=datetime.now().year), 500
+        return render_template('error.html',
+                               error="An Internal Error has occured",
+                               current_year=datetime.now().year), 500
+
 
 @bp.route('/leagues', methods=['POST'])
 def add_league():
@@ -245,7 +265,10 @@ def add_league():
         return jsonify({'success': True, 'league_id': league_id}), 201
     except Exception as e:
         admin_logger.error("Error adding league: %s", str(e))
-        return render_template('error.html', error=str(e), current_year=datetime.now().year), 400
+        return render_template('error.html',
+                               error="An Internal Error as occured",
+                               current_year=datetime.now().year), 400
+
 
 @bp.route('/leagues/<int:league_id>', methods=['PUT'])
 def update_league(league_id):
@@ -262,4 +285,6 @@ def update_league(league_id):
         return jsonify({'success': success}), 200 if success else 400
     except Exception as e:
         admin_logger.error("Error updating league: %s", str(e))
-        return render_template('error.html', error=str(e), current_year=datetime.now().year), 400
+        return render_template('error.html',
+                               error="An Internal Error has occured",
+                               current_year=datetime.now().year), 400
