@@ -4,27 +4,29 @@ from datetime import datetime
 from .bot_instance import BotInstance
 from pathlib import Path
 
-# Set up database logger
-db_logger = logging.getLogger('database')
-db_logger.setLevel(logging.INFO)
+# Set up logging
+logger = logging.getLogger('database')
+logger.setLevel(logging.INFO)
+
+# Remove any existing handlers
+logger.handlers.clear()
 
 # Configure logging format
-log_format = "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
-formatter = logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S")
+formatter = logging.Formatter(
+    "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
 
-# Create logs directory if it doesn't exist
-logs_dir = Path("logs")
-logs_dir.mkdir(exist_ok=True)
+# Set up file handler with rotation
+log_dir = Path(__file__).parent.parent.parent / 'logs'
+log_dir.mkdir(exist_ok=True)
+log_file = log_dir / 'database.log'
 
-# Create a file handler for database logs
-db_log_filename = f"database_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-db_log_filepath = logs_dir / db_log_filename
+file_handler = logging.FileHandler(log_file)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
-db_file_handler = logging.FileHandler(db_log_filepath)
-db_file_handler.setFormatter(formatter)
-db_logger.addHandler(db_file_handler)
-
-logger = logging.getLogger(__name__)
+db_logger = logging.getLogger(__name__)
 
 class PickemDB:
     def __init__(self, db_path="pickem.db"):
