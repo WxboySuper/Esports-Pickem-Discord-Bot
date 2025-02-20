@@ -128,3 +128,7 @@ pickem.db
 
 # Deployment 
 deploy.bat
+
+# Logs
+logs/*.log
+logs/*.log.*

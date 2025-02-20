@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, AsyncMock, patch
 import discord
 import sqlite3
 from src.utils.db import PickemDB
+import psutil
+import time
 
 class BaseTestCase(unittest.TestCase):
     """Base test case class with shared setup and helper methods"""
@@ -27,31 +29,53 @@ class BaseTestCase(unittest.TestCase):
         # Close database connection
         if hasattr(self, 'db') and self.db is not None:
             try:
-                self.db.close()
-            except Exception:
-                pass
-            self.db = None
+                # Close any open cursors
+                if hasattr(self.db, '_cursor') and self.db._cursor is not None:
+                    self.db._cursor.close()
+                # Close the connection
+                if hasattr(self.db, '_conn') and self.db._conn is not None:
+                    self.db._conn.close()
+                self.db = None
+            except Exception as e:
+                print(f"Error closing database: {e}")
 
-        # Remove test database file
+        # Remove test database file with retry logic
         if hasattr(self, 'db_path') and os.path.exists(self.db_path):
-            try:
-                os.remove(self.db_path)
-            except (PermissionError, OSError):
-                # If file is locked, try to close any remaining connections
+            max_retries = 3
+            for attempt in range(max_retries):
                 try:
-                    sqlite3.connect(self.db_path).close()
-                    os.remove(self.db_path)
-                except Exception:
-                    pass
+                    # Force close any remaining connections
+                    connections = []
+                    for proc in psutil.process_iter(['pid', 'open_files']):
+                        try:
+                            for file in proc.open_files():
+                                if self.db_path in file.path:
+                                    connections.append(proc)
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
 
-        # Clean up patches
+                    # Terminate processes holding the file
+                    for proc in connections:
+                        try:
+                            proc.terminate()
+                        except psutil.NoSuchProcess:
+                            pass
+
+                    # Try to remove the file
+                    os.remove(self.db_path)
+                    break
+                except (PermissionError, OSError) as e:
+                    if attempt == max_retries - 1:
+                        print(f"Failed to remove database file after {max_retries} attempts: {e}")
+                    else:
+                        time.sleep(0.1)
+
+        # Clean up mocks and patches
+        self.mock_bot = None
+        self.mock_interaction = None
         for p in self.patches:
             p.stop()
         self.patches.clear()
-
-        # Clean up mocks
-        self.mock_bot = None
-        self.mock_interaction = None
 
     def _create_sample_data(self):
         """Create sample test data"""

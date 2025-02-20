@@ -1,5 +1,5 @@
 [run]
-source = backend/app
+source = src
 omit = 
     */site-packages/*
     */tests/*
@@ -14,4 +14,7 @@ exclude_lines =
     if __name__ == .__main__.:
     pass
     raise NotImplementedError
-fail_under=80
+fail_under = 80
+
+[html]
+directory = coverage_html

@@ -1,13 +1,12 @@
 import unittest
+import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 import discord
 from datetime import datetime
 from src.bot.bot import AnnouncementManager, create_matches_embed, create_admin_summary_embed
-import os
-import sqlite3
 
-class TestBot(unittest.TestCase):
-    def setUp(self):
+class TestBot(unittest.IsolatedAsyncioTestCase):  # Change to IsolatedAsyncioTestCase
+    async def asyncSetUp(self):  # Change to asyncSetUp
         """Set up test environment before each test"""
         self.mock_bot = MagicMock()
         self.mock_bot.guilds = []
@@ -25,34 +24,25 @@ class TestBot(unittest.TestCase):
         # Store any patches we create so we can clean them up
         self.patches = []
 
-    def tearDown(self):
-        """Clean up test database after each test"""
-        # Close database connection
-        if hasattr(self, 'db') and self.db is not None:
-            try:
-                self.db.close()
-            except Exception:
-                pass
-            self.db = None
-
-        # Remove test database file
-        if hasattr(self, 'db_path') and os.path.exists(self.db_path):
-            try:
-                os.remove(self.db_path)
-            except (PermissionError, OSError):
-                # If file is locked, try to close any remaining connections
-                try:
-                    sqlite3.connect(self.db_path).close()
-                    os.remove(self.db_path)
-                except Exception:
-                    pass
-
-        # Clean up patches
+    async def asyncTearDown(self):  # Add proper async teardown
+        """Clean up test environment after each test"""
+        # Clean up any patches
         for p in self.patches:
             p.stop()
         self.patches.clear()
 
-    def test_announcement_manager_init(self):
+        # Cancel any pending tasks
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        for task in tasks:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+
+    async def test_announcement_manager_init(self):  # Make test methods async
         """Test AnnouncementManager initialization"""
         announcer = AnnouncementManager(self.mock_bot)
         self.assertEqual(announcer.bot, self.mock_bot)
@@ -81,9 +71,9 @@ class TestBot(unittest.TestCase):
         )
 
         self.assertTrue(success)
-        self.assertEqual(mock_channel.send.call_count, 1)
+        mock_channel.send.assert_called_once()
 
-    def test_create_matches_embed(self):
+    async def test_create_matches_embed(self):
         """Test matches embed creation"""
         matches = [(
             1,
@@ -101,7 +91,7 @@ class TestBot(unittest.TestCase):
         self.assertIsInstance(embed, discord.Embed)
         self.assertGreater(len(embed.fields), 0)
 
-    def test_create_admin_summary_embed(self):
+    async def test_create_admin_summary_embed(self):
         """Test admin summary embed creation"""
         matches = [(
             1,

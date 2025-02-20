@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 import sqlite3
 from unittest.mock import MagicMock, patch
 from src.utils.db import PickemDB
-from src.utils.bot_instance import BotInstance
+import psutil
+import time
 
 class TestDatabase(unittest.TestCase):
     def setUp(self):
@@ -44,22 +45,46 @@ class TestDatabase(unittest.TestCase):
         # Close database connection
         if hasattr(self, 'db') and self.db is not None:
             try:
-                self.db.close()
-            except Exception:
-                pass
-            self.db = None
+                # Close any open cursors
+                if hasattr(self.db, '_cursor') and self.db._cursor is not None:
+                    self.db._cursor.close()
+                # Close the connection
+                if hasattr(self.db, '_conn') and self.db._conn is not None:
+                    self.db._conn.close()
+                self.db = None
+            except Exception as e:
+                print(f"Error closing database: {e}")
 
-        # Remove test database file
+        # Remove test database file with retry logic
         if hasattr(self, 'db_path') and os.path.exists(self.db_path):
-            try:
-                os.remove(self.db_path)
-            except (PermissionError, OSError):
-                # If file is locked, try to close any remaining connections
+            max_retries = 3
+            for attempt in range(max_retries):
                 try:
-                    sqlite3.connect(self.db_path).close()
+                    # Force close any remaining connections to the file
+                    connections = []
+                    for proc in psutil.process_iter(['pid', 'open_files']):
+                        try:
+                            for file in proc.open_files():
+                                if self.db_path in file.path:
+                                    connections.append(proc)
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            pass
+
+                    # Terminate processes holding the file
+                    for proc in connections:
+                        try:
+                            proc.terminate()
+                        except psutil.NoSuchProcess:
+                            pass
+
+                    # Try to remove the file
                     os.remove(self.db_path)
-                except Exception:
-                    pass
+                    break
+                except (PermissionError, OSError) as e:
+                    if attempt == max_retries - 1:
+                        print(f"Failed to remove database file after {max_retries} attempts: {e}")
+                    else:
+                        time.sleep(0.1)  # Short delay before retry
 
         # Clean up patches
         for p in self.patches:
