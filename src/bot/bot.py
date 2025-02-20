@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 import logging
+from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 import discord
 from discord.ext import commands
@@ -24,15 +25,9 @@ path_helper.setup_path()
 # Load environment variables
 load_dotenv()
 
-# Create logs directory if it doesn't exist
-logs_dir = Path("logs")
-logs_dir.mkdir(exist_ok=True)
 
-# Configure logging
-log_filename = f"bot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-log_filepath = logs_dir / log_filename
-
-# Fix the CustomFormatter class
+# Define CustomFormatter class first
+bot_logger = logging.getLogger('bot')
 class CustomFormatter(logging.Formatter):
     """Custom formatter with colors for console output"""
     grey = "\x1b[38;20m"
@@ -55,27 +50,39 @@ class CustomFormatter(logging.Formatter):
         return formatter.format(record)
 
 
-# Set up root logger
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+# Create logs directory if it doesn't exist
+logs_dir = Path(__file__).parent.parent.parent / "logs"
+logs_dir.mkdir(exist_ok=True)
 
-# Console handler with custom formatter
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(CustomFormatter())
-logger.addHandler(console_handler)
-
-# Fix the file handler formatter (around line 90)
-file_handler = logging.FileHandler(log_filepath)
+# Configure logging
+log_file = logs_dir / "bot.log"
+file_handler = RotatingFileHandler(
+    log_file,
+    maxBytes=5*1024*1024,  # 5MB
+    backupCount=5,
+    encoding='utf-8'
+)
 file_handler.setFormatter(
     logging.Formatter(
         "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 )
+
+# Set up root logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.handlers.clear()  # Remove any existing handlers
+
+# Add handlers
 logger.addHandler(file_handler)
 
-# Create module logger
-bot_logger = logging.getLogger('bot')
+# Only add console handler if not in test mode
+if not any(arg.startswith('test') for arg in sys.argv):
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(CustomFormatter())
+    logger.addHandler(console_handler)
+
 
 # Add this helper function near the top of the file after imports
 def get_discord_timestamp(dt: datetime, style: str = 'R') -> str:
@@ -780,7 +787,7 @@ async def make_pick(interaction: discord.Interaction):  # Rename pick to make_pi
 # Update other commands to include guild_id
 @bot.tree.command(name="stats", description="View your pick'em statistics")
 async def get_stats(interaction: discord.Interaction):  # Renamed from stats to get_stats
-    bot_logger.info("Stats command used by %s (ID: %s) in guild: %s", 
+    bot_logger.info("Stats command used by %s (ID: %s) in guild: %s",
                    interaction.user.name, interaction.user.id, interaction.guild.name)
     user_stats = bot.db.get_user_stats(interaction.guild_id, interaction.user.id)  # Renamed from stats to user_stats
 
@@ -963,7 +970,7 @@ async def create_match(
 
 @bot.tree.command(name="matches", description="Show matches by day")
 async def show_matches(interaction: discord.Interaction):  # Renamed from matches to show_matches
-    bot_logger.info("Matches command used by %s (ID: %s) in guild: %s", 
+    bot_logger.info("Matches command used by %s (ID: %s) in guild: %s",
                    interaction.user.name, interaction.user.id, interaction.guild.name)
     # Display matches organized by day with navigation
     all_matches = bot.db.get_all_matches()
@@ -1238,11 +1245,11 @@ def update_match_datetime(new_details: dict, old_details: dict, match_date: str,
     except ValueError:
         return False
 
-async def handle_update_result(interaction: discord.Interaction, success: bool, match_id: int, 
+async def handle_update_result(interaction: discord.Interaction, success: bool, match_id: int,
                              old_details: dict, new_details: dict) -> None:
     """Handle the result of the update operation"""
     if success:
-        bot_logger.info("Match %d updated by %s (ID: %s)", 
+        bot_logger.info("Match %d updated by %s (ID: %s)",
                        match_id, interaction.user.name, interaction.user.id)
 
         # Send update announcement
@@ -1298,7 +1305,7 @@ async def update_match(
     match_name: str
 ):
     """Update match details and announce changes"""
-    bot_logger.info("Update match command initiated by %s (ID: %s) for match %d", 
+    bot_logger.info("Update match command initiated by %s (ID: %s) for match %d",
                    interaction.user.name, interaction.user.id, match_id)
 
     try:
@@ -1498,7 +1505,7 @@ class AnnouncementConfirmView(ui.View):
         await interaction.response.defer()
 
 @bot.tree.command(
-    name="announce", 
+    name="announce",
     description="Send an announcement to all servers [Owner Only]"
 )
 @app_commands.describe(
@@ -1507,16 +1514,16 @@ class AnnouncementConfirmView(ui.View):
     color="Color of the embed (red, green, blue, gold, orange, purple)",
 )
 async def announce(
-    interaction: discord.Interaction, 
-    title: str, 
-    message: str, 
+    interaction: discord.Interaction,
+    title: str,
+    message: str,
     color: str = "blue"
 ):
     bot_logger.info("Announce command initiated by %s (ID: %s)", interaction.user.name, interaction.user.id)
     # Send an announcement to all servers
     if interaction.user.id != USER_ID:
         await interaction.response.send_message(
-            "❌ This command is only available to the bot owner!", 
+            "❌ This command is only available to the bot owner!",
             ephemeral=True
         )
         return
@@ -1539,20 +1546,20 @@ async def announce(
         color=discord.Color.yellow()
     )
     preview.add_field(
-        name="Title", 
-        value=title, 
+        name="Title",
+        value=title,
         inline=False
     )
     preview.add_field(
-        name="Message", 
-        value=message, 
+        name="Message",
+        value=message,
         inline=False
     )
     preview.set_footer(text="Click ✅ to send or ❌ to cancel")
 
     view = AnnouncementConfirmView()
     await interaction.response.send_message(
-        "Please confirm the announcement:", 
+        "Please confirm the announcement:",
         embed=preview,
         view=view,
         ephemeral=True
