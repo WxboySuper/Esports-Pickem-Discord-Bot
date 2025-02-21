@@ -11,6 +11,14 @@ jobs:
     name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
 
+    env:
+      PROD_DISCORD_TOKEN: ${{ secrets.PROD_DISCORD_TOKEN }}
+      PROD_APP_ID: ${{ secrets.PROD_APP_ID }}
+      PROD_PUBLIC_KEY: ${{ secrets.PROD_PUBLIC_KEY }}
+      PROD_CLIENT_SECRET: ${{ secrets.PROD_CLIENT_SECRET }}
+      PROD_DB_NAME: ${{ secrets.PROD_DB_NAME }}
+      OWNER_USER_DISCORD_ID: ${{ secrets.OWNER_USER_DISCORD_ID }}
+
     strategy:
       matrix:
         python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
