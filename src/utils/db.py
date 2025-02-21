@@ -57,9 +57,6 @@ class PickemDB:
             self.migrate_db(self._conn)
             self._conn.commit()  # Ensure changes are committed
             db_logger.info("Database migrations completed successfully")
-            self.migrate_db(self._conn)
-            self._conn.commit()  # Ensure changes are committed
-            db_logger.info("Database migrations completed successfully")
         except sqlite3.Error as e:
             db_logger.error("Database initialization failed: %s", e)
             raise

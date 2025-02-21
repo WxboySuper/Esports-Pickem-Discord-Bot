@@ -4,8 +4,6 @@ from datetime import datetime, timedelta
 import sqlite3
 from unittest.mock import MagicMock, patch
 from src.utils.db import PickemDB
-import psutil
-import time
 
 class TestDatabase(unittest.TestCase):
     def setUp(self):
