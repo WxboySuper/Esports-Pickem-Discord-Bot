@@ -68,8 +68,8 @@ def run_tests():
     This function performs the following steps:
     1. Starts code coverage tracking
     2. Discovers and executes all tests in the 'tests' directory
-    3. Exits with code 1 if any tests fail
-    4. Generates coverage reports in both console and HTML format 
+    3. Exits with code 1 if any tests fail (ignoring coverage)
+    4. Generates coverage reports for informational purposes only
     """
     # Configure logging
     logger = setup_logging()
@@ -132,10 +132,10 @@ def run_tests():
         cov.stop()
         cov.save()
         
-        # Generate coverage reports
+        # Generate coverage reports (for information only)
         generate_coverage_report(cov, logger)
         
-        # Exit with appropriate status code
+        # Exit based on test success only, ignoring coverage percentage
         successful = test_result.wasSuccessful()
         logger.info("\nTest run %s", "successful" if successful else "failed")
         sys.exit(0 if successful else 1)
