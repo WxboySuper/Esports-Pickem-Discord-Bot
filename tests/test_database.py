@@ -5,6 +5,7 @@ import sqlite3
 from unittest.mock import MagicMock, patch
 from src.utils.db import PickemDB
 
+
 class TestDatabase(unittest.TestCase):
     def setUp(self):
         """Set up test database before each test"""

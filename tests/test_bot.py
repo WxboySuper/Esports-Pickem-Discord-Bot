@@ -5,6 +5,7 @@ import discord
 from datetime import datetime
 from src.bot.bot import AnnouncementManager, create_matches_embed, create_admin_summary_embed
 
+
 class TestBot(unittest.IsolatedAsyncioTestCase):  # Change to IsolatedAsyncioTestCase
     async def asyncSetUp(self):  # Change to asyncSetUp
         """Set up test environment before each test"""

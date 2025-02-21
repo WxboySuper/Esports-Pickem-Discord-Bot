@@ -3,13 +3,23 @@ import os
 from datetime import datetime
 from unittest.mock import MagicMock, AsyncMock, patch
 import discord
-import sqlite3
 from src.utils.db import PickemDB
 import psutil
 import time
 
+
+# skipcq: PTC-W0046
 class BaseTestCase(unittest.TestCase):
     """Base test case class with shared setup and helper methods"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.db_path = None
+        self.db = None
+        self.sample_match_data = None
+        self.mock_bot = None
+        self.mock_interaction = None
+        self.patches = []
 
     def setUp(self):
         """Set up test environment before each test"""
@@ -24,20 +34,32 @@ class BaseTestCase(unittest.TestCase):
         self._create_sample_data()
         self._create_mocks()
 
+    def _close_cursor(self):
+        """Helper method to close database cursor"""
+        try:
+            # skipcq: PYL-W0212
+            if hasattr(self.db, '_cursor') and self.db._cursor is not None:
+                # skipcq: PYL-W0212
+                self.db._cursor.close()
+        except Exception as e:
+            print(f"Error closing cursor: {e}")
+
+    def _close_connection(self):
+        """Helper method to close database connection"""
+        try:
+            # skipcq: PYL-W0212
+            if hasattr(self.db, '_conn') and self.db._conn is not None:
+                # skipcq: PYL-W0212
+                self.db._conn.close()
+        except Exception as e:
+            print(f"Error closing connection: {e}")
+
     def tearDown(self):
         """Clean up after each test"""
-        # Close database connection
         if hasattr(self, 'db') and self.db is not None:
-            try:
-                # Close any open cursors
-                if hasattr(self.db, '_cursor') and self.db._cursor is not None:
-                    self.db._cursor.close()
-                # Close the connection
-                if hasattr(self.db, '_conn') and self.db._conn is not None:
-                    self.db._conn.close()
-                self.db = None
-            except Exception as e:
-                print(f"Error closing database: {e}")
+            self._close_cursor()
+            self._close_connection()
+            self.db = None
 
         # Remove test database file with retry logic
         if hasattr(self, 'db_path') and os.path.exists(self.db_path):
@@ -64,7 +86,7 @@ class BaseTestCase(unittest.TestCase):
                     # Try to remove the file
                     os.remove(self.db_path)
                     break
-                except (PermissionError, OSError) as e:
+                except OSError as e:
                     if attempt == max_retries - 1:
                         print(f"Failed to remove database file after {max_retries} attempts: {e}")
                     else:

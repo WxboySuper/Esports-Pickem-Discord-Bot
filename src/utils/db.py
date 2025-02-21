@@ -4,6 +4,7 @@ from datetime import datetime
 from .bot_instance import BotInstance
 from pathlib import Path
 
+
 def setup_db_logging():
     """Set up database logging"""
     # Set up logger
@@ -33,8 +34,10 @@ def setup_db_logging():
 
     return logger
 
+
 # Initialize logger
 db_logger = setup_db_logging()
+
 
 class PickemDB:
     def __init__(self, db_path="pickem.db"):
