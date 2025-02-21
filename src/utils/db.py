@@ -45,7 +45,13 @@ class PickemDB:
         # Initialize tables first, then migrate
         try:
             # Create and store the connection at instance level
-            self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            self._conn = sqlite3.connect(
+                self.db_path,
+                check_same_thread=False,
+                timeout=30.0  # 30 seconds timeout
+            )
+            # Set busy timeout to handle concurrent access
+            self._conn.execute('PRAGMA busy_timeout = 30000')  # 30 seconds in milliseconds
             self._cursor = self._conn.cursor()
 
             # Initialize tables using the stored connection

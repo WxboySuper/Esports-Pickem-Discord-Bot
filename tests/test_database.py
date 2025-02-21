@@ -224,7 +224,29 @@ class TestDatabase(unittest.TestCase):
         # Add matches with all correct picks
         match_ids = []
         base_date = datetime.now() - timedelta(hours=1)
-
+        # Add a user with no correct picks
+        no_picks_match = self.db.add_match(
+            league_id=1,
+            team_a="Team X",
+            team_b="Team Y",
+            match_date=base_date - timedelta(minutes=5),
+            match_name=self.sample_match_data['match_name'],
+            is_active=1
+        )
+        self.db.make_pick(123, 789, no_picks_match, "Team X")
+        self.db.update_match_result(no_picks_match, "Team Y")
+        # Add users with tied scores
+        for user_id in [111, 222]:
+            match_id = self.db.add_match(
+                league_id=1,
+                team_a="Team Tie",
+                team_b="Team Other",
+                match_date=base_date - timedelta(minutes=10),
+                match_name=self.sample_match_data['match_name'],
+                is_active=1
+            )
+            self.db.make_pick(123, user_id, match_id, "Team Tie")
+            self.db.update_match_result(match_id, "Team Tie")
         for i in range(10):
             match_id = self.db.add_match(
                 league_id=1,
@@ -235,35 +257,42 @@ class TestDatabase(unittest.TestCase):
                 is_active=1
             )
             match_ids.append(match_id)
-
             # Verify match was created
             self.assertIsNotNone(match_id, f"Failed to create match {i}")
-
             # Verify match exists and is open using instance connection
             match_exists = self.db._cursor.execute("""
                 SELECT COUNT(*) FROM matches
                 WHERE match_id = ? AND winner IS NULL
             """, (match_id,)).fetchone()[0]
             self.assertEqual(match_exists, 1, f"Match {match_id} not found or already closed")
-
             # Make pick
             pick_success = self.db.make_pick(123, 456, match_id, f"Team A{i}")
             self.assertTrue(pick_success, f"Failed to make pick for match {match_id}")
-
             # Verify pick was recorded using instance connection
             pick_recorded = self.db._cursor.execute("""
                 SELECT COUNT(*) FROM picks
                 WHERE match_id = ? AND guild_id = ? AND user_id = ?
             """, (match_id, 123, 456)).fetchone()[0]
             self.assertEqual(pick_recorded, 1, f"Pick not found for match {match_id}")
-
             # Update match result
             result_success = self.db.update_match_result(match_id, f"Team A{i}")
             self.assertTrue(result_success, f"Failed to update result for match {match_id}")
-
         # Get leaderboard and verify results
         leaderboard = self.db.get_leaderboard_by_timeframe(123, 'all')
         self.assertGreater(len(leaderboard), 0, "Leaderboard should have entries")
+        # Verify first entry
+        entry = leaderboard[0]
+        self.assertEqual(entry[0], 456, "Expected user_id 456")
+        self.assertEqual(entry[1], 10, "Expected 10 completed picks")
+        self.assertEqual(entry[2], 10, "Expected 10 correct picks")
+        # Verify tied users
+        tied_entries = [entry for entry in leaderboard if entry[0] in [111, 222]]
+        self.assertEqual(len(tied_entries), 2, "Expected two tied users")
+        self.assertEqual(tied_entries[0][2], tied_entries[1][2], "Tied users should have same correct picks")
+        # Verify user with no correct picks
+        no_picks_entry = next((entry for entry in leaderboard if entry[0] == 789), None)
+        self.assertIsNotNone(no_picks_entry, "User with no correct picks should be in leaderboard")
+        self.assertEqual(no_picks_entry[2], 0, "Expected 0 correct picks")
 
         # Verify first entry
         entry = leaderboard[0]

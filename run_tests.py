@@ -121,7 +121,15 @@ def run_tests():
                     for task in pending:
                         task.cancel()
                     # Wait for cancellation to complete
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    try:
+                        loop.run_until_complete(
+                            asyncio.wait_for(
+                                asyncio.gather(*pending, return_exceptions=True),
+                                timeout=10.0  # 10 seconds timeout
+                            )
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error("Async cleanup timed out after 10 seconds")
             except Exception as e:
                 logger.error("Error during async cleanup: %s", str(e))
             finally:
