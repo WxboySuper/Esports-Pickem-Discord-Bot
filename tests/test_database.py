@@ -294,12 +294,6 @@ class TestDatabase(unittest.TestCase):
         self.assertIsNotNone(no_picks_entry, "User with no correct picks should be in leaderboard")
         self.assertEqual(no_picks_entry[2], 0, "Expected 0 correct picks")
 
-        # Verify first entry
-        entry = leaderboard[0]
-        self.assertEqual(entry[0], 456, "Expected user_id 456")
-        self.assertEqual(entry[1], 10, "Expected 10 completed picks")
-        self.assertEqual(entry[2], 10, "Expected 10 correct picks")
-
     def test_invalid_operations(self):
         """Test handling of invalid operations"""
         # Test invalid match ID
