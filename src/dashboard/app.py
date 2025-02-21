@@ -46,7 +46,7 @@ def create_app():
 
     # Basic configuration
     app.config.update(
-        DEBUG=True,
+        DEBUG=os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 't'],
         JSON_SORT_KEYS=False
     )
 
@@ -65,5 +65,5 @@ if __name__ == '__main__':
     app.run(
         host='127.0.0.1',  # Change to specifically use IPv4 localhost
         port=5000,       # Use port 5000
-        debug=True       # Enable debug mode
+        debug=os.getenv('FLASK_DEBUG', 'False').lower() in ['true', '1', 't']  # Enable debug mode based on environment variable
     )
