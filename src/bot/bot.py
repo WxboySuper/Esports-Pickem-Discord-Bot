@@ -54,6 +54,40 @@ TOKEN = config.DISCORD_TOKEN
 APP_ID = config.APP_ID
 
 
+    async def announce_new_match(self, match_id: int, team_a: str, team_b: str, match_date: datetime, league_name: str, match_name: str) -> bool:
+        """Send new match announcement to all guilds"""
+        try:
+            embed = discord.Embed(
+                title="🎮 New Match Scheduled!",
+                color=discord.Color.blue()
+            )
+
+            embed.add_field(
+                name=f"{league_name}",
+                value=(
+                    f"🏆 **{team_a}** vs **{team_b}**\n"
+                    f"⏰ {get_discord_timestamp(match_date, 'F')}\n"
+                    f"📊 {match_name}"
+                ),
+                inline=False
+            )
+            embed.set_footer(text=f"Match ID: {match_id}")
+
+            success = False
+            for guild in self.bot.guilds:
+                if channel := await self.get_announcement_channel(guild):
+                    try:
+                        await channel.send(embed=embed)
+                        success = True
+                    except discord.Forbidden:
+                        continue
+
+            return success
+
+        except Exception as e:
+            logging.error("Error announcing new match: %s", e)
+            return False
+
 class CustomBot(commands.Bot):
     def __init__(self):
         super().__init__(
