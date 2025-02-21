@@ -17,7 +17,7 @@ def setup_db_logging():
     # Configure logging format
     formatter = logging.Formatter(
         "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt="%Y-%d-%m %H:%M:%S"
     )
 
     # Set up file handler with a single log file
@@ -279,41 +279,37 @@ class PickemDB:
 
     def make_pick(self, guild_id: int, user_id: int, match_id: int, pick: str) -> bool:
         """Record a user's pick for a match"""
-        user_name = getattr(BotInstance.get_bot().get_user(user_id), 'name', 'Unknown')
-        db_logger.info("Recording pick: Guild %d, User %d (%s), Match %d, Pick: %s",
-                      guild_id, user_id, user_name, match_id, pick)
         try:
-            # Use class-level connection and cursor
-            # Check if match exists and is still open
+            db_logger.info(f"Recording pick: Guild {guild_id}, User {user_id}, Match {match_id}, Pick: {pick}")
+
+            # First verify the match exists and is still pickable
+            match = self.get_match_details(match_id)
+            if not match:
+                db_logger.warning(f"Match {match_id} not found")
+                return False
+
+            match_date = datetime.strptime(str(match['match_date']), '%Y-%m-%d %H:%M:%S')
+            if match_date <= datetime.now():
+                db_logger.warning(f"Match {match_id} has already started")
+                return False
+
+            # Use class-level connection instead of creating new one
             self._cursor.execute("""
-                SELECT match_date, winner
-                FROM matches
-                WHERE match_id = ?
-            """, (match_id,))
+                DELETE FROM picks
+                WHERE guild_id = ? AND user_id = ? AND match_id = ?
+            """, (guild_id, user_id, match_id))
 
-            match_data = self._cursor.fetchone()
-            if not match_data:
-                db_logger.warning("Match %d not found", match_id)
-                return False
+            self._cursor.execute("""
+                INSERT INTO picks (guild_id, user_id, match_id, pick)
+                VALUES (?, ?, ?, ?)
+            """, (guild_id, user_id, match_id, pick))
 
-            _, winner = match_data
-
-            if winner is not None:
-                db_logger.warning("Match %d already has a winner", match_id)
-                return False
-
-            # Make the pick using the same connection
-            self._cursor.execute(
-                "INSERT INTO picks (guild_id, user_id, match_id, pick) VALUES (?, ?, ?, ?)"
-                "ON CONFLICT(guild_id, user_id, match_id) DO UPDATE SET pick=excluded.pick",
-                (guild_id, user_id, match_id, pick)
-            )
             self._conn.commit()
             db_logger.info("Pick recorded successfully")
             return True
 
-        except sqlite3.Error as e:
-            db_logger.error("Database error: %s", e)
+        except Exception as e:
+            db_logger.error(f"Database error: {str(e)}", exc_info=True)
             return False
 
     def update_match_result(self, match_id: int, winner: str) -> bool:
@@ -338,11 +334,20 @@ class PickemDB:
             db_logger.error("Failed to update match result: %s", e, exc_info=True)
             return False
 
-    def update_match(self, match_id: int, team_a: str, team_b: str, match_date: datetime, match_name: str) -> bool:
+    def update_match(self, match_id: int, team_a: str, team_b: str, match_date: str | datetime, match_name: str) -> bool:
         """Update match details"""
-        db_logger.info("Updating match %d: %s vs %s, Date: %s, Type: %s",
-                      match_id, team_a, team_b, match_date.strftime('%Y-%m-%d %I:%M %p'), match_name)
         try:
+            # Convert string to datetime if needed
+            if isinstance(match_date, str):
+                try:
+                    match_date = datetime.strptime(match_date, '%Y-%m-%d %H:%M:%S')
+                except ValueError as e:
+                    db_logger.error("Invalid date format: %s", e)
+                    return False
+
+            db_logger.info("Updating match %d: %s vs %s, Date: %s, Type: %s",
+                           match_id, team_a, team_b, match_date.strftime('%Y-%m-%d %I:%M %p'), match_name)
+
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
                 c.execute("""
@@ -353,9 +358,12 @@ class PickemDB:
                 conn.commit()
                 db_logger.info("Match %d updated successfully", match_id)
                 return True
+
         except sqlite3.Error as e:
-            logging.error("Database error: %s", e)
             db_logger.error("Failed to update match: %s", e, exc_info=True)
+            return False
+        except Exception as e:
+            db_logger.error("Error updating match: %s", e, exc_info=True)
             return False
 
     def get_user_stats(self, guild_id: int, user_id: int) -> dict:
