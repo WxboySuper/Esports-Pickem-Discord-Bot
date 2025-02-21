@@ -713,7 +713,7 @@ class PickemDB:
             return result[0] if result else None
         except sqlite3.Error as e:
             db_logger.error("Error getting user pick: %s", e)
-            return None
+            raise
 
     def get_ongoing_matches(self):
         """Get matches that are currently in progress (started but no winner)"""
