@@ -334,11 +334,20 @@ class PickemDB:
             db_logger.error("Failed to update match result: %s", e, exc_info=True)
             return False
 
-    def update_match(self, match_id: int, team_a: str, team_b: str, match_date: datetime, match_name: str) -> bool:
+    def update_match(self, match_id: int, team_a: str, team_b: str, match_date: str | datetime, match_name: str) -> bool:
         """Update match details"""
-        db_logger.info("Updating match %d: %s vs %s, Date: %s, Type: %s",
-                      match_id, team_a, team_b, match_date.strftime('%Y-%m-%d %I:%M %p'), match_name)
         try:
+            # Convert string to datetime if needed
+            if isinstance(match_date, str):
+                try:
+                    match_date = datetime.strptime(match_date, '%Y-%m-%d %H:%M:%S')
+                except ValueError as e:
+                    db_logger.error("Invalid date format: %s", e)
+                    return False
+
+            db_logger.info("Updating match %d: %s vs %s, Date: %s, Type: %s",
+                           match_id, team_a, team_b, match_date.strftime('%Y-%m-%d %I:%M %p'), match_name)
+
             with sqlite3.connect(self.db_path) as conn:
                 c = conn.cursor()
                 c.execute("""
@@ -349,9 +358,12 @@ class PickemDB:
                 conn.commit()
                 db_logger.info("Match %d updated successfully", match_id)
                 return True
+
         except sqlite3.Error as e:
-            logging.error("Database error: %s", e)
             db_logger.error("Failed to update match: %s", e, exc_info=True)
+            return False
+        except Exception as e:
+            db_logger.error("Error updating match: %s", e, exc_info=True)
             return False
 
     def get_user_stats(self, guild_id: int, user_id: int) -> dict:

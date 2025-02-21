@@ -43,6 +43,7 @@ class LeaderboardView(ui.View):
         )
 
         leaderboard_data = self.db.get_leaderboard_by_timeframe(self.guild_id, self.current_timeframe)
+        print(leaderboard_data)
         
         if not leaderboard_data:
             embed.description = f"No picks found for {timeframe_titles[self.current_timeframe].lower()} leaderboard!"
@@ -52,8 +53,7 @@ class LeaderboardView(ui.View):
             if self.current_timeframe == 'all':
                 user_id, completed_picks, correct_picks, accuracy = data
             else:
-                user_id, completed_picks, correct_picks = data
-                accuracy = correct_picks / completed_picks if completed_picks > 0 else 0
+                user_id, completed_picks, correct_picks, accuracy = data
 
             member = guild.get_member(user_id)
             name = member.display_name if member else f"User {user_id}"
