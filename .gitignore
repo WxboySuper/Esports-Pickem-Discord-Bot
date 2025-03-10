@@ -132,3 +132,6 @@ deploy.bat
 # Logs
 logs/*.log
 logs/*.log.*
+
+Personal docs
+*/personal-docs/*
