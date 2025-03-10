@@ -1,0 +1,180 @@
+name: PR Label Automation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  pr-labeler:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      # Auto-label new PRs as "needs review"
+      - name: Label new PRs as needing review
+        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['pr:needs-review']
+            })
+
+      # Label draft PRs as WIP
+      - name: Label draft PRs as WIP
+        if: github.event_name == 'pull_request' && github.event.pull_request.draft == true
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['pr:wip']
+            })
+            // Remove needs-review if it's a draft
+            try {
+              github.rest.issues.removeLabel({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'pr:needs-review'
+              })
+            } catch (e) {
+              console.log("Label not found, skipping removal")
+            }
+
+      # Handle PR becoming ready for review
+      - name: Handle PR ready for review
+        if: github.event_name == 'pull_request' && github.event.action == 'ready_for_review'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Remove WIP label
+            try {
+              github.rest.issues.removeLabel({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'pr:wip'
+              })
+            } catch (e) {
+              console.log("Label not found, skipping removal")
+            }
+            // Add needs-review label
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['pr:needs-review']
+            })
+
+      # Handle PR review submissions
+      - name: Handle PR review submissions
+        if: github.event_name == 'pull_request_review' && github.event.action == 'submitted'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const review = context.payload.review
+            
+            // If changes requested
+            if (review.state === 'changes_requested') {
+              // Remove other PR status labels
+              try {
+                github.rest.issues.removeLabel({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'pr:needs-review'
+                })
+              } catch (e) { /* Ignore errors */ }
+              
+              try {
+                github.rest.issues.removeLabel({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'pr:approved'
+                })
+              } catch (e) { /* Ignore errors */ }
+              
+              // Add changes requested label
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['pr:changes-requested']
+              })
+            }
+            
+            // If approved
+            if (review.state === 'approved') {
+              // Remove other PR status labels
+              try {
+                github.rest.issues.removeLabel({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'pr:needs-review'
+                })
+              } catch (e) { /* Ignore errors */ }
+              
+              try {
+                github.rest.issues.removeLabel({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'pr:changes-requested'
+                })
+              } catch (e) { /* Ignore errors */ }
+              
+              // Add approved label
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['pr:approved']
+              })
+            }
+
+      # Check for merge conflicts on synchronize
+      - name: Check for merge conflicts
+        if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Get PR details including mergeable status
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            })
+            
+            // If not mergeable, add conflict label
+            if (pr.data.mergeable === false) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['pr:merge-conflict']
+              })
+            } else {
+              // Remove conflict label if no longer conflicting
+              try {
+                github.rest.issues.removeLabel({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'pr:merge-conflict'
+                })
+              } catch (e) {
+                console.log("No conflict label to remove")
+              }
+            }
