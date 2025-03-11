@@ -7,7 +7,7 @@ assignees: ''
 ---
 
 ## Bug Description
-<!-- A clear and concise description of the bug -->
+<!-- A clear and concise description of the bug. Include any error messages that appear -->
 
 ## Steps to Reproduce
 1. 
