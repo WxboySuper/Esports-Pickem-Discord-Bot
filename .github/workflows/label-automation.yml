@@ -166,26 +166,46 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number
             })
-
+            
+            // Get current labels on the PR
+            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const currentLabelNames = currentLabels.map(label => label.name);
+            console.log('Current labels for merge conflict check:', currentLabelNames);
+            
             // If not mergeable, add conflict label
             if (pr.data.mergeable === false) {
-              github.rest.issues.addLabels({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                labels: ['pr:merge-conflict']
-              })
-            } else {
-              // Remove conflict label if no longer conflicting
               try {
-                github.rest.issues.removeLabel({
+                await github.rest.issues.addLabels({
                   issue_number: context.issue.number,
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  name: 'pr:merge-conflict'
-                })
+                  labels: ['pr:merge-conflict']
+                });
+                console.log('Added pr:merge-conflict label');
               } catch (e) {
-                console.log("No conflict label to remove")
+                console.log('Error adding merge conflict label:', e.message);
+              }
+            } else {
+              // Only try to remove the label if it exists
+              if (currentLabelNames.includes('pr:merge-conflict')) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    issue_number: context.issue.number,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: 'pr:merge-conflict'
+                  });
+                  console.log('Removed pr:merge-conflict label');
+                } catch (e) {
+                  console.log('Error removing merge conflict label:', e.message);
+                }
+              } else {
+                console.log('No pr:merge-conflict label to remove');
               }
             }
 
