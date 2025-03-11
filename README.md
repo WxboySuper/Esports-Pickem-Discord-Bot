@@ -81,7 +81,7 @@ discord-esports-pickem
 ## Configuration
 
 1. Create a `.env` file in the root directory with your Discord bot credentials and database settings
-2. See detailed instructions in the [Environment Variables Setup Guide](docs/setup/env.md)
+2. See detailed instructions in the [Environment Variables Setup Guide](docs/setup/environment-variables.md)
 3. Update the `config/config.yml` file with any additional configuration settings
 
 ## Running the Bot
