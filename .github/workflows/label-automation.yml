@@ -20,12 +20,17 @@ jobs:
         uses: actions/github-script@v6.3.0
         with:
           script: |
-            github.rest.issues.addLabels({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              labels: ['pr:needs-review']
-            })
+            try {
+              await github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['pr:needs-review']
+              });
+              console.log('Added label: pr:needs-review');
+            } catch (e) {
+              console.log('Error adding label pr:needs-review:', e.message);
+            }
 
       # Label draft PRs as WIP
       - name: Label draft PRs as WIP
@@ -33,22 +38,44 @@ jobs:
         uses: actions/github-script@v6.3.0
         with:
           script: |
-            github.rest.issues.addLabels({
-              issue_number: context.issue.number,
+            // Get current labels on the PR
+            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              labels: ['pr:wip']
-            })
-            // Remove needs-review if it's a draft
+              issue_number: context.issue.number
+            });
+            
+            const currentLabelNames = currentLabels.map(label => label.name);
+            console.log('Current labels for draft PR:', currentLabelNames);
+            
+            // Add WIP label
             try {
-              github.rest.issues.removeLabel({
+              await github.rest.issues.addLabels({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                name: 'pr:needs-review'
-              })
+                labels: ['pr:wip']
+              });
+              console.log('Added label: pr:wip');
             } catch (e) {
-              console.log("Label not found, skipping removal")
+              console.log('Error adding label pr:wip:', e.message);
+            }
+            
+            // Remove needs-review if it's a draft and the label exists
+            if (currentLabelNames.includes('pr:needs-review')) {
+              try {
+                await github.rest.issues.removeLabel({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'pr:needs-review'
+                });
+                console.log('Removed label: pr:needs-review');
+              } catch (e) {
+                console.log('Error removing label pr:needs-review:', e.message);
+              }
+            } else {
+              console.log('Label pr:needs-review not found, no need to remove');
             }
 
       # Handle PR becoming ready for review
@@ -57,24 +84,45 @@ jobs:
         uses: actions/github-script@v6.3.0
         with:
           script: |
-            // Remove WIP label
+            // Get current labels on the PR
+            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const currentLabelNames = currentLabels.map(label => label.name);
+            console.log('Current labels for ready PR:', currentLabelNames);
+            
+            // Remove WIP label if it exists
+            if (currentLabelNames.includes('pr:wip')) {
+              try {
+                await github.rest.issues.removeLabel({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'pr:wip'
+                });
+                console.log('Removed label: pr:wip');
+              } catch (e) {
+                console.log('Error removing label pr:wip:', e.message);
+              }
+            } else {
+              console.log('Label pr:wip not found, no need to remove');
+            }
+            
+            // Add needs-review label
             try {
-              github.rest.issues.removeLabel({
+              await github.rest.issues.addLabels({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                name: 'pr:wip'
-              })
+                labels: ['pr:needs-review']
+              });
+              console.log('Added label: pr:needs-review');
             } catch (e) {
-              console.log("Label not found, skipping removal")
+              console.log('Error adding label pr:needs-review:', e.message);
             }
-            // Add needs-review label
-            github.rest.issues.addLabels({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              labels: ['pr:needs-review']
-            })
 
       # Handle PR review submissions
       - name: Handle PR review submissions
