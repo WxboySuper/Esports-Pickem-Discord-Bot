@@ -84,64 +84,74 @@ jobs:
           script: |
             const review = context.payload.review
             
+            // Get current labels on the PR
+            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            // Extract label names
+            const currentLabelNames = currentLabels.map(label => label.name);
+            console.log('Current labels:', currentLabelNames);
+            
+            // Helper function to remove a label only if it exists
+            async function removeLabel(labelName) {
+              if (currentLabelNames.includes(labelName)) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    issue_number: context.issue.number,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: labelName
+                  });
+                  console.log(`Removed label: ${labelName}`);
+                } catch (e) {
+                  console.log(`Error removing label ${labelName}:`, e.message);
+                }
+              } else {
+                console.log(`Label ${labelName} not found, no need to remove`);
+              }
+            }
+            
             // If changes requested
             if (review.state === 'changes_requested') {
-              // Remove other PR status labels
+              // Remove other PR status labels if they exist
+              await removeLabel('pr:needs-review');
+              await removeLabel('pr:approved');
+              
               try {
-                github.rest.issues.removeLabel({
+                // Add changes requested label
+                await github.rest.issues.addLabels({
                   issue_number: context.issue.number,
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  name: 'pr:needs-review'
-                })
-              } catch (e) { /* Ignore errors */ }
-              
-              try {
-                github.rest.issues.removeLabel({
-                  issue_number: context.issue.number,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  name: 'pr:approved'
-                })
-              } catch (e) { /* Ignore errors */ }
-              
-              // Add changes requested label
-              github.rest.issues.addLabels({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                labels: ['pr:changes-requested']
-              })
+                  labels: ['pr:changes-requested']
+                });
+                console.log('Added label: pr:changes-requested');
+              } catch (e) {
+                console.log('Error adding label pr:changes-requested:', e.message);
+              }
             }
             
             // If approved
             if (review.state === 'approved') {
-              // Remove other PR status labels
+              // Remove other PR status labels if they exist
+              await removeLabel('pr:needs-review');
+              await removeLabel('pr:changes-requested');
+              
               try {
-                github.rest.issues.removeLabel({
+                // Add approved label
+                await github.rest.issues.addLabels({
                   issue_number: context.issue.number,
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  name: 'pr:needs-review'
-                })
-              } catch (e) { /* Ignore errors */ }
-              
-              try {
-                github.rest.issues.removeLabel({
-                  issue_number: context.issue.number,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  name: 'pr:changes-requested'
-                })
-              } catch (e) { /* Ignore errors */ }
-              
-              // Add approved label
-              github.rest.issues.addLabels({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                labels: ['pr:approved']
-              })
+                  labels: ['pr:approved']
+                });
+                console.log('Added label: pr:approved');
+              } catch (e) {
+                console.log('Error adding label pr:approved:', e.message);
+              }
             }
 
       # Check for merge conflicts on synchronize
