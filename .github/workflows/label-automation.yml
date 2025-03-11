@@ -178,3 +178,77 @@ jobs:
                 console.log("No conflict label to remove")
               }
             }
+
+  directory-labeler:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize')
+    steps:
+      - name: Add labels based on changed directories
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Get the list of files changed in the PR
+            const response = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            
+            const changedFiles = response.data.map(file => file.filename);
+            console.log('Changed files:', changedFiles);
+            
+            // Define directory to label mappings
+            const dirToComponentLabel = {
+              '^src/database/': 'component:database',
+              '^src/api/': 'component:api',
+              '^src/framework/': 'component:bot-framework',
+              '^src/commands/': 'component:commands',
+              '^src/match/|^src/tracking/': 'component:match-tracking',
+              '^src/picks/': 'component:picks',
+              '^src/leaderboard/': 'component:leaderboard',
+              '^src/notifications/': 'component:notifications',
+              '^src/admin/': 'component:admin',
+              '^src/monitoring/': 'component:monitoring'
+            };
+            
+            const dirToTypeLabel = {
+              '^docs/': 'type:documentation',
+              '^tests/': 'type:test',
+              '^\\.github/workflows/': 'type:devops',
+              '^scripts/deployment/': 'type:devops'
+            };
+            
+            // Collect labels to be added
+            const labelsToAdd = new Set();
+            
+            // Check component directories
+            for (const file of changedFiles) {
+              for (const [pattern, label] of Object.entries(dirToComponentLabel)) {
+                if (new RegExp(pattern).test(file)) {
+                  labelsToAdd.add(label);
+                  break;
+                }
+              }
+              
+              // Check type directories
+              for (const [pattern, label] of Object.entries(dirToTypeLabel)) {
+                if (new RegExp(pattern).test(file)) {
+                  labelsToAdd.add(label);
+                  break;
+                }
+              }
+            }
+            
+            // Add labels if any were matched
+            if (labelsToAdd.size > 0) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: Array.from(labelsToAdd)
+              });
+              console.log('Added labels:', Array.from(labelsToAdd));
+            }
