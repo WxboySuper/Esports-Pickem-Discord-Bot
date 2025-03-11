@@ -17,7 +17,7 @@ jobs:
       # Auto-label new PRs as "needs review"
       - name: Label new PRs as needing review
         if: github.event_name == 'pull_request' && github.event.action == 'opened'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v6.3.0
         with:
           script: |
             github.rest.issues.addLabels({
@@ -30,7 +30,7 @@ jobs:
       # Label draft PRs as WIP
       - name: Label draft PRs as WIP
         if: github.event_name == 'pull_request' && github.event.pull_request.draft == true
-        uses: actions/github-script@v6
+        uses: actions/github-script@v6.3.0
         with:
           script: |
             github.rest.issues.addLabels({
@@ -54,7 +54,7 @@ jobs:
       # Handle PR becoming ready for review
       - name: Handle PR ready for review
         if: github.event_name == 'pull_request' && github.event.action == 'ready_for_review'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v6.3.0
         with:
           script: |
             // Remove WIP label
@@ -79,7 +79,7 @@ jobs:
       # Handle PR review submissions
       - name: Handle PR review submissions
         if: github.event_name == 'pull_request_review' && github.event.action == 'submitted'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v6.3.0
         with:
           script: |
             const review = context.payload.review
@@ -157,7 +157,7 @@ jobs:
       # Check for merge conflicts on synchronize
       - name: Check for merge conflicts
         if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v6.3.0
         with:
           script: |
             // Get PR details including mergeable status
@@ -197,7 +197,7 @@ jobs:
     if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize')
     steps:
       - name: Add labels based on changed directories
-        uses: actions/github-script@v6
+        uses: actions/github-script@v6.3.0
         with:
           script: |
             // Get the list of files changed in the PR
