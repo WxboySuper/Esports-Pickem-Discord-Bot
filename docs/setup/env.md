@@ -20,7 +20,7 @@ Before setting up your environment variables, you'll need to create a Discord ap
 
 Create a file named `.env` in the root directory of the project with the following structure:
 
-```
+```env
 # Production Bot Settings
 PROD_DISCORD_TOKEN=your_production_bot_token
 PROD_PUBLIC_KEY=your_production_public_key

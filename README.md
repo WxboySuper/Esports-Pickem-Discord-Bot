@@ -39,9 +39,9 @@ This project is currently being rebuilt with a focus on automation and efficienc
 Currently, this implementation supports only Tier 1 LoL Esports, with plans to expand to additional esports titles.
 
 ## Project Structure
-Current Project Structure, this is expected to change when development continues.
+Current project structure (subject to ongoing changes)
 
-```
+```plaintext
 discord-esports-pickem
 ├── docs
    └── setup
@@ -66,15 +66,15 @@ discord-esports-pickem
 ## Installation
 
 1. Clone the repository:
-   ```
+   ```shell
    git clone <repository-url>
    ```
 2. Navigate to the project directory:
-   ```
+   ```shell
    cd discord-esports-pickem
    ```
 3. Install the required dependencies:
-   ```
+   ```shell
    pip install -r requirements.txt
    ```
 
@@ -87,14 +87,14 @@ discord-esports-pickem
 ## Running the Bot
 
 To start the Discord bot, run:
-```
+```shell
 python src/bot/bot.py
 ```
 
 ## Running the Admin Dashboard
 
 To start the admin dashboard, run:
-```
+```shell
 python src/dashboard/app.py
 ```
 
