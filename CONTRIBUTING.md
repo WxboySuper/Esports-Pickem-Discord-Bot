@@ -35,7 +35,7 @@ By participating in this project, you agree to maintain a respectful and inclusi
    pip install -r requirements.txt
    ```
 5. Set up environment variables:
-   - Create a `.env` file based on the instructions in [Environment Variables Setup Guide](docs/setup/env.md)
+   - Create a `.env` file based on the instructions in [Environment Variables Setup Guide](docs/setup/environment-variables.md)
 
 ## Development Workflow
 
