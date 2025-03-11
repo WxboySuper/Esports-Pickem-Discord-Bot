@@ -83,18 +83,18 @@ jobs:
         with:
           script: |
             const review = context.payload.review
-            
+
             // Get current labels on the PR
             const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number
             });
-            
+
             // Extract label names
             const currentLabelNames = currentLabels.map(label => label.name);
             console.log('Current labels:', currentLabelNames);
-            
+
             // Helper function to remove a label only if it exists
             async function removeLabel(labelName) {
               if (currentLabelNames.includes(labelName)) {
@@ -113,13 +113,13 @@ jobs:
                 console.log(`Label ${labelName} not found, no need to remove`);
               }
             }
-            
+
             // If changes requested
             if (review.state === 'changes_requested') {
               // Remove other PR status labels if they exist
               await removeLabel('pr:needs-review');
               await removeLabel('pr:approved');
-              
+
               try {
                 // Add changes requested label
                 await github.rest.issues.addLabels({
@@ -133,13 +133,13 @@ jobs:
                 console.log('Error adding label pr:changes-requested:', e.message);
               }
             }
-            
+
             // If approved
             if (review.state === 'approved') {
               // Remove other PR status labels if they exist
               await removeLabel('pr:needs-review');
               await removeLabel('pr:changes-requested');
-              
+
               try {
                 // Add approved label
                 await github.rest.issues.addLabels({
@@ -166,7 +166,7 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number
             })
-            
+
             // If not mergeable, add conflict label
             if (pr.data.mergeable === false) {
               github.rest.issues.addLabels({
@@ -206,10 +206,10 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number,
             });
-            
+
             const changedFiles = response.data.map(file => file.filename);
             console.log('Changed files:', changedFiles);
-            
+
             // Define directory to label mappings
             const dirToComponentLabel = {
               '^src/database/': 'component:database',
@@ -223,17 +223,17 @@ jobs:
               '^src/admin/': 'component:admin',
               '^src/monitoring/': 'component:monitoring'
             };
-            
+
             const dirToTypeLabel = {
               '^docs/': 'type:documentation',
               '^tests/': 'type:test',
               '^\\.github/workflows/': 'type:devops',
               '^scripts/deployment/': 'type:devops'
             };
-            
+
             // Collect labels to be added
             const labelsToAdd = new Set();
-            
+
             // Check component directories
             for (const file of changedFiles) {
               for (const [pattern, label] of Object.entries(dirToComponentLabel)) {
@@ -242,7 +242,7 @@ jobs:
                   break;
                 }
               }
-              
+
               // Check type directories
               for (const [pattern, label] of Object.entries(dirToTypeLabel)) {
                 if (new RegExp(pattern).test(file)) {
@@ -251,7 +251,7 @@ jobs:
                 }
               }
             }
-            
+
             // Add labels if any were matched
             if (labelsToAdd.size > 0) {
               github.rest.issues.addLabels({
