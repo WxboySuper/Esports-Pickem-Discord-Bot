@@ -1,0 +1,332 @@
+name: PR Label Automation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  pr-labeler:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      # Auto-label new PRs as "needs review"
+      - name: Label new PRs as needing review
+        if: github.event_name == 'pull_request' && github.event.action == 'opened'
+        uses: actions/github-script@v6.3.0
+        with:
+          script: |
+            try {
+              await github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['pr:needs-review']
+              });
+              console.log('Added label: pr:needs-review');
+            } catch (e) {
+              console.log('Error adding label pr:needs-review:', e.message);
+            }
+
+      # Label draft PRs as WIP
+      - name: Label draft PRs as WIP
+        if: github.event_name == 'pull_request' && github.event.pull_request.draft == true
+        uses: actions/github-script@v6.3.0
+        with:
+          script: |
+            // Get current labels on the PR
+            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const currentLabelNames = currentLabels.map(label => label.name);
+            console.log('Current labels for draft PR:', currentLabelNames);
+            
+            // Add WIP label
+            try {
+              await github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['pr:wip']
+              });
+              console.log('Added label: pr:wip');
+            } catch (e) {
+              console.log('Error adding label pr:wip:', e.message);
+            }
+            
+            // Remove needs-review if it's a draft and the label exists
+            if (currentLabelNames.includes('pr:needs-review')) {
+              try {
+                await github.rest.issues.removeLabel({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'pr:needs-review'
+                });
+                console.log('Removed label: pr:needs-review');
+              } catch (e) {
+                console.log('Error removing label pr:needs-review:', e.message);
+              }
+            } else {
+              console.log('Label pr:needs-review not found, no need to remove');
+            }
+
+      # Handle PR becoming ready for review
+      - name: Handle PR ready for review
+        if: github.event_name == 'pull_request' && github.event.action == 'ready_for_review'
+        uses: actions/github-script@v6.3.0
+        with:
+          script: |
+            // Get current labels on the PR
+            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const currentLabelNames = currentLabels.map(label => label.name);
+            console.log('Current labels for ready PR:', currentLabelNames);
+            
+            // Remove WIP label if it exists
+            if (currentLabelNames.includes('pr:wip')) {
+              try {
+                await github.rest.issues.removeLabel({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: 'pr:wip'
+                });
+                console.log('Removed label: pr:wip');
+              } catch (e) {
+                console.log('Error removing label pr:wip:', e.message);
+              }
+            } else {
+              console.log('Label pr:wip not found, no need to remove');
+            }
+            
+            // Add needs-review label
+            try {
+              await github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['pr:needs-review']
+              });
+              console.log('Added label: pr:needs-review');
+            } catch (e) {
+              console.log('Error adding label pr:needs-review:', e.message);
+            }
+
+      # Handle PR review submissions
+      - name: Handle PR review submissions
+        if: github.event_name == 'pull_request_review' && github.event.action == 'submitted'
+        uses: actions/github-script@v6.3.0
+        with:
+          script: |
+            const review = context.payload.review
+
+            // Get current labels on the PR
+            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+
+            // Extract label names
+            const currentLabelNames = currentLabels.map(label => label.name);
+            console.log('Current labels:', currentLabelNames);
+
+            // Helper function to remove a label only if it exists
+            async function removeLabel(labelName) {
+              if (currentLabelNames.includes(labelName)) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    issue_number: context.issue.number,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: labelName
+                  });
+                  console.log(`Removed label: ${labelName}`);
+                } catch (e) {
+                  console.log(`Error removing label ${labelName}:`, e.message);
+                }
+              } else {
+                console.log(`Label ${labelName} not found, no need to remove`);
+              }
+            }
+
+            // If changes requested
+            if (review.state === 'changes_requested') {
+              // Remove other PR status labels if they exist
+              await removeLabel('pr:needs-review');
+              await removeLabel('pr:approved');
+
+              try {
+                // Add changes requested label
+                await github.rest.issues.addLabels({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  labels: ['pr:changes-requested']
+                });
+                console.log('Added label: pr:changes-requested');
+              } catch (e) {
+                console.log('Error adding label pr:changes-requested:', e.message);
+              }
+            }
+
+            // If approved
+            if (review.state === 'approved') {
+              // Remove other PR status labels if they exist
+              await removeLabel('pr:needs-review');
+              await removeLabel('pr:changes-requested');
+
+              try {
+                // Add approved label
+                await github.rest.issues.addLabels({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  labels: ['pr:approved']
+                });
+                console.log('Added label: pr:approved');
+              } catch (e) {
+                console.log('Error adding label pr:approved:', e.message);
+              }
+            }
+
+      # Check for merge conflicts on synchronize
+      - name: Check for merge conflicts
+        if: github.event_name == 'pull_request' && github.event.action == 'synchronize'
+        uses: actions/github-script@v6.3.0
+        with:
+          script: |
+            // Get PR details including mergeable status
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            })
+            
+            // Get current labels on the PR
+            const { data: currentLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const currentLabelNames = currentLabels.map(label => label.name);
+            console.log('Current labels for merge conflict check:', currentLabelNames);
+            
+            // If not mergeable, add conflict label
+            if (pr.data.mergeable === false) {
+              try {
+                await github.rest.issues.addLabels({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  labels: ['pr:merge-conflict']
+                });
+                console.log('Added pr:merge-conflict label');
+              } catch (e) {
+                console.log('Error adding merge conflict label:', e.message);
+              }
+            } else {
+              // Only try to remove the label if it exists
+              if (currentLabelNames.includes('pr:merge-conflict')) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    issue_number: context.issue.number,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: 'pr:merge-conflict'
+                  });
+                  console.log('Removed pr:merge-conflict label');
+                } catch (e) {
+                  console.log('Error removing merge conflict label:', e.message);
+                }
+              } else {
+                console.log('No pr:merge-conflict label to remove');
+              }
+            }
+
+  directory-labeler:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize')
+    steps:
+      - name: Add labels based on changed directories
+        uses: actions/github-script@v6.3.0
+        with:
+          script: |
+            // Get the list of files changed in the PR
+            const response = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            const changedFiles = response.data.map(file => file.filename);
+            console.log('Changed files:', changedFiles);
+
+            // Define directory to label mappings
+            const dirToComponentLabel = {
+              '^src/database/': 'component:database',
+              '^src/api/': 'component:api',
+              '^src/framework/': 'component:bot-framework',
+              '^src/commands/': 'component:commands',
+              '^src/match/|^src/tracking/': 'component:match-tracking',
+              '^src/picks/': 'component:picks',
+              '^src/leaderboard/': 'component:leaderboard',
+              '^src/notifications/': 'component:notifications',
+              '^src/admin/': 'component:admin',
+              '^src/monitoring/': 'component:monitoring'
+            };
+
+            const dirToTypeLabel = {
+              '^docs/': 'type:documentation',
+              '^tests/': 'type:test',
+              '^\\.github/workflows/': 'type:devops',
+              '^scripts/deployment/': 'type:devops'
+            };
+
+            // Collect labels to be added
+            const labelsToAdd = new Set();
+
+            // Check component directories
+            for (const file of changedFiles) {
+              for (const [pattern, label] of Object.entries(dirToComponentLabel)) {
+                if (new RegExp(pattern).test(file)) {
+                  labelsToAdd.add(label);
+                  break;
+                }
+              }
+
+              // Check type directories
+              for (const [pattern, label] of Object.entries(dirToTypeLabel)) {
+                if (new RegExp(pattern).test(file)) {
+                  labelsToAdd.add(label);
+                  break;
+                }
+              }
+            }
+
+            // Add labels if any were matched
+            if (labelsToAdd.size > 0) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: Array.from(labelsToAdd)
+              });
+              console.log('Added labels:', Array.from(labelsToAdd));
+            }
