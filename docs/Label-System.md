@@ -67,7 +67,7 @@ These labels indicate the current state of an issue or pull request in the devel
 | `status:discussion` | `#D4C5F5` (Light Purple) | Needs further discussion |
 | `status:duplicate` | `#CCCCCC` (Gray) | Duplicate issue |
 
-### Pull Request Specific Labels
+### Pull Request-Specific Labels
 
 These labels are specifically for pull requests to indicate their review status.
 
@@ -102,7 +102,7 @@ These labels provide an estimate of the amount of work required to complete the 
 
 | Label | Color | Description |
 |-------|-------|-------------|
-| `effort:trivial` | `#C2E0C6` (Light Green) | Very quick fix |
+| `effort:trivial` | `#C2E0C6` (Light Green) | Quick fix |
 | `effort:small` | `#FBCA04` (Yellow) | Less than a day of work |
 | `effort:medium` | `#EB6420` (Orange) | 1-3 days of work |
 | `effort:large` | `#D93F0B` (Red Orange) | More than 3 days of work |
@@ -120,14 +120,14 @@ These labels provide an estimate of the amount of work required to complete the 
 
 ### Example Label Combinations
 
-#### For Issues:
+#### For Issues
 - New feature in initial development:
   - `phase:foundation` + `priority:high` + `type:feature` + `status:in-progress` + `component:database` + `effort:medium`
 
 - Critical bug during deployment:
   - `phase:deployment` + `priority:critical` + `type:bug` + `component:bot-framework` + `effort:small`
 
-#### For Pull Requests:
+#### For Pull Requests
 - Feature implementation PR ready for review:
   - `phase:core` + `type:feature` + `component:pick-system` + `pr:needs-review` + `effort:medium`
 
