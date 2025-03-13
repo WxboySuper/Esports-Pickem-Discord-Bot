@@ -3,6 +3,8 @@ import logging
 
 os.makedirs('logs', exist_ok=True)
 
+# TODO: Add Docstrings
+
 def configure_logging():
     log = logging.getLogger()
     
