@@ -90,3 +90,22 @@ class Database:
             log.error(f"Database execute error: {str(e)}\nQuery: {query}\nParams: {params}")
             return None
 
+    async def execute_many(self, query: str, params_list: List[tuple]) -> bool:
+        """
+        Execute many queries at once
+
+        Args:
+            query (str): SQL query with placeholders
+            params_list (List[tuple]): List of parameter tuples
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            async with await self._get_connection() as db:
+                await db.executemany(query, params_list)
+                await db.commit()
+                return True
+        except Exception as e:
+            log.error(f"Database executemany error: {str(e)}\nQuery: {query}\nParams: {params_list}")
+            return False
