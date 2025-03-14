@@ -89,3 +89,51 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
 
             # Verify the connection was returned
             self.assertEqual(conn, mock_db)
+
+    async def test_execute(self):
+        # Create a mock database connection and cursor
+        mock_db = AsyncMock()
+        mock_cursor = AsyncMock()
+        mock_cursor.lastrowid = 123
+
+        # Set up mock db methods
+        mock_db.execute = AsyncMock(return_value=mock_cursor)
+        mock_db.commit = AsyncMock()
+
+        # Set up _get_connection to return a mock that works with async with
+        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
+            # Configure the mock connection to work as a context manager
+            mock_get_connection.return_value.__aenter__.return_value = mock_db
+
+            # Call the method being tested
+            result = await self.db.execute("SELECT * FROM test")
+
+            # Verify the query was executed with correct parameters
+            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
+            mock_db.commit.assert_called_once()
+
+            # Verify the lastrowid was returned
+            self.assertEqual(result, 123)
+
+    async def test_execute_exception(self):
+        # Create a mock database connection
+        mock_db = AsyncMock()
+
+        # Set up mock methods
+        mock_db.execute = AsyncMock(side_effect=Exception("Test exception"))
+        mock_db.commit = AsyncMock()
+
+        # Set up _get_connection to return a mock that works with async with
+        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
+            # Configure the mock connection to work as a context manager
+            mock_get_connection.return_value.__aenter__.return_value = mock_db
+
+            # Call the method being tested
+            result = await self.db.execute("SELECT * FROM test")
+
+            # Verify the query was executed with correct parameters
+            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
+            mock_db.commit.assert_not_called()
+
+            # Verify None was returned
+            self.assertEqual(result, None)
