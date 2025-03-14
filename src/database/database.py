@@ -109,3 +109,23 @@ class Database:
         except Exception as e:
             log.error(f"Database executemany error: {str(e)}\nQuery: {query}\nParams: {params_list}")
             return False
+
+    async def fetch_one(self, query: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
+        """
+        Fetch a single row from the database
+
+        Args:
+            query (str): SQL query to execute
+            params (tuple, optional): Query parameters. Defaults to ().
+
+        Returns:
+            Optional[Dict[str, Any]]: Row as dictionary or None if not found or error
+        """
+        try:
+            async with await self._get_connection() as db:
+                cursor = await db.execute(query, params)
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+        except Exception as e:
+            log.error(f"Database fetch_one error: {str(e)}\nQuery: {query}\nParams: {params}")
+            return None
