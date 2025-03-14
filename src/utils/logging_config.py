@@ -6,9 +6,8 @@ os.makedirs('logs', exist_ok=True)
 # TODO: Add Docstrings
 
 def configure_logging():
-    log = logging.getLogger()
     
-    log.basicConfig(
+    logging.basicConfig(
         level=logging.DEBUG,
         format='%(filename)s:%(lineno)d - %(asctime)s - %(name)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',
@@ -18,4 +17,4 @@ def configure_logging():
         ]
     )
     
-    return log
+    return logging

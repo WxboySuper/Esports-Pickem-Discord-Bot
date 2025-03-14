@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     discord_id INTEGER NOT NULL UNIQUE, -- Discord's user ID
     username TEXT NOT NULL, 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_discord_id ON users(discord_id);
