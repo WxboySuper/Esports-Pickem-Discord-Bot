@@ -89,3 +89,4 @@ class Database:
         except Exception as e:
             log.error(f"Database execute error: {str(e)}\nQuery: {query}\nParams: {params}")
             return None
+
