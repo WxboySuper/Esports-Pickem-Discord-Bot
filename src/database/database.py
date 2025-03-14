@@ -24,6 +24,11 @@ class Database:
         """
         self.db_path = db_path
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        # Ensure the database file exists
+        if not os.path.exists(db_path):
+            open(db_path, 'w').close()
+            log.info(f"Created empty database file: {db_path}")
+        log.info(f"Database path set to: {db_path}")
 
         self.schema_path = "src/database/schema/schema.sql"
 
@@ -53,3 +58,14 @@ class Database:
         except Exception as e:
             log.error(f"Failed to initialize database: {str(e)}")
             return False
+
+    async def _get_connection(self) -> aiosqlite.Connection:
+        """
+        Get a databse connection with row factory enabled
+
+        Returns:
+            SQLite database connection
+        """
+        conn = await aiosqlite.connect(self.db_path)
+        conn.row_factory = aiosqlite.Row
+        return conn
