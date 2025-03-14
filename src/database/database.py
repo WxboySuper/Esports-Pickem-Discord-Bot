@@ -69,3 +69,23 @@ class Database:
         conn = await aiosqlite.connect(self.db_path)
         conn.row_factory = aiosqlite.Row
         return conn
+
+    async def execute(self, query: str, params: tuple = ()) -> Optional[int]:
+        """
+        Execute a database query
+
+        Args:
+            query (str): SQL query to execute
+            params (tuple, optional): Query parameters. Defaults to ().
+
+        Returns:
+            Optional[int]: Last row ID or None if error
+        """
+        try:
+            async with await self._get_connection() as db:
+                cursor = await db.execute(query, params)
+                await db.commit()
+                return cursor.lastrowid
+        except Exception as e:
+            log.error(f"Database execute error: {str(e)}\nQuery: {query}\nParams: {params}")
+            return None
