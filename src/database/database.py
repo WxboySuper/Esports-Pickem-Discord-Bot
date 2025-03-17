@@ -61,7 +61,7 @@ class Database:
 
     async def _get_connection(self) -> aiosqlite.Connection:
         """
-        Get a databse connection with row factory enabled
+        Get a database connection with row factory enabled
 
         Returns:
             SQLite database connection
