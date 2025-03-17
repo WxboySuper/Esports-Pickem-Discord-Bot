@@ -1,9 +1,11 @@
 import os
 import aiosqlite
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple
+from typing import List, Dict, Any, Optional, Union
 from src.utils.logging_config import configure_logging
 
 log = configure_logging()
+
+# TODO: Investigate connection pooling for better performance
 
 
 class Database:
@@ -69,7 +71,7 @@ class Database:
         conn.row_factory = aiosqlite.Row
         return conn
 
-    async def execute(self, query: str, params: tuple = ()) -> Optional[int]:
+    async def execute(self, query: str, params: Union[tuple, list] = ()) -> Optional[int]:
         """
         Execute a database query
 
