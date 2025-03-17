@@ -5,7 +5,6 @@ from src.utils.logging_config import configure_logging
 
 log = configure_logging()
 
-# TODO: Add Docstrings
 
 class Database:
     """
@@ -14,6 +13,7 @@ class Database:
     This class handles all low-level database operations and provides
     a consistent interface for model classes to use.
     """
+
     def __init__(self, db_path: str = "data/pickem.db"):
         """
         Initialize the database handler

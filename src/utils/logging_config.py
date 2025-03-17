@@ -3,10 +3,14 @@ import logging
 
 os.makedirs('logs', exist_ok=True)
 
-# TODO: Add Docstrings
 
 def configure_logging():
-    
+    """
+    Configure logging for the application
+
+    Returns:
+        logging.Logger: Configured logger
+    """
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(filename)s:%(lineno)d - %(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -16,5 +20,5 @@ def configure_logging():
             logging.StreamHandler()
         ]
     )
-    
+
     return logging

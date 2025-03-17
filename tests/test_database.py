@@ -7,7 +7,7 @@ import aiosqlite
 class TestDatabase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.db = Database(db_path = "data/test.db")
-        
+
     def tearDown(self):
         os.remove("data/test.db")
 
