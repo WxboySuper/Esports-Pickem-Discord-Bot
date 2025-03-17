@@ -130,3 +130,23 @@ class Database:
         except Exception as e:
             log.error(f"Database fetch_one error: {str(e)}\nQuery: {query}\nParams: {params}")
             return None
+
+    async def fetch_many(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
+        """
+        Fetch multiple rows from the database
+
+        Args:
+            query (str): SQL query to execute
+            params (tuple, optional): Query parameters. Defaults to ().
+
+        Returns:
+            List[Dict[str, Any]]: List of rows as dictionaries
+        """
+        try:
+            async with await self._get_connection() as db:
+                cursor = await db.execute(query, params)
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+        except Exception as e:
+            log.error(f"Database fetch_many error: {str(e)}\nQuery: {query}\nParams: {params}")
+            return []

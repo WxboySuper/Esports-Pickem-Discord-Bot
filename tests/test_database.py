@@ -232,3 +232,52 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
 
             # Verify None was returned
             self.assertEqual(result, None)
+
+    async def test_fetch_many(self):
+        # Create a mock database connection and cursor
+        mock_db = AsyncMock()
+        mock_cursor = AsyncMock()
+
+        # Create mock rows that act like aiosqlite.Row
+        mock_rows = [{"id": 1, "name": "test1"}, {"id": 2, "name": "test2"}]
+
+        # Set up fetchall as AsyncMock that returns our mock rows
+        mock_cursor.fetchall = AsyncMock(return_value=mock_rows)
+
+        # Set up mock db methods
+        mock_db.execute = AsyncMock(return_value=mock_cursor)
+
+        # Set up _get_connection to return a mock that works with async with
+        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
+            # Configure the mock connection to work as a context manager
+            mock_get_connection.return_value.__aenter__.return_value = mock_db
+
+            # Call the method being tested
+            result = await self.db.fetch_many("SELECT * FROM test")
+
+            # Verify the query was executed with correct parameters
+            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
+
+            # Verify the rows were returned as a list of dictionaries
+            self.assertEqual(result, [{"id": 1, "name": "test1"}, {"id": 2, "name": "test2"}])
+
+    async def test_fetch_many_exception(self):
+        # Create a mock database connection
+        mock_db = AsyncMock()
+
+        # Set up mock methods
+        mock_db.execute = AsyncMock(side_effect=Exception("Test exception"))
+
+        # Set up _get_connection to return a mock that works with async with
+        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
+            # Configure the mock connection to work as a context manager
+            mock_get_connection.return_value.__aenter__.return_value = mock_db
+
+            # Call the method being tested
+            result = await self.db.fetch_many("SELECT * FROM test")
+
+            # Verify the query was executed with correct parameters
+            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
+
+            # Verify an empty list was returned
+            self.assertEqual(result, [])
