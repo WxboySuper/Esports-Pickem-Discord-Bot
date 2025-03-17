@@ -6,6 +6,7 @@ from src.utils.logging_config import configure_logging
 log = configure_logging()
 
 # TODO: Investigate connection pooling for better performance
+# TODO: Investivate schema version tracking
 
 
 class Database:
@@ -126,7 +127,9 @@ class Database:
             async with await self._get_connection() as db:
                 cursor = await db.execute(query, params)
                 row = await cursor.fetchone()
-                return dict(row) if row else None
+                if row is None:
+                    return None
+                return dict(row)
         except Exception as e:
             log.error(f"Database fetch_one error: {str(e)}\nQuery: {query}\nParams: {params}")
             return None
