@@ -45,7 +45,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             mock_connect.return_value.__aenter__.return_value = mock_db
 
             # Set the schema path to a non-existent file
-            self.db.schema_path = "data/schema.sql"
+            self.db.schema_path = "nonexistent_directory/nonexistent_file.sql"
 
             await self.db.initialize()
 
@@ -107,10 +107,10 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             mock_get_connection.return_value.__aenter__.return_value = mock_db
 
             # Call the method being tested
-            result = await self.db.execute("SELECT * FROM test")
+            result = await self.db.execute("SELECT * FROM test WHERE id = ?", (42,))
 
             # Verify the query was executed with correct parameters
-            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
+            mock_db.execute.assert_called_once_with("SELECT * FROM test WHERE id = ?", (42,))
             mock_db.commit.assert_called_once()
 
             # Verify the lastrowid was returned
