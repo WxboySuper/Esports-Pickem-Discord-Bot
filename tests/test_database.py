@@ -190,9 +190,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
         mock_cursor = AsyncMock()
 
         # Create a mock row that acts like aiosqlite.Row
-        mock_row = AsyncMock()
-        # Make dict(row) return a dictionary with keys that simulate column names
-        mock_row.__iter__ = lambda self: iter([("id", 1), ("name", "test")])
+        mock_row = {"id": 1, "name": "test"}
 
         # Set up fetchone as AsyncMock that returns our mock row
         mock_cursor.fetchone = AsyncMock(return_value=mock_row)
