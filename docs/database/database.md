@@ -14,6 +14,12 @@ Stores information about Discord users interacting with the bot.
 - `joined_date`: When the user first interacted with the bot
 - `is_active`: Boolean flag to track active status
 
+#### Indexes
+```sql
+CREATE INDEX idx_user_discord_id ON User(discord_user_id);
+CREATE INDEX idx_user_guild_id ON User(discord_guild_id);
+```
+
 ### Matches
 Contains information about esports matches that users can make predictions on.
 - `match_id` (Primary Key): Internal match identifier
@@ -61,6 +67,11 @@ Information about esports teams.
 - `region`: Primary region of the team
 - `logo_url`: URL to team logo image
 - `active`: Whether the team is currently active
+
+#### Index
+```sql
+CREATE UNIQUE INDEX idx_unique_team_code ON Teams(team_code);
+```
 
 ### Tournaments
 Details about esports tournaments.
