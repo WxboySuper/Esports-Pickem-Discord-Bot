@@ -30,7 +30,7 @@ Contains information about esports matches that users can make predictions on.
 - `match_metadata`: JSON field for additional match data (optional)
 
 ### Picks
-Records user predictions for matches.
+Stores user predictions for matches.
 - `pick_id` (Primary Key): Unique identifier for each pick
 - `user_id` (Foreign Key): References User table
 - `match_id` (Foreign Key): References Matches table
@@ -66,17 +66,26 @@ Information about esports teams.
 Details about esports tournaments.
 - `tournament_id` (Primary Key): Unique tournament identifier
 - `tournament_name`: Full name of the tournament
-- `region`: Region where tournament is held
+- `region`: Region where the tournament is held
 - `start_date`: Tournament start date
 - `end_date`: Tournament end date
 - `is_active`: Whether tournament is currently running
 
 ## Relationships
-- A User can have many Picks (one-to-many)
-- A Match can have many Picks (one-to-many)
-- Statistics has a one-to-one relationship with User
-- Teams participate in many Matches (many-to-many)
-- Tournaments contain many Matches (one-to-many)
+- **User and Picks**: A User can have many Picks (one-to-many).
+    - Foreign Key: `Picks.user_id` references `User.user_id`.
+
+- **Match and Picks**: A Match can have many Picks (one-to-many).
+    - Foreign Key: `Picks.match_id` references `Matches.match_id`.
+
+- **User and Statistics**: Statistics has a one-to-one relationship with User.
+    - Foreign Key: `Statistics.user_id` references `User.user_id`.
+
+- **Teams and Matches**: Teams participate in many Matches (many-to-many).
+    - This relationship can be implemented using a join table (e.g., `Team_Match`), with foreign keys `Team_Match.team_id` referencing `Teams.team_id` and `Team_Match.match_id` referencing `Matches.match_id`.
+
+- **Tournaments and Matches**: Tournaments contain many Matches (one-to-many).
+    - Foreign Key: `Matches.tournament` references `Tournaments.tournament_id`.
 
 ## Notes
 - Consider implementing a caching strategy for frequently accessed data
