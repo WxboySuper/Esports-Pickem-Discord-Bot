@@ -2,7 +2,6 @@ import os
 import aiosqlite
 from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple
 from src.utils.logging_config import configure_logging
-import re
 
 log = configure_logging()
 
