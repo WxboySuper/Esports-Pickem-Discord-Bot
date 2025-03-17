@@ -183,3 +183,54 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
 
             # Verify False was returned
             self.assertEqual(result, False)
+
+    async def test_fetch_one(self):
+        # Create a mock database connection and cursor
+        mock_db = AsyncMock()
+        mock_cursor = AsyncMock()
+
+        # Create a mock row that acts like aiosqlite.Row
+        mock_row = AsyncMock()
+        # Make dict(row) return a dictionary with keys that simulate column names
+        mock_row.__iter__ = lambda self: iter([("id", 1), ("name", "test")])
+
+        # Set up fetchone as AsyncMock that returns our mock row
+        mock_cursor.fetchone = AsyncMock(return_value=mock_row)
+
+        # Set up mock db methods
+        mock_db.execute = AsyncMock(return_value=mock_cursor)
+
+        # Set up _get_connection to return a mock that works with async with
+        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
+            # Configure the mock connection to work as a context manager
+            mock_get_connection.return_value.__aenter__.return_value = mock_db
+
+            # Call the method being tested
+            result = await self.db.fetch_one("SELECT * FROM test")
+
+            # Verify the query was executed with correct parameters
+            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
+
+            # Verify the row was returned as a dictionary
+            self.assertEqual(result, {"id": 1, "name": "test"})
+
+    async def test_fetch_one_exception(self):
+        # Create a mock database connection
+        mock_db = AsyncMock()
+
+        # Set up mock methods
+        mock_db.execute = AsyncMock(side_effect=Exception("Test exception"))
+
+        # Set up _get_connection to return a mock that works with async with
+        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
+            # Configure the mock connection to work as a context manager
+            mock_get_connection.return_value.__aenter__.return_value = mock_db
+
+            # Call the method being tested
+            result = await self.db.fetch_one("SELECT * FROM test")
+
+            # Verify the query was executed with correct parameters
+            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
+
+            # Verify None was returned
+            self.assertEqual(result, None)
