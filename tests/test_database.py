@@ -9,7 +9,8 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
         self.db = Database(db_path = "data/test.db")
 
     def tearDown(self):
-        os.remove("data/test.db")
+        if os.path.exists("data/test.db"):
+            os.remove("data/test.db")
 
     async def test_initialize(self):
         # Create a mock database connection
