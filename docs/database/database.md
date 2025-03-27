@@ -1,9 +1,84 @@
-# Esports Pick'em Discord Bot - Database Schema
+# Database Documentation
 
-## Overview
-This document outlines the database structure for the Esports Pick'em Discord Bot, including tables, fields, and relationships.
+This document describes the database implementation for the Esports Pick'em Discord Bot.
 
-## Tables
+## Architecture
+
+The database module uses SQLite with `aiosqlite` for asynchronous access. The main components are:
+
+1. `Database` class - Core handler for all database operations
+2. Model classes - Interfaces for specific data entities (users, matches, etc.)
+
+## Connection Management
+
+The database uses a connection pooling pattern to efficiently manage database connections:
+
+### Connection Pool
+
+- A pool of connections is maintained to avoid the overhead of creating new connections for each operation
+- Default pool size is 5 connections
+- Connections are automatically returned to the pool after use
+- If the pool is exhausted, new connections are created as needed
+
+### Connection Lifecycle
+
+1. **Initialization**: A pool of connections is created when the database is first initialized
+2. **Acquisition**: When a database operation is requested, a connection is taken from the pool
+3. **Release**: After the operation completes, the connection is returned to the pool
+4. **Cleanup**: When the application shuts down, all connections are properly closed
+
+### Usage
+
+Database operations are designed to automatically handle connection management:
+
+```python
+# Execute a query (connection management is handled automatically)
+await db.execute("INSERT INTO users (discord_id, username) VALUES (?, ?)", (12345, "User"))
+
+# Fetch data (connection management is handled automatically)
+user = await db.fetch_one("SELECT * FROM users WHERE discord_id = ?", (12345,))
+```
+
+## Transaction Management
+
+Transactions are automatically handled by the database operations:
+
+1. Each operation acquires a connection
+2. The SQL is executed
+3. For write operations, the transaction is committed
+4. The connection is returned to the pool
+5. Any exceptions are properly handled and logged
+
+## Error Handling
+
+The database module includes comprehensive error handling:
+
+- All exceptions are caught and logged
+- Failed operations return appropriate values (None, False, or empty lists)
+- Connection errors are properly managed to prevent resource leaks
+
+## Log Management
+
+The application includes functionality to manage log files:
+
+- Logs are stored in the `logs/app.log` file by default
+- Log files can be cleared on application startup to prevent excessive growth
+- RotatingFileHandler is used to automatically limit log file size
+
+### Clearing Logs on Startup
+
+To enable log clearing on application startup:
+
+```python
+from src.utils.logging_config import configure_logging
+
+# Clear log file when initializing logging
+log = configure_logging(clear_logs=True)
+```
+
+## Database Schema
+
+The database schema is defined in `src/database/schema/schema.sql` and includes the following tables:
 
 ### User
 Stores information about Discord users interacting with the bot.
@@ -82,6 +157,19 @@ Details about esports tournaments.
 - `end_date`: Tournament end date
 - `is_active`: Whether tournament is currently running
 
+### Schema Version
+Tracks the current schema version for migrations.
+- `version` (Primary Key): Schema version number
+- `applied_at`: Timestamp when version was applied
+
+## Schema Versioning
+
+The database tracks schema versions to support future migrations:
+
+1. A `schema_version` table stores the current schema version
+2. During initialization, the schema version is checked
+3. Migration functions can be added as needed to update from one version to another
+
 ## Relationships
 - **User and Picks**: A User can have many Picks (one-to-many).
     - Foreign Key: `Picks.user_id` references `User.user_id`.
@@ -98,7 +186,8 @@ Details about esports tournaments.
 - **Tournaments and Matches**: Tournaments contain many Matches (one-to-many).
     - Foreign Key: `Matches.tournament` references `Tournaments.tournament_id`.
 
-## Notes
+## Best Practices
+
 - Consider implementing a caching strategy for frequently accessed data
 - Statistics table should be updated through triggers or scheduled jobs
 - Guild-specific information is tracked via the discord_guild_id in the User table
