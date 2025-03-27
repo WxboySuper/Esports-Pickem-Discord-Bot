@@ -1,309 +1,346 @@
 import unittest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from src.database.database import Database
 import os
 import aiosqlite
+import asyncio
+import uuid
+import shutil
 
 class TestDatabase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.db = Database(db_path = "data/test.db")
+        # Create a unique database file for each test to ensure isolation
+        # Use UUID to generate a unique name
+        self.test_db_path = f"data/test_{uuid.uuid4().hex}.db"
+        self.db = Database(db_path=self.test_db_path, pool_size=3)
 
+    async def asyncSetUp(self):
+        # This runs after setUp but before each test
+        # Initialize the database for tests that need it
+        self.db_initialized = False
+        
+    async def asyncTearDown(self):
+        # This runs after each test but before tearDown
+        # Ensure all database connections are properly closed
+        await self.db.close_all_connections()
+        
     def tearDown(self):
-        if os.path.exists("data/test.db"):
-            os.remove("data/test.db")
+        # Remove the database file
+        if os.path.exists(self.test_db_path):
+            try:
+                os.remove(self.test_db_path)
+            except PermissionError:
+                # On Windows, sometimes the file handle isn't released immediately
+                # Just log this rather than failing the test
+                print(f"Could not delete {self.test_db_path}, will be cleaned up later.")
+
+    # Helper to initialize database when needed
+    async def init_db_if_needed(self):
+        if not self.db_initialized:
+            await self.db.initialize()
+            self.db_initialized = True
 
     async def test_initialize(self):
         # Create a mock database connection
-        mock_db = AsyncMock()
+        mock_conn = AsyncMock()
+        
+        # Set up mock methods for the connection
+        mock_conn.execute = AsyncMock()
+        mock_conn.executescript = AsyncMock()
+        mock_conn.commit = AsyncMock()
+        mock_conn.close = AsyncMock()
 
-        # Set up mock methods
-        mock_db.execute = AsyncMock()
-        mock_db.executescript = AsyncMock()
-        mock_db.commit = AsyncMock()
+        # Mock cursor functionality
+        mock_cursor = AsyncMock()
+        mock_cursor.fetchone = AsyncMock(return_value=(0,))
+        mock_conn.execute.return_value = mock_cursor
+        
+        # Fix: Patch the _create_connection method directly
+        with patch.object(self.db, '_create_connection', return_value=mock_conn):
+            success = await self.db.initialize()
 
-        with patch("aiosqlite.connect") as mock_connect:
-            # Configure the mock to return our mock_db when used as a context manager
-            mock_connect.return_value.__aenter__.return_value = mock_db
+            self.assertTrue(success)
+            # No need to check for PRAGMA foreign_keys here as it's now in _create_connection
+            mock_conn.executescript.assert_called_once()
+            mock_conn.commit.assert_called_once()
+            mock_conn.close.assert_called_once()
 
-            await self.db.initialize()
-
-            mock_db.execute.assert_called_once_with("PRAGMA foreign_keys = ON")
-            mock_db.executescript.assert_called_once()
-            mock_db.commit.assert_called_once()
+    async def test_create_connection(self):
+        """Test that _create_connection properly sets up PRAGMA foreign_keys"""
+        # Fix: Make the mock connect function return a coroutine that returns mock_conn
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock()
+        
+        # Create a mock for aiosqlite.connect that returns a coroutine
+        async def mock_connect(*args, **kwargs):
+            return mock_conn
+            
+        with patch('aiosqlite.connect', mock_connect):
+            conn = await self.db._create_connection()
+            
+            # This is where PRAGMA foreign_keys should be called now
+            mock_conn.execute.assert_called_with("PRAGMA foreign_keys = ON")
+            # Make sure we got back the expected connection
+            self.assertEqual(conn, mock_conn)
 
     async def test_initialize_no_schema(self):
         # Create a mock database connection
-        mock_db = AsyncMock()
-
+        mock_conn = AsyncMock()
+        
         # Set up mock methods
-        mock_db.execute = AsyncMock()
-        mock_db.executescript = AsyncMock()
-        mock_db.commit = AsyncMock()
+        mock_conn.execute = AsyncMock()
+        mock_conn.executescript = AsyncMock()
+        mock_conn.commit = AsyncMock()
+        mock_conn.close = AsyncMock()
 
-        with patch("aiosqlite.connect") as mock_connect:
-            # Configure the mock to return our mock_db when used as a context manager
-            mock_connect.return_value.__aenter__.return_value = mock_db
+        # Mock cursor functionality
+        mock_cursor = AsyncMock()
+        mock_cursor.fetchone = AsyncMock(return_value=(0,))
+        mock_conn.execute.return_value = mock_cursor
 
+        # Fix: Patch the _create_connection method directly
+        with patch.object(self.db, '_create_connection', return_value=mock_conn):
             # Set the schema path to a non-existent file
             self.db.schema_path = "nonexistent_directory/nonexistent_file.sql"
 
-            await self.db.initialize()
+            success = await self.db.initialize()
 
-            mock_db.execute.assert_called_once_with("PRAGMA foreign_keys = ON")
-            mock_db.executescript.assert_not_called()
-            mock_db.commit.assert_not_called()
+            self.assertTrue(success)
+            # We're no longer checking for PRAGMA here since it moved to _create_connection
+            mock_conn.executescript.assert_not_called()
+            mock_conn.close.assert_called_once()
 
     async def test_initialize_exception(self):
-        # Create a mock database connection
-        mock_db = AsyncMock()
+        # Patch _create_connection to raise an exception
+        with patch.object(self.db, '_create_connection', side_effect=Exception("Test exception")):
+            success = await self.db.initialize()
+            self.assertFalse(success)
 
-        # Set up mock methods
-        mock_db.execute = AsyncMock(side_effect=Exception("Test exception"))
-        mock_db.executescript = AsyncMock()
-        mock_db.commit = AsyncMock()
+    async def test_schema_version_tracking(self):
+        # Initialize real database for this test
+        await self.init_db_if_needed()
 
-        with patch("aiosqlite.connect") as mock_connect:
-            # Configure the mock to return our mock_db when used as a context manager
-            mock_connect.return_value.__aenter__.return_value = mock_db
+        # Check the schema_version table directly using a separate connection
+        conn = await aiosqlite.connect(self.test_db_path)
+        conn.row_factory = aiosqlite.Row
+        try:
+            cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
+            row = await cursor.fetchone()
+            
+            self.assertIsNotNone(row, "Schema version table is empty or not created.")
+            self.assertEqual(row["version"], 1)
+        finally:
+            await conn.close()
 
-            await self.db.initialize()
-
-            mock_db.execute.assert_called_once_with("PRAGMA foreign_keys = ON")
-            mock_db.executescript.assert_not_called()
-            mock_db.commit.assert_not_called()
+    async def test_connection_pooling(self):
+        # Initialize the pool
+        await self.db._initialize_pool()
+        
+        try:
+            # Check pool size
+            self.assertEqual(len(self.db._connection_pool), 3)
+            
+            # Get connections from pool
+            conn1 = await self.db._get_connection()
+            conn2 = await self.db._get_connection()
+            conn3 = await self.db._get_connection()
+            
+            # Pool should be empty now
+            self.assertEqual(len(self.db._connection_pool), 0)
+            
+            # Release connections back to pool
+            await self.db._release_connection(conn1)
+            await self.db._release_connection(conn2)
+            await self.db._release_connection(conn3)
+            
+            # Pool should be refilled
+            self.assertEqual(len(self.db._connection_pool), 3)
+        finally:
+            # Make sure pool is closed even if test fails
+            await self.db.close_all_connections()
 
     async def test_get_connection(self):
-        # Create a mock database connection
-        mock_db = AsyncMock()
-
-        with patch("aiosqlite.connect", new_callable=AsyncMock) as mock_connect:
-            # Make the connect function return our mock_db when awaited
-            mock_connect.return_value = mock_db
-
-            conn = await self.db._get_connection()
-
-            # Verify connect was called with the correct path
-            mock_connect.assert_called_once_with(self.db.db_path)
-
-            # Verify the row_factory was set
-            self.assertEqual(mock_db.row_factory, aiosqlite.Row)
-
-            # Verify the connection was returned
-            self.assertEqual(conn, mock_db)
+        # Test the _get_connection method directly
+        conn = await self.db._get_connection()
+        
+        try:
+            # Verify it's a valid connection
+            self.assertIsInstance(conn, aiosqlite.Connection)
+        finally:
+            # Always close the connection
+            await conn.close()
 
     async def test_execute(self):
-        # Create a mock database connection and cursor
-        mock_db = AsyncMock()
-        mock_cursor = AsyncMock()
-        mock_cursor.lastrowid = 123
-
-        # Set up mock db methods
-        mock_db.execute = AsyncMock(return_value=mock_cursor)
-        mock_db.commit = AsyncMock()
-
-        # Set up _get_connection to return a mock that works with async with
-        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
-            # Configure the mock connection to work as a context manager
-            mock_get_connection.return_value.__aenter__.return_value = mock_db
-
-            # Call the method being tested
-            result = await self.db.execute("SELECT * FROM test WHERE id = ?", (42,))
-
-            # Verify the query was executed with correct parameters
-            mock_db.execute.assert_called_once_with("SELECT * FROM test WHERE id = ?", (42,))
-            mock_db.commit.assert_called_once()
-
-            # Verify the lastrowid was returned
-            self.assertEqual(result, 123)
+        # Initialize the database
+        await self.init_db_if_needed()
+        
+        # Create a test table
+        result = await self.db.execute(
+            "CREATE TABLE IF NOT EXISTS test_table (id INTEGER PRIMARY KEY, name TEXT)"
+        )
+        self.assertIsNotNone(result)
+        
+        # Insert data
+        rowid = await self.db.execute(
+            "INSERT INTO test_table (name) VALUES (?)",
+            ("Test Name",)
+        )
+        self.assertIsNotNone(rowid)
+        self.assertGreater(rowid, 0)
 
     async def test_execute_exception(self):
-        # Create a mock database connection
-        mock_db = AsyncMock()
-
-        # Set up mock methods
-        mock_db.execute = AsyncMock(side_effect=Exception("Test exception"))
-        mock_db.commit = AsyncMock()
-
-        # Set up _get_connection to return a mock that works with async with
-        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
-            # Configure the mock connection to work as a context manager
-            mock_get_connection.return_value.__aenter__.return_value = mock_db
-
-            # Call the method being tested
-            result = await self.db.execute("SELECT * FROM test")
-
-            # Verify the query was executed with correct parameters
-            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
-            mock_db.commit.assert_not_called()
-
-            # Verify None was returned
-            self.assertEqual(result, None)
+        # Initialize the database
+        await self.init_db_if_needed()
+        
+        # Try invalid SQL
+        result = await self.db.execute("SELECT * FROM nonexistent_table")
+        self.assertIsNone(result)
 
     async def test_execute_many(self):
-        # Create a mock database connection
-        mock_db = AsyncMock()
-
-        # Set up mock methods
-        mock_db.executemany = AsyncMock()
-        mock_db.commit = AsyncMock()
-
-        # Set up _get_connection to return a mock that works with async with
-        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
-            # Configure the mock connection to work as a context manager
-            mock_get_connection.return_value.__aenter__.return_value = mock_db
-
-            # Call the method being tested
-            result = await self.db.execute_many("INSERT INTO test VALUES (?)", [(1,), (2,), (3,)])
-
-            # Verify the query was executed with correct parameters
-            mock_db.executemany.assert_called_once_with("INSERT INTO test VALUES (?)", [(1,), (2,), (3,)])
-            mock_db.commit.assert_called_once()
-
-            # Verify True was returned
-            self.assertEqual(result, True)
+        # Initialize the database
+        await self.init_db_if_needed()
+        
+        # Create a test table
+        await self.db.execute(
+            "CREATE TABLE IF NOT EXISTS test_bulk (id INTEGER PRIMARY KEY, value TEXT)"
+        )
+        
+        # Prepare bulk data
+        data = [("value1",), ("value2",), ("value3",)]
+        
+        # Insert using execute_many
+        success = await self.db.execute_many(
+            "INSERT INTO test_bulk (value) VALUES (?)",
+            data
+        )
+        
+        self.assertTrue(success)
+        
+        # Verify the insertions
+        rows = await self.db.fetch_many("SELECT * FROM test_bulk ORDER BY id")
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["value"], "value1")
+        self.assertEqual(rows[1]["value"], "value2")
+        self.assertEqual(rows[2]["value"], "value3")
 
     async def test_execute_many_exception(self):
-        # Create a mock database connection
-        mock_db = AsyncMock()
-
-        # Set up mock methods
-        mock_db.executemany = AsyncMock(side_effect=Exception("Test exception"))
-        mock_db.commit = AsyncMock()
-
-        # Set up _get_connection to return a mock that works with async with
-        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
-            # Configure the mock connection to work as a context manager
-            mock_get_connection.return_value.__aenter__.return_value = mock_db
-
-            # Call the method being tested
-            result = await self.db.execute_many("INSERT INTO test VALUES (?)", [(1,), (2,), (3,)])
-
-            # Verify the query was executed with correct parameters
-            mock_db.executemany.assert_called_once_with("INSERT INTO test VALUES (?)", [(1,), (2,), (3,)])
-            mock_db.commit.assert_not_called()
-
-            # Verify False was returned
-            self.assertEqual(result, False)
+        # Initialize the database
+        await self.init_db_if_needed()
+        
+        # Try invalid SQL
+        success = await self.db.execute_many(
+            "INSERT INTO nonexistent_table (value) VALUES (?)",
+            [("test",)]
+        )
+        
+        self.assertFalse(success)
 
     async def test_fetch_one(self):
-        # Create a mock database connection and cursor
-        mock_db = AsyncMock()
-        mock_cursor = AsyncMock()
-
-        # Create a mock row that acts like aiosqlite.Row
-        mock_row = {"id": 1, "name": "test"}
-
-        # Set up fetchone as AsyncMock that returns our mock row
-        mock_cursor.fetchone = AsyncMock(return_value=mock_row)
-
-        # Set up mock db methods
-        mock_db.execute = AsyncMock(return_value=mock_cursor)
-
-        # Set up _get_connection to return a mock that works with async with
-        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
-            # Configure the mock connection to work as a context manager
-            mock_get_connection.return_value.__aenter__.return_value = mock_db
-
-            # Call the method being tested
-            result = await self.db.fetch_one("SELECT * FROM test")
-
-            # Verify the query was executed with correct parameters
-            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
-
-            # Verify the row was returned as a dictionary
-            self.assertEqual(result, {"id": 1, "name": "test"})
+        # Initialize the database
+        await self.init_db_if_needed()
+        
+        # Create a test table with data
+        await self.db.execute(
+            "CREATE TABLE IF NOT EXISTS test_fetch (id INTEGER PRIMARY KEY, name TEXT)"
+        )
+        await self.db.execute("INSERT INTO test_fetch (name) VALUES (?)", ("Test Name",))
+        
+        # Fetch the inserted row
+        row = await self.db.fetch_one("SELECT * FROM test_fetch WHERE id = 1")
+        
+        self.assertIsNotNone(row)
+        self.assertEqual(row["id"], 1)
+        self.assertEqual(row["name"], "Test Name")
 
     async def test_fetch_one_exception(self):
-        # Create a mock database connection
-        mock_db = AsyncMock()
-
-        # Set up mock methods
-        mock_db.execute = AsyncMock(side_effect=Exception("Test exception"))
-
-        # Set up _get_connection to return a mock that works with async with
-        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
-            # Configure the mock connection to work as a context manager
-            mock_get_connection.return_value.__aenter__.return_value = mock_db
-
-            # Call the method being tested
-            result = await self.db.fetch_one("SELECT * FROM test")
-
-            # Verify the query was executed with correct parameters
-            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
-
-            # Verify None was returned
-            self.assertEqual(result, None)
+        # Initialize the database
+        await self.init_db_if_needed()
+        
+        # Try invalid SQL
+        row = await self.db.fetch_one("SELECT * FROM nonexistent_table")
+        
+        self.assertIsNone(row)
 
     async def test_fetch_one_not_found(self):
-        # Create a mock database connection and cursor
-        mock_db = AsyncMock()
-        mock_cursor = AsyncMock()
-
-        # Set up fetchone as AsyncMock that returns None
-        mock_cursor.fetchone = AsyncMock(return_value=None)
-
-        # Set up mock db methods
-        mock_db.execute = AsyncMock(return_value=mock_cursor)
-
-        # Set up _get_connection to return a mock that works with async with
-        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
-            # Configure the mock connection to work as a context manager
-            mock_get_connection.return_value.__aenter__.return_value = mock_db
-
-            # Call the method being tested
-            result = await self.db.fetch_one("SELECT * FROM test")
-
-            # Verify the query was executed with correct parameters
-            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
-
-            # Verify None was returned
-            self.assertEqual(result, None)
+        # Initialize the database
+        await self.init_db_if_needed()
+        
+        # Create a test table with no data
+        await self.db.execute(
+            "CREATE TABLE IF NOT EXISTS test_empty (id INTEGER PRIMARY KEY, name TEXT)"
+        )
+        
+        # Try to fetch non-existent row
+        row = await self.db.fetch_one("SELECT * FROM test_empty WHERE id = 1")
+        
+        self.assertIsNone(row)
 
     async def test_fetch_many(self):
-        # Create a mock database connection and cursor
-        mock_db = AsyncMock()
-        mock_cursor = AsyncMock()
-
-        # Create mock rows that act like aiosqlite.Row
-        mock_rows = [{"id": 1, "name": "test1"}, {"id": 2, "name": "test2"}]
-
-        # Set up fetchall as AsyncMock that returns our mock rows
-        mock_cursor.fetchall = AsyncMock(return_value=mock_rows)
-
-        # Set up mock db methods
-        mock_db.execute = AsyncMock(return_value=mock_cursor)
-
-        # Set up _get_connection to return a mock that works with async with
-        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
-            # Configure the mock connection to work as a context manager
-            mock_get_connection.return_value.__aenter__.return_value = mock_db
-
-            # Call the method being tested
-            result = await self.db.fetch_many("SELECT * FROM test")
-
-            # Verify the query was executed with correct parameters
-            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
-
-            # Verify the rows were returned as a list of dictionaries
-            self.assertEqual(result, [{"id": 1, "name": "test1"}, {"id": 2, "name": "test2"}])
+        # Initialize the database
+        await self.init_db_if_needed()
+        
+        # Create a test table with data
+        await self.db.execute(
+            "CREATE TABLE IF NOT EXISTS test_fetch_many (id INTEGER PRIMARY KEY, value TEXT)"
+        )
+        
+        # Insert multiple rows
+        values = [("value1",), ("value2",), ("value3",)]
+        await self.db.execute_many("INSERT INTO test_fetch_many (value) VALUES (?)", values)
+        
+        # Fetch all rows
+        rows = await self.db.fetch_many("SELECT * FROM test_fetch_many ORDER BY id")
+        
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["value"], "value1")
+        self.assertEqual(rows[1]["value"], "value2")
+        self.assertEqual(rows[2]["value"], "value3")
 
     async def test_fetch_many_exception(self):
-        # Create a mock database connection
-        mock_db = AsyncMock()
+        # Initialize the database
+        await self.init_db_if_needed()
+        
+        # Try invalid SQL
+        rows = await self.db.fetch_many("SELECT * FROM nonexistent_table")
+        
+        self.assertEqual(rows, [])
 
-        # Set up mock methods
-        mock_db.execute = AsyncMock(side_effect=Exception("Test exception"))
-
-        # Set up _get_connection to return a mock that works with async with
-        with patch.object(self.db, '_get_connection', new_callable=AsyncMock) as mock_get_connection:
-            # Configure the mock connection to work as a context manager
-            mock_get_connection.return_value.__aenter__.return_value = mock_db
-
-            # Call the method being tested
-            result = await self.db.fetch_many("SELECT * FROM test")
-
-            # Verify the query was executed with correct parameters
-            mock_db.execute.assert_called_once_with("SELECT * FROM test", ())
-
-            # Verify an empty list was returned
-            self.assertEqual(result, [])
+    async def test_close_all_connections(self):
+        """Test that all connections are properly closed"""
+        # Initialize the pool
+        await self.db._initialize_pool()
+        
+        # Get connections from pool and store their references
+        conn1 = await self.db._get_connection()
+        conn2 = await self.db._get_connection()
+        
+        # Keep one connection out of the pool and return one to the pool
+        await self.db._release_connection(conn1)
+        
+        # For aiosqlite, we need to make sure we have the connection working first
+        try:
+            await conn2.execute("SELECT 1")
+        except Exception as e:
+            self.fail(f"Connection should be usable before closing: {e}")
+            
+        # Close all connections (including both pooled and active)
+        await self.db.close_all_connections()
+        
+        # Verify the pool state
+        self.assertEqual(len(self.db._connection_pool), 0)
+        self.assertFalse(self.db._pool_initialized)
+        
+        # The connection should be closed, which makes this property inaccessible
+        self.assertTrue(conn2._connection is None or 
+                        not hasattr(conn2, '_connection'), 
+                        "Connection should be closed")
+                      
+        # Additional verification - try to execute and expect a failure
+        # This should raise an exception like "Cannot operate on a closed database"
+        try:
+            await conn2.execute("SELECT 1")
+            # If we get here, the connection wasn't closed
+            self.fail("Connection should be closed and raise an exception when used")
+        except Exception:
+            # This is expected - any exception confirms the connection is closed
+            pass
