@@ -80,6 +80,11 @@ log = configure_logging(clear_logs=True)
 
 The database schema is defined in `src/database/schema/schema.sql` and includes the following tables:
 
+> \[!NOTE]
+> The Database Schema is actively being upgraded from v1 to v2 to fully implement the user database.
+>
+> If using a v1 database ensure that the v2 migration works correct.y
+
 ### User
 Stores information about Discord users interacting with the bot.
 - `user_id` (Primary Key): Internal user identifier
