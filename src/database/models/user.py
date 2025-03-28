@@ -2,7 +2,7 @@ from typing import Optional, List, Dict, Any
 from src.database.database import Database
 from src.utils.logging_config import configure_logging
 
-log = configure_logging(__name__)
+log = configure_logging()
 
 class User:
     """
@@ -13,7 +13,7 @@ class User:
     """
     def __init__(self, db_id: Optional[int] = None, discord_user_id: int = 0, discord_guild_id: int = 0,
                  username: Optional[str] = None, created_at: Optional[str] = None, last_active: Optional[str] = None):
-        self.id = db_id
+        self.db_id = db_id
         self.discord_user_id = discord_user_id
         self.discord_guild_id = discord_guild_id
         self.username = username
@@ -31,6 +31,6 @@ class User:
         user_id = await db.execute(query, (discord_user_id, discord_guild_id, username))
         if user_id:
             log.info(f"User {username} successfully created with ID {user_id}")
-            return User(id=user_id, discord_user_id=discord_user_id, discord_guild_id=discord_guild_id, username=username)
+            return User(db_id=user_id, discord_user_id=discord_user_id, discord_guild_id=discord_guild_id, username=username)
         log.error(f"Failed to create user {username} with ID {discord_user_id}")
         return None
