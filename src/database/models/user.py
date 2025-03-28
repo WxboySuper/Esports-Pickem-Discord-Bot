@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional
 from src.database.database import Database
 from src.utils.logging_config import configure_logging
 
@@ -24,7 +24,17 @@ class User:
 
     @staticmethod
     async def create(db: Database, discord_user_id: int, discord_guild_id: int, username: str) -> Optional['User']:
-        """Create a new user in the database"""
+        """Create a new user in the database.
+
+        Args:
+            db: Database instance to use for the query.
+            discord_user_id: The Discord user ID to associate with this user.
+            discord_guild_id: The Discord guild ID to associate with this user.
+            username: The username for this user.
+
+        Returns:
+            A new User instance if creation was successful, None otherwise.
+        """
         log.info(f"Creating user {username} with ID {discord_user_id} in guild {discord_guild_id}")
         query = """
             INSERT INTO users (discord_user_id, discord_guild_id, username)
