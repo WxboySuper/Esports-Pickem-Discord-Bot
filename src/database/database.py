@@ -129,12 +129,16 @@ class Database:
             # Create a dedicated connection for initialization
             conn = await self._create_connection()
             try:
-                cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'")
+                # Check if schema_version table exists
+                cursor = await conn.execute("""
+                    SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'
+                """)
                 row = await cursor.fetchone()
+                schema_version = row if row else (0,)
+                log.info(f"Schema version: {schema_version[0]}")
 
-                if row is None or row == 0:
-                    # New Database Logic
-                    log.info("New database detected. Creating schema...")
+                if schema_version[0] == 0:
+                    log.info("schema_version table not found. Assuming new database.")
                     if os.path.exists(self.schema_path):
                         with open(self.schema_path, 'r') as f:
                             schema = f.read()
@@ -149,21 +153,17 @@ class Database:
                     log.info("Database initialized with schema version 2.")
                 else:
                     # Existing Database Logic
-                    log.info("Existing database detected. Checking schema version...")
                     cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
                     row = await cursor.fetchone()
                     current_version = row[0] if row and row[0] is not None else 0
                     log.info(f"Current schema version: {current_version}")
 
-                    if current_version < 2 and current_version != 0:
+                    if current_version < 2:
                         log.info("Outdated database version detected. Applying migrations...")
                         # Apply migration 2 if needed
                         await self._migration_2(conn)
                         await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
                         log.info("Upgraded database to version 2.")
-                    elif current_version is None or current_version == 0:
-                        log.error("No schema version found. Database may be corrupted.")
-                        return False
                     else:
                         log.info("Database is up to date. No migrations needed.")
 
