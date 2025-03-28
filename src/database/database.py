@@ -153,7 +153,7 @@ class Database:
                 # Check if we need to insert the initial schema version
                 cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
                 row = await cursor.fetchone()
-                current_version = row["version"] if row and row["version"] else 0
+                current_version = row[0] if row and row[0] else 0
                 log.info(f"Schema version table has {current_version} rows")
 
                 if current_version < 2:
@@ -182,7 +182,7 @@ class Database:
 
     # Include Migrations here when needed
     @staticmethod
-    async def _migration_2(conn: aiosqlite.Connection):
+    async def _migration_2(conn: _create_connection):
         """Migration 2: Update the users table to include discord_guild_id and rename discord_id to discord_user_id."""
         log.info("Starting migration to version 2...")
 
