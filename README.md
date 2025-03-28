@@ -49,11 +49,23 @@ Currently, this implementation supports only Tier 1 LoL Esports, with plans to e
 Current project structure (subject to ongoing changes)
 
 ```plaintext
-discord-esports-pickem
-├── docs
-   └── setup
-├── config
-└── requirements.txt
+discord-esports-pickem/
+├── .github/            # GitHub-specific configurations
+│   ├── workflows/      # CI/CD workflows
+│   └── ISSUE_TEMPLATE/ # Issue templates
+├── data/               # Data files (e.g., test databases)
+├── docs/               # Documentation files
+│   ├── database/       # Database-related documentation
+│   └── setup/          # Setup-related documentation
+├── logs/               # Log files
+├── src/                # Source code
+│   ├── database/       # Database models and utilities
+│   │   ├── schema/     # Database schema files
+│   │   └── models/     # Database model classes
+│   ├── utils/          # Utility functions and configurations
+├── tests/              # Test files
+├── requirements.txt    # Python dependencies
+└── .gitignore          # Git ignore rules
 ```
 
 ## Technical Requirements
