@@ -46,3 +46,38 @@ class TestUser(unittest.IsolatedAsyncioTestCase):
             (12345, 67890, "test_user")
         )
         mock_log.error.assert_called()
+
+    @patch("src.database.models.user.log")
+    async def test_get_by_id_success(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.fetch_one.return_value = {
+            "db_id": 1,
+            "discord_user_id": 12345,
+            "discord_guild_id": 67890,
+            "username": "test_user",
+            "created_at": "2023-01-01T00:00:00",
+            "last_active": "2023-01-02T00:00:00"
+        }
+
+        user = await User.get_by_id(mock_db, 1)
+
+        self.assertIsNotNone(user)
+        self.assertEqual(user.db_id, 1)
+        self.assertEqual(user.discord_user_id, 12345)
+        self.assertEqual(user.discord_guild_id, 67890)
+        self.assertEqual(user.username, "test_user")
+        self.assertEqual(user.created_at, "2023-01-01T00:00:00")
+        self.assertEqual(user.last_active, "2023-01-02T00:00:00")
+        mock_db.fetch_one.assert_called_once_with("SELECT * FROM users WHERE id = ?", (1,))
+        mock_log.info.assert_not_called()
+
+    @patch("src.database.models.user.log")
+    async def test_get_by_id_not_found(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.fetch_one.return_value = None
+
+        user = await User.get_by_id(mock_db, 1)
+
+        self.assertIsNone(user)
+        mock_db.fetch_one.assert_called_once_with("SELECT * FROM users WHERE id = ?", (1,))
+        mock_log.info.assert_not_called()
