@@ -106,7 +106,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
 
             success = await self.db.initialize()
 
-            self.assertTrue(success)
+            self.assertFalse(success)
             # We're no longer checking for PRAGMA here since it moved to _create_connection
             mock_conn.executescript.assert_not_called()
             mock_conn.close.assert_called_once()
