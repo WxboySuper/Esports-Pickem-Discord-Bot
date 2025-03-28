@@ -6,6 +6,13 @@ Welcome to the Discord Esports Pickem project! This bot allows users to compete 
 
 This project is currently being rebuilt with a focus on automation and efficiency. We're moving from manual match updates to automated match tracking with minimal intervention required. The goal is to create a system that's both feature-rich and cost-effective to host.
 
+Currently, work is being done on the database functions. For the latest on how the database functions, check out the [Database Documentation](docs/database/database.md).
+
+> \[!NOTE]
+> The database is being upgraded from v1 to v2
+>
+> For more information visit the [Database Documentation](docs/database/database.md) or the [Associated Pull Request](https://github.com/WxboySuper/Esports-Pickem-Discord-Bot/pull/84)
+
 ## Features
 
 - **Match Management**
@@ -42,11 +49,23 @@ Currently, this implementation supports only Tier 1 LoL Esports, with plans to e
 Current project structure (subject to ongoing changes)
 
 ```plaintext
-discord-esports-pickem
-├── docs
-   └── setup
-├── config
-└── requirements.txt
+discord-esports-pickem/
+├── .github/            # GitHub-specific configurations
+│   ├── workflows/      # CI/CD workflows
+│   └── ISSUE_TEMPLATE/ # Issue templates
+├── data/               # Data files (e.g., test databases)
+├── docs/               # Documentation files
+│   ├── database/       # Database-related documentation
+│   └── setup/          # Setup-related documentation
+├── logs/               # Log files
+├── src/                # Source code
+│   ├── database/       # Database models and utilities
+│   │   ├── schema/     # Database schema files
+│   │   └── models/     # Database model classes
+│   ├── utils/          # Utility functions and configurations
+├── tests/              # Test files
+├── requirements.txt    # Python dependencies
+└── .gitignore          # Git ignore rules
 ```
 
 ## Technical Requirements

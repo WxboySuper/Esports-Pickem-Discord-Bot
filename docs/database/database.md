@@ -2,6 +2,13 @@
 
 This document describes the database implementation for the Esports Pick'em Discord Bot.
 
+> \[!IMPORTANT]
+> The Database Schema is actively being upgraded from v1 to v2 to fully implement the user database.
+>
+> If using a v1 database, ensure that the v2 migration works correctly.
+>
+> For more information on the user database, scroll down to the User Database Schema.
+
 ## Architecture
 
 The database module uses SQLite with `aiosqlite` for asynchronous access. The main components are:

@@ -129,37 +129,43 @@ class Database:
             # Create a dedicated connection for initialization
             conn = await self._create_connection()
             try:
-                # Load schema if the file exists
-                if os.path.exists(self.schema_path):
-                    with open(self.schema_path, 'r') as f:
-                        schema = f.read()
-                    await conn.executescript(schema)
-                    log.info(f"Loaded schema from {self.schema_path}")
-                else:
-                    log.warning(f"Schema file not found: {self.schema_path}")
-                    # Return early for the test_initialize_no_schema test case
-                    if self.schema_path == "nonexistent_directory/nonexistent_file.sql":
-                        return True
-
-                # Always ensure schema_version table exists
-                await conn.execute("""
-                    CREATE TABLE IF NOT EXISTS schema_version (
-                        version INTEGER PRIMARY KEY,
-                        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
+                # Check if schema_version table exists
+                cursor = await conn.execute("""
+                    SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'
                 """)
-                log.info("Schema version table ensured.")
-
-                # Check if we need to insert the initial schema version
-                cursor = await conn.execute("SELECT COUNT(*) as count FROM schema_version")
                 row = await cursor.fetchone()
-                count = row[0] if row else 0
-                log.info(f"Schema version table has {count} rows")
+                schema_version = row if row else (0,)
+                log.info(f"Schema version: {schema_version[0]}")
 
-                if count == 0:
-                    # Insert version 1 as the initial version
-                    await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (1,))
-                    log.info("Inserted initial schema version.")
+                if schema_version[0] == 0:
+                    log.info("schema_version table not found. Assuming new database.")
+                    if os.path.exists(self.schema_path):
+                        with open(self.schema_path, 'r') as f:
+                            schema = f.read()
+                        await conn.executescript(schema)
+                        log.info(f"Loaded schema from {self.schema_path}")
+                    else:
+                        log.warning(f"Schema file not found: {self.schema_path}")
+                        return False
+
+                    # Insert latest schema version
+                    await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
+                    log.info("Database initialized with schema version 2.")
+                else:
+                    # Existing Database Logic
+                    cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
+                    row = await cursor.fetchone()
+                    current_version = row[0] if row and row[0] is not None else 0
+                    log.info(f"Current schema version: {current_version}")
+
+                    if current_version < 2:
+                        log.info("Outdated database version detected. Applying migrations...")
+                        # Apply migration 2 if needed
+                        await self._migration_2(conn)
+                        await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
+                        log.info("Upgraded database to version 2.")
+                    else:
+                        log.info("Database is up to date. No migrations needed.")
 
                 # Commit all changes
                 await conn.commit()
@@ -178,9 +184,40 @@ class Database:
 
     # Include Migrations here when needed
     @staticmethod
-    async def _migration_1(db: aiosqlite.Connection):
-        """Migration 1: Add a new table."""
-        print('placeholder')  # pragma: no cover
+    async def _migration_2(conn: _create_connection):
+        """Migration 2: Update the users table to include discord_guild_id and rename discord_id to discord_user_id."""
+        log.info("Starting migration to version 2...")
+
+        # Rename the existing table to a temporary name
+        await conn.execute("ALTER TABLE users RENAME TO users_old")
+
+        # Create the new users table with the updated schema
+        await conn.execute("""
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                discord_user_id INTEGER NOT NULL UNIQUE,
+                discord_guild_id INTEGER NOT NULL DEFAULT 0,
+                username TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_active TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CHECK (discord_user_id > 0)
+            )
+        """)
+
+        # Migrate data from the old table to the new table
+        await conn.execute("""
+            INSERT INTO users (id, discord_user_id, username, created_at, last_active)
+            SELECT id, discord_id, username, created_at, last_active FROM users_old
+        """)
+
+        # Drop the old table
+        await conn.execute("DROP TABLE users_old")
+
+        # Create the new indexes
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_users_discord_user_id ON users (discord_user_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_users_discord_guild_id ON users (discord_guild_id)")
+
+        log.info("Migration to version 2 completed.")
 
     async def close_all_connections(self) -> None:
         """
