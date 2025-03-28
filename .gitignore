@@ -135,3 +135,5 @@ logs/*.log.*
 
 Personal docs
 */personal-docs/*
+
+data/
