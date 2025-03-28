@@ -4,6 +4,7 @@ from src.utils.logging_config import configure_logging
 
 log = configure_logging()
 
+
 class User:
     """
     Interface for user-related database operations.
@@ -11,6 +12,7 @@ class User:
     This model provides methods to create, retrieve, update, and delete
     user records in the database.
     """
+
     def __init__(self, db_id: Optional[int] = None, discord_user_id: int = 0, discord_guild_id: int = 0,
                  username: Optional[str] = None, created_at: Optional[str] = None, last_active: Optional[str] = None):
         self.db_id = db_id
