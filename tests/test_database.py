@@ -3,9 +3,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from src.database.database import Database
 import os
 import aiosqlite
-import asyncio
 import uuid
-import shutil
 
 class TestDatabase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):

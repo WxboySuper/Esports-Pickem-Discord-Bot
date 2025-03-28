@@ -26,7 +26,7 @@ class Database:
         self.db_path = db_path
         self.pool_size = pool_size
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        
+
         # Ensure the database file exists
         if not os.path.exists(db_path):
             open(db_path, 'w').close()
@@ -42,12 +42,10 @@ class Database:
         self._all_connections = set()  # Track all connections created
 
     async def _initialize_pool(self) -> None:
-        """
-        Initialize the connection pool with a set number of connections
-        """
+        """Initialize the connection pool with a set number of connections"""
         if self._pool_initialized:
             return
-        
+
         async with self._pool_lock:
             if not self._pool_initialized:
                 for _ in range(self.pool_size):
@@ -59,7 +57,7 @@ class Database:
     async def _create_connection(self) -> aiosqlite.Connection:
         """
         Create a new SQLite connection with proper settings
-        
+
         Returns:
             A configured SQLite connection
         """
@@ -73,7 +71,7 @@ class Database:
     async def _get_connection(self) -> aiosqlite.Connection:
         """
         Get a connection from the pool or create a new one if needed
-        
+
         Returns:
             SQLite database connection
         """
@@ -85,15 +83,14 @@ class Database:
         async with self._pool_lock:
             if self._connection_pool:
                 return self._connection_pool.pop()
-            else:
-                # If pool is empty, create a new connection
-                log.warning("Connection pool exhausted, creating a new connection")
-                return await self._create_connection()
+            # If pool is empty, create a new connection
+            log.warning("Connection pool exhausted, creating a new connection")
+            return await self._create_connection()
 
     async def _release_connection(self, conn: aiosqlite.Connection) -> None:
         """
         Release a connection back to the pool or close it if the pool is full
-        
+
         Args:
             conn: The connection to release
         """
@@ -180,7 +177,8 @@ class Database:
             return False
 
     # Include Migrations here when needed
-    async def _migration_1(self, db: aiosqlite.Connection):
+    @staticmethod
+    async def _migration_1(db: aiosqlite.Connection):
         """Migration 1: Add a new table."""
         print('placeholder')  # pragma: no cover
 
