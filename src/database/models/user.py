@@ -7,7 +7,7 @@ log = configure_logging()
 class User:
     """
     Interface for user-related database operations.
-    
+
     This model provides methods to create, retrieve, update, and delete
     user records in the database.
     """
@@ -19,7 +19,7 @@ class User:
         self.username = username
         self.created_at = created_at
         self.last_active = last_active
-        
+
     @staticmethod
     async def create(db: Database, discord_user_id: int, discord_guild_id: int, username: str) -> Optional['User']:
         """Create a new user in the database"""
