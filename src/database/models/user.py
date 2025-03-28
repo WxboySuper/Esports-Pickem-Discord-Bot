@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from src.database.database import Database
 from src.utils.logging_config import configure_logging
 
@@ -82,3 +82,18 @@ class User:
         if row:
             return User(**row)
         return None
+
+    @staticmethod
+    async def get_all(db: Database) -> List['User']:
+        """
+        Retrieve all users from the database.
+
+        Args:
+            db: Database instance to use for the query.
+
+        Returns:
+            A list of User instances.
+        """
+        query = "SELECT * FROM users"
+        rows = await db.fetch_all(query)
+        return [User(**row) for row in rows] if rows else []
