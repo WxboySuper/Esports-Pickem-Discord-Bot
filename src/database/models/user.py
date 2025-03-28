@@ -59,11 +59,18 @@ class User:
         Returns:
             A User instance if found, None otherwise.
         """
+        log.info(f"Attempting to retrieve user with ID {user_id}")
         query = "SELECT * FROM users WHERE id = ?"
-        row = await db.fetch_one(query, (user_id,))
-        if row:
-            return User(**row)
-        return None
+        try:
+            row = await db.fetch_one(query, (user_id,))
+            if row:
+                log.info(f"User with ID {user_id} retrieved successfully: {row}")
+                return User(**row)
+            log.warning(f"No user found with ID {user_id}")
+            return None
+        except Exception as e:
+            log.error(f"Error retrieving user with ID {user_id}: {str(e)}")
+            return None
 
     @staticmethod
     async def get_by_discord_user_id(db: Database, discord_user_id: int) -> Optional['User']:
@@ -77,11 +84,18 @@ class User:
         Returns:
             A User instance if found, None otherwise.
         """
+        log.info(f"Attempting to retrieve user with Discord user ID {discord_user_id}")
         query = "SELECT * FROM users WHERE discord_user_id = ?"
-        row = await db.fetch_one(query, (discord_user_id,))
-        if row:
-            return User(**row)
-        return None
+        try:
+            row = await db.fetch_one(query, (discord_user_id,))
+            if row:
+                log.info(f"User with Discord user ID {discord_user_id} retrieved successfully: {row}")
+                return User(**row)
+            log.warning(f"No user found with Discord user ID {discord_user_id}")
+            return None
+        except Exception as e:
+            log.error(f"Error retrieving user with Discord user ID {discord_user_id}: {str(e)}")
+            return None
 
     @staticmethod
     async def get_all(db: Database) -> List['User']:
@@ -94,6 +108,15 @@ class User:
         Returns:
             A list of User instances.
         """
+        log.info("Attempting to retrieve all users from the database")
         query = "SELECT * FROM users"
-        rows = await db.fetch_all(query)
-        return [User(**row) for row in rows] if rows else []
+        try:
+            rows = await db.fetch_all(query)
+            if rows:
+                log.info(f"Successfully retrieved {len(rows)} users from the database")
+                return [User(**row) for row in rows]
+            log.warning("No users found in the database")
+            return []
+        except Exception as e:
+            log.error(f"Error retrieving all users from the database: {str(e)}")
+            return []
