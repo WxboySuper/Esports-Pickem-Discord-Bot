@@ -153,15 +153,23 @@ class Database:
                 # Check if we need to insert the initial schema version
                 cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
                 row = await cursor.fetchone()
-                current_version = row[0] if row and row[0] else 0
-                log.info(f"Schema version table has {current_version} rows")
+                current_version = row[0] if row and row[0] is not None else 0
+                log.info(f"Current schema version: {current_version}")
 
-                if current_version < 2:
+                if current_version < 2 and current_version != 0:
                     log.info("Outdated database version deteched. Applying migrations...")
                     # Apply migration 2 if needed
                     await self._migration_2(conn)
                     await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
                     log.info("Upgraded database to version 2.")
+                elif current_version is None or current_version == 0:
+                    log.info("No schema version found. Applying initial schema...")
+                    await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
+                    cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
+                    row = await cursor.fetchone()
+                    current_version = row[0]
+                    log.info(f"Schema version set to {current_version}.")
+                    log.info("Inserted initial schema version.")
                 else:
                     log.info("Database is up to date. No migrations needed.")
 
