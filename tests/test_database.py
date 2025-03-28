@@ -1,10 +1,10 @@
 import unittest
 from unittest.mock import patch, AsyncMock, MagicMock
 from src.database.database import Database
+from src.utils.logging_config import configure_logging
 import os
 import aiosqlite
 import uuid
-from src.utils.logging_config import configure_logging
 
 log = configure_logging()
 

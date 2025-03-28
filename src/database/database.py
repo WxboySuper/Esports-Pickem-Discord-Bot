@@ -219,7 +219,6 @@ class Database:
 
         log.info("Migration to version 2 completed.")
 
-
     async def close_all_connections(self) -> None:
         """
         Close all database connections in the pool.
