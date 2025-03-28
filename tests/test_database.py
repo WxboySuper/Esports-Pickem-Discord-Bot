@@ -4,6 +4,9 @@ from src.database.database import Database
 import os
 import aiosqlite
 import uuid
+from src.utils.logging_config import configure_logging
+
+log = configure_logging()
 
 class TestDatabase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -126,7 +129,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             row = await cursor.fetchone()
             
             self.assertIsNotNone(row, "Schema version table is empty or not created.")
-            self.assertEqual(row["version"], 1)
+            self.assertEqual(row["version"], 2)
         finally:
             await conn.close()
 
@@ -499,3 +502,74 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
         finally:
             # Restore the original pool
             self.db._connection_pool = original_pool
+
+    async def create_version_1_schema(self):
+        """Helper method to create the version 1 schema"""
+        async with aiosqlite.connect(self.test_db_path) as conn:
+            await conn.executescript("""
+                PRAGMA foreign_keys = ON;
+
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    discord_id INTEGER NOT NULL UNIQUE,
+                    username TEXT NOT NULL,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_active TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CHECK (discord_id > 0)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_users_discord_id ON users(discord_id);
+
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                INSERT INTO schema_version (version) VALUES (1);
+
+                INSERT INTO users (discord_id, username, created_at, last_active)
+                VALUES (12345, 'TestUser', '2025-03-01 12:00:00', '2025-03-01 12:00:00');
+            """)
+            await conn.commit()
+
+    async def test_migration_1_to_2(self):
+        # Create the version 1 schema
+        await self.create_version_1_schema()
+
+        # Run the database initialization (This should include the migration)
+        success = await self.db.initialize()
+        self.assertTrue(success)
+
+        # Verify the schema version is updated to 2
+        async with aiosqlite.connect(self.test_db_path) as conn:
+            cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
+            row = await cursor.fetchone()
+            self.assertEqual(row[0], 2)
+
+            # Verify the new schema
+            cursor = await conn.execute("PRAGMA table_info(users)")
+            columns = [col[1] for col in await cursor.fetchall()]
+            self.assertIn("discord_user_id", columns)
+            self.assertIn("discord_guild_id", columns)
+
+            # Verify the migrated data
+            cursor = await conn.execute("SELECT * FROM users WHERE discord_user_id = 12345")
+            user = await cursor.fetchone()
+            self.assertIsNotNone(user)
+            self.assertEqual(user[1], 12345)
+            self.assertEqual(user[2], 0)  # Default value
+            self.assertEqual(user[3], "TestUser")
+
+    async def test_no_migration_for_version_2(self):
+        # Create a version 2 database
+        await self.db.initialize()
+
+        # Re-initialize the database
+        success = await self.db.initialize()
+        self.assertTrue(success)
+
+        # Verify no additional migrations were applied
+        async with aiosqlite.connect(self.test_db_path) as conn:
+            cursor = await conn.execute("SELECT COUNT(*) FROM schema_version WHERE version = 2")
+            row = await cursor.fetchone()
+            self.assertEqual(row[0], 1)
