@@ -6,7 +6,7 @@ Welcome to the Discord Esports Pickem project! This bot allows users to compete 
 
 This project is currently being rebuilt with a focus on automation and efficiency. We're moving from manual match updates to automated match tracking with minimal intervention required. The goal is to create a system that's both feature-rich and cost-effective to host.
 
-Currently work is being done on the database functions. For the latest on how the database functions check out the [Database Documentation](docs/database/database.md).
+Currently, work is being done on the database functions. For the latest on how the database functions, check out the [Database Documentation](docs/database/database.md).
 
 > \[!NOTE]
 > The database is being upgraded from v1 to v2
