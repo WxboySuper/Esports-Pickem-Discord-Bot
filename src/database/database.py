@@ -129,49 +129,43 @@ class Database:
             # Create a dedicated connection for initialization
             conn = await self._create_connection()
             try:
-                # Load schema if the file exists
-                if os.path.exists(self.schema_path):
-                    with open(self.schema_path, 'r') as f:
-                        schema = f.read()
-                    await conn.executescript(schema)
-                    log.info(f"Loaded schema from {self.schema_path}")
-                else:
-                    log.warning(f"Schema file not found: {self.schema_path}")
-                    # Return early for the test_initialize_no_schema test case
-                    if self.schema_path == "nonexistent_directory/nonexistent_file.sql":
-                        return True
-
-                # Always ensure schema_version table exists
-                await conn.execute("""
-                    CREATE TABLE IF NOT EXISTS schema_version (
-                        version INTEGER PRIMARY KEY,
-                        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
-                log.info("Schema version table ensured.")
-
-                # Check if we need to insert the initial schema version
-                cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
+                cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'")
                 row = await cursor.fetchone()
-                current_version = row[0] if row and row[0] is not None else 0
-                log.info(f"Current schema version: {current_version}")
 
-                if current_version < 2 and current_version != 0:
-                    log.info("Outdated database version deteched. Applying migrations...")
-                    # Apply migration 2 if needed
-                    await self._migration_2(conn)
+                if row is None or row == 0:
+                    # New Database Logic
+                    log.info("New database detected. Creating schema...")
+                    if os.path.exists(self.schema_path):
+                        with open(self.schema_path, 'r') as f:
+                            schema = f.read()
+                        await conn.executescript(schema)
+                        log.info(f"Loaded schema from {self.schema_path}")
+                    else:
+                        log.warning(f"Schema file not found: {self.schema_path}")
+                        return False
+
+                    # Insert latest schema version
                     await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
-                    log.info("Upgraded database to version 2.")
-                elif current_version is None or current_version == 0:
-                    log.info("No schema version found. Applying initial schema...")
-                    await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
+                    log.info("Database initialized with schema version 2.")
+                else:
+                    # Existing Database Logic
+                    log.info("Existing database detected. Checking schema version...")
                     cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
                     row = await cursor.fetchone()
-                    current_version = row[0]
-                    log.info(f"Schema version set to {current_version}.")
-                    log.info("Inserted initial schema version.")
-                else:
-                    log.info("Database is up to date. No migrations needed.")
+                    current_version = row[0] if row and row[0] is not None else 0
+                    log.info(f"Current schema version: {current_version}")
+
+                    if current_version < 2 and current_version != 0:
+                        log.info("Outdated database version detected. Applying migrations...")
+                        # Apply migration 2 if needed
+                        await self._migration_2(conn)
+                        await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
+                        log.info("Upgraded database to version 2.")
+                    elif current_version is None or current_version == 0:
+                        log.error("No schema version found. Database may be corrupted.")
+                        return False
+                    else:
+                        log.info("Database is up to date. No migrations needed.")
 
                 # Commit all changes
                 await conn.commit()
@@ -202,7 +196,7 @@ class Database:
             CREATE TABLE users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 discord_user_id INTEGER NOT NULL UNIQUE,
-                discord_guild_id INTEGER NOT NULL,
+                discord_guild_id INTEGER NOT NULL DEFAULT 0,
                 username TEXT,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 last_active TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
