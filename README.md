@@ -11,7 +11,7 @@ Currently work is being done on the database functions. For the latest on how th
 > \[!NOTE]
 > The database is being upgraded from v1 to v2
 >
-> For more inormation visit the [Database Documentation](docs/database/database.md) or the [Associated Pull Request](https://github.com/WxboySuper/Esports-Pickem-Discord-Bot/pull/84)
+> For more information visit the [Database Documentation](docs/database/database.md) or the [Associated Pull Request](https://github.com/WxboySuper/Esports-Pickem-Discord-Bot/pull/84)
 
 ## Features
 
