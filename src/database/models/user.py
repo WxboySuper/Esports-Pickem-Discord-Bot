@@ -64,3 +64,21 @@ class User:
         if row:
             return User(**row)
         return None
+
+    @staticmethod
+    async def get_by_discord_user_id(db: Database, discord_user_id: int) -> Optional['User']:
+        """
+        Retrieve a user by their Discord user ID.
+
+        Args:
+            db: Database instance to use for the query.
+            discord_user_id: The Discord user ID of the user to retrieve.
+
+        Returns:
+            A User instance if found, None otherwise.
+        """
+        query = "SELECT * FROM users WHERE discord_user_id = ?"
+        row = await db.fetch_one(query, (discord_user_id,))
+        if row:
+            return User(**row)
+        return None
