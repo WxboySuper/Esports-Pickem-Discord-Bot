@@ -114,8 +114,8 @@ class Database:
                 # Remove from tracking
                 if conn in self._all_connections:  # pragma: no cover
                     self._all_connections.remove(conn)  # pragma: no cover
-            except:
-                pass
+            except Exception as release_error:
+                log.error(f"Error during connection release: {str(release_error)}")
 
     async def initialize(self) -> bool:
         """
