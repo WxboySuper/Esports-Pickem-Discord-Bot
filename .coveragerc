@@ -2,19 +2,20 @@
 source = src
 omit = 
     */site-packages/*
+    */dist-packages/*
     */tests/*
+    src/utils/logging_config.py
     */__init__.py
-    */path_helper.py
-    run_tests.py
+    *\__init__.py
 
 [report]
-fail_under = 0
 exclude_lines =
     pragma: no cover
     def __repr__
+    raise NotImplementedError
     if __name__ == .__main__.:
     pass
-    raise NotImplementedError
+    raise ImportError
 
 [html]
-directory = coverage_html
+directory = coverage_html_report
