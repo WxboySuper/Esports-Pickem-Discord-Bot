@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch, AsyncMock, MagicMock
 from src.database.models.user import User
 
-class TestDatabase(unittest.IsolatedAsyncioTestCase):
+class TestUser(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.db = MagicMock()
 
