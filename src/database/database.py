@@ -159,10 +159,30 @@ class Database:
                 if count == 0:
                     # Insert version 1 as the initial version
                     await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (1,))
+                    await conn.commit()
                     log.info("Inserted initial schema version.")
 
-                # Commit all changes
-                await conn.commit()
+                # Check current version and apply any pending migrations
+                cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
+                row = await cursor.fetchone()
+                current_version = row[0] if row and row[0] is not None else 0
+
+                # Get all migration methods
+                migration_methods = [
+                    (version, method) for name, method in self.__class__.__dict__.items()
+                    if name.startswith('_migration_') and callable(method)
+                ]
+                
+                # Sort by version number
+                migration_methods.sort(key=lambda x: int(x[0].split('_')[1]))
+
+                # Apply any migrations after current version
+                for version, migration in migration_methods:
+                    migration_version = int(version.split('_')[1])
+                    if migration_version > current_version:
+                        log.info(f"Applying migration {migration_version}")
+                        await migration(conn)
+                        log.info(f"Migration {migration_version} completed")
 
                 # Initialize the connection pool
                 await self._initialize_pool()
@@ -179,8 +199,42 @@ class Database:
     # Include Migrations here when needed
     @staticmethod
     async def _migration_1(db: aiosqlite.Connection):
-        """Migration 1: Add a new table."""
-        print('placeholder')  # pragma: no cover
+        """Migration 1: Initial schema."""
+        pass  # Initial schema is already handled by initialize()
+
+    @staticmethod
+    async def _migration_2(db: aiosqlite.Connection):
+        """Migration 2: Update users table schema to support guild-based functionality."""
+        await db.executescript("""
+            -- Create temporary table with new schema
+            CREATE TABLE users_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                discord_user_id INTEGER NOT NULL UNIQUE,
+                discord_guild_id INTEGER NOT NULL,
+                username TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_active TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CHECK (discord_user_id > 0)
+            );
+
+            -- Copy data from old table to new table
+            INSERT INTO users_new (id, discord_user_id, discord_guild_id, username, created_at, last_active)
+            SELECT id, discord_id, 0, username, created_at, last_active FROM users;
+
+            -- Drop old table and indexes
+            DROP TABLE users;
+            
+            -- Rename new table to users
+            ALTER TABLE users_new RENAME TO users;
+
+            -- Create new indexes
+            CREATE INDEX idx_user_discord_user_id ON users(discord_user_id);
+            CREATE INDEX idx_user_guild_id ON users(discord_guild_id);
+        """)
+        
+        # Update schema version
+        await db.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
+        await db.commit()
 
     async def close_all_connections(self) -> None:
         """
