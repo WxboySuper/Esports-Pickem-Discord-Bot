@@ -120,7 +120,7 @@ class TestUser(unittest.IsolatedAsyncioTestCase):
     @patch("src.database.models.user.log")
     async def test_get_all_users_success(self, mock_log):
         mock_db = AsyncMock()
-        mock_db.fetch_all.return_value = [
+        mock_db.fetch_many.return_value = [
             {
                 "db_id": 1,
                 "discord_user_id": 12345,
@@ -154,8 +154,8 @@ class TestUser(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(users[1].username, "test_user2")
         self.assertEqual(users[1].created_at, "2023-01-03T00:00:00")
         self.assertEqual(users[1].last_active, "2023-01-04T00:00:00")
-        mock_db.fetch_all.assert_called_once_with("SELECT * FROM users")
-        mock_log.info.assert_called_with("Retrieving all users from the database")
+        mock_db.fetch_many.assert_called_once_with('SELECT * FROM users LIMIT ? OFFSET ?', (100, 0))
+        mock_log.info.assert_called_with('Retrieving all users from the database with limit 100 and offset 0')
 
     @patch("src.database.models.user.log")
     async def test_get_all_users_empty(self, mock_log):
@@ -165,8 +165,8 @@ class TestUser(unittest.IsolatedAsyncioTestCase):
         users = await User.get_all(mock_db)
 
         self.assertEqual(len(users), 0)
-        mock_db.fetch_all.assert_called_once_with("SELECT * FROM users")
-        mock_log.info.assert_called_with("Retrieving all users from the database")
+        mock_db.fetch_many.assert_called_once_with('SELECT * FROM users LIMIT ? OFFSET ?', (100, 0))
+        mock_log.info.assert_called_with('Retrieving all users from the database with limit 100 and offset 0')
 
     @patch("src.database.models.user.log")
     async def test_create_user_invalid_input(self, mock_log):
@@ -213,3 +213,33 @@ class TestUser(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(users[1].db_id, 2)
         mock_db.fetch_many.assert_called_once_with("SELECT * FROM users LIMIT ? OFFSET ?", (2, 0))
         mock_log.info.assert_called_with("Retrieving all users from the database with limit 2 and offset 0")
+
+    @patch("src.database.models.user.log")
+    async def test_get_all_users_exception(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.fetch_many.side_effect = Exception("Database error")
+
+        users = await User.get_all(mock_db, limit=2, offset=0)
+
+        self.assertEqual(users, [])
+        mock_log.error.assert_called_with("Error retrieving all users from the database: Database error")
+
+    @patch("src.database.models.user.log")
+    async def test_get_by_id_exception(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.fetch_one.side_effect = Exception("Database error")
+
+        user = await User.get_by_id(mock_db, 1)
+
+        self.assertIsNone(user)
+        mock_log.error.assert_called_with("Error retrieving user with ID 1: Database error")
+
+    @patch("src.database.models.user.log")
+    async def test_create_user_exception(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.execute.side_effect = Exception("Database error")
+
+        user = await User.create(mock_db, 12345, 67890, "test_user")
+
+        self.assertIsNone(user)
+        mock_log.error.assert_called_with("Error creating user test_user: Database error")
