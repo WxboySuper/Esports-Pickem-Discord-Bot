@@ -13,6 +13,8 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
         # Create a unique database file for each test to ensure isolation
         # Use UUID to generate a unique name
         self.test_db_path = f"data/test/test_{uuid.uuid4().hex}.db"
+        # Guarantee that the parent directory exists
+        os.makedirs(os.path.dirname(self.test_db_path), exist_ok=True)
         self.db = Database(db_path=self.test_db_path, pool_size=3)
 
     async def asyncSetUp(self):
