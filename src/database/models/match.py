@@ -135,6 +135,80 @@ class Match:
             log.error(f"Error updating result for match {match_id}: {str(e)}")
             return False
 
-    # TODO: Implement delete_match method
-    # TODO: Implement get_by_day method
-    # TODO: Implement get_by_tournament method
+    @staticmethod
+    async def delete_match(db: Database, match_id: int) -> bool:
+        """Delete a match by its ID."""
+        if match_id <= 0:
+            log.error("Invalid match_id provided for deletion.")
+            return False
+
+        log.info(f"Deleting match with ID {match_id}")
+        query = "DELETE FROM matches WHERE match_id = ?"
+        try:
+            rows_affected = await db.execute(query, (match_id,))
+            if rows_affected == 0 or rows_affected is None:
+                log.warning(f"No rows affected. Match {match_id} may not exist or deletion failed.")
+                return False
+            log.info(f"Match {match_id} deleted successfully.")
+            return True
+        except Exception as e:
+            log.error(f"Error deleting match {match_id}: {str(e)}")
+            return False
+
+    @staticmethod
+    async def get_by_day(db: Database, date: str) -> List['Match']:
+        """Retrieve all matches scheduled for a specific date."""
+        # Basic validation could be added here for date format if needed
+        log.info(f"Retrieving matches for date {date}")
+        query = "SELECT * FROM matches WHERE match_date = ? ORDER BY match_time"
+        try:
+            rows = await db.fetch_many(query, (date,))
+            matches = []
+            for row in rows:
+                # Convert metadata JSON string back to dict
+                if row.get('match_metadata'):
+                    try:
+                        row['match_metadata'] = json.loads(row['match_metadata'])
+                    except json.JSONDecodeError:
+                        log.warning(f"Failed to decode metadata for match {row['match_id']}")
+                        row['match_metadata'] = None
+                matches.append(Match(**row))
+            if not matches:
+                log.info(f"No matches found for date {date}.")
+            return matches
+        except Exception as e:
+            log.error(f"Error retrieving matches for date {date}: {str(e)}")
+            return []
+
+    @staticmethod
+    async def get_by_tournament(db: Database, tournament: str, limit: int = 100, offset: int = 0) -> List['Match']:
+        """Retrieve matches belonging to a specific tournament."""
+        if not tournament:
+            log.error("Tournament name cannot be empty.")
+            return []
+
+        log.info(f"Retrieving matches for tournament '{tournament}' with limit {limit} and offset {offset}")
+        query = """
+            SELECT * FROM matches
+            WHERE tournament = ?
+            ORDER BY match_date, match_time
+            LIMIT ? OFFSET ?
+        """.strip()
+        try:
+            rows = await db.fetch_many(query, (tournament, limit, offset))
+            matches = []
+            for row in rows:
+                # Convert metadata JSON string back to dict
+                if row.get('match_metadata'):
+                    try:
+                        row['match_metadata'] = json.loads(row['match_metadata'])
+                    except json.JSONDecodeError:
+                        log.warning(f"Failed to decode metadata for match {row['match_id']}")
+                        row['match_metadata'] = None
+                matches.append(Match(**row))
+            if not matches:
+                log.info(f"No matches found for tournament '{tournament}'.")
+            return matches
+        except Exception as e:
+            log.error(f"Error retrieving matches for tournament '{tournament}': {str(e)}")
+            return []

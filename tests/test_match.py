@@ -1,7 +1,7 @@
 import unittest
+import json
 from unittest.mock import patch, AsyncMock, MagicMock
 from src.database.models.match import Match
-import json
 
 class TestMatch(unittest.IsolatedAsyncioTestCase):
 
@@ -250,7 +250,6 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         # Ensure info log for retrieval was also called
         mock_log.info.assert_any_call("Retrieving upcoming matches with limit 5 and offset 0")
 
-
     # --- Tests for Match.update_result ---
 
     @patch("src.database.models.match.log")
@@ -299,4 +298,269 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         expected_query = "UPDATE matches SET result = ?, is_complete = ? WHERE match_id = ?"
         mock_db.execute.assert_called_once_with(expected_query, ("team1", True, 17))
         mock_log.error.assert_called_with("Error updating result for match 17: Update error")
+
+    # --- Tests for Match.delete_match ---
+
+    @patch("src.database.models.match.log")
+    async def test_delete_match_success(self, mock_log):
+        """Test successful deletion of a match."""
+        mock_db = AsyncMock()
+        mock_db.execute.return_value = 1 # Simulate 1 row affected
+
+        result = await Match.delete_match(mock_db, 10)
+
+        self.assertTrue(result)
+        mock_db.execute.assert_called_once_with("DELETE FROM matches WHERE match_id = ?", (10,))
+        # Assert that info was called exactly twice
+        self.assertEqual(mock_log.info.call_count, 2)
+        # Assert that the specific messages were logged at least once
+        mock_log.info.assert_any_call("Deleting match with ID 10")
+        mock_log.info.assert_any_call("Match 10 deleted successfully.")
+
+    @patch("src.database.models.match.log")
+    async def test_delete_match_not_found(self, mock_log):
+        """Test deleting a match that does not exist."""
+        mock_db = AsyncMock()
+        mock_db.execute.return_value = 0 # Simulate 0 rows affected
+
+        result = await Match.delete_match(mock_db, 99)
+
+        self.assertFalse(result)
+        mock_db.execute.assert_called_once_with("DELETE FROM matches WHERE match_id = ?", (99,))
+        mock_log.info.assert_called_once_with("Deleting match with ID 99")
+        mock_log.warning.assert_called_once_with("No rows affected. Match 99 may not exist or deletion failed.")
+
+    @patch("src.database.models.match.log")
+    async def test_delete_match_invalid_id(self, mock_log):
+        """Test deleting a match with an invalid ID."""
+        mock_db = AsyncMock()
+
+        result = await Match.delete_match(mock_db, 0)
+
+        self.assertFalse(result)
+        mock_db.execute.assert_not_called()
+        mock_log.error.assert_called_once_with("Invalid match_id provided for deletion.")
+
+    @patch("src.database.models.match.log")
+    async def test_delete_match_exception(self, mock_log):
+        """Test exception during match deletion."""
+        mock_db = AsyncMock()
+        mock_db.execute.side_effect = Exception("DB Delete Error")
+
+        result = await Match.delete_match(mock_db, 11)
+
+        self.assertFalse(result)
+        mock_db.execute.assert_called_once_with("DELETE FROM matches WHERE match_id = ?", (11,))
+        mock_log.info.assert_called_once_with("Deleting match with ID 11")
+        mock_log.error.assert_called_once_with("Error deleting match 11: DB Delete Error")
+
+    # --- Tests for Match.get_by_day ---
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_day_success(self, mock_log):
+        """Test retrieving matches for a specific day."""
+        mock_db = AsyncMock()
+        test_date = "2025-05-10"
+        mock_rows = [
+            {
+                "match_id": 12, "team1_name": "Team K", "team2_name": "Team L",
+                "match_date": test_date, "match_time": "14:00:00", "is_complete": False, "result": None,
+                "team1_id": 110, "team2_id": 120, "region": "NA", "tournament": "Summer Playoffs", "match_metadata": None
+            },
+            {
+                "match_id": 13, "team1_name": "Team M", "team2_name": "Team N",
+                "match_date": test_date, "match_time": "17:00:00", "is_complete": False, "result": None,
+                "team1_id": 130, "team2_id": 140, "region": "NA", "tournament": "Summer Playoffs", "match_metadata": json.dumps({"stream": "twitch"})
+            }
+        ]
+        mock_db.fetch_many.return_value = mock_rows
+
+        matches = await Match.get_by_day(mock_db, test_date)
+
+        self.assertEqual(len(matches), 2)
+        self.assertEqual(matches[0].match_id, 12)
+        self.assertEqual(matches[0].match_date, test_date)
+        self.assertIsNone(matches[0].match_metadata)
+        self.assertEqual(matches[1].match_id, 13)
+        self.assertEqual(matches[1].match_date, test_date)
+        self.assertEqual(matches[1].match_metadata, {"stream": "twitch"})
+
+        expected_query = "SELECT * FROM matches WHERE match_date = ? ORDER BY match_time"
+        mock_db.fetch_many.assert_called_once_with(expected_query, (test_date,))
+        mock_log.info.assert_called_once_with(f"Retrieving matches for date {test_date}")
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_day_no_matches(self, mock_log):
+        """Test retrieving matches for a day with no scheduled matches."""
+        mock_db = AsyncMock()
+        test_date = "2025-05-11"
+        mock_db.fetch_many.return_value = []
+
+        matches = await Match.get_by_day(mock_db, test_date)
+
+        self.assertEqual(len(matches), 0)
+        expected_query = "SELECT * FROM matches WHERE match_date = ? ORDER BY match_time"
+        mock_db.fetch_many.assert_called_once_with(expected_query, (test_date,))
+        mock_log.info.assert_any_call(f"Retrieving matches for date {test_date}")
+        mock_log.info.assert_any_call(f"No matches found for date {test_date}.")
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_day_json_decode_error(self, mock_log):
+        """Test handling JSONDecodeError when retrieving matches by day."""
+        mock_db = AsyncMock()
+        test_date = "2025-05-12"
+        mock_rows = [
+            {
+                "match_id": 14, "team1_name": "Team O", "team2_name": "Team P",
+                "match_date": test_date, "match_time": "15:00:00", "is_complete": False, "result": None,
+                "team1_id": 150, "team2_id": 160, "region": "EU", "tournament": "LEC Finals", "match_metadata": '{"invalid json'
+            }
+        ]
+        mock_db.fetch_many.return_value = mock_rows
+
+        matches = await Match.get_by_day(mock_db, test_date)
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].match_id, 14)
+        self.assertIsNone(matches[0].match_metadata) # Should be None after decode error
+        mock_log.warning.assert_called_once_with("Failed to decode metadata for match 14")
+        expected_query = "SELECT * FROM matches WHERE match_date = ? ORDER BY match_time"
+        mock_db.fetch_many.assert_called_once_with(expected_query, (test_date,))
+        mock_log.info.assert_called_once_with(f"Retrieving matches for date {test_date}")
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_day_exception(self, mock_log):
+        """Test database exception when retrieving matches by day."""
+        mock_db = AsyncMock()
+        test_date = "2025-05-13"
+        mock_db.fetch_many.side_effect = Exception("DB Fetch Error")
+
+        matches = await Match.get_by_day(mock_db, test_date)
+
+        self.assertEqual(len(matches), 0)
+        expected_query = "SELECT * FROM matches WHERE match_date = ? ORDER BY match_time"
+        mock_db.fetch_many.assert_called_once_with(expected_query, (test_date,))
+        mock_log.info.assert_called_once_with(f"Retrieving matches for date {test_date}")
+        mock_log.error.assert_called_once_with(f"Error retrieving matches for date {test_date}: DB Fetch Error")
+
+    # --- Tests for Match.get_by_tournament ---
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_tournament_success(self, mock_log):
+        """Test retrieving matches for a specific tournament."""
+        mock_db = AsyncMock()
+        test_tournament = "World Championship"
+        mock_rows = [
+            {
+                "match_id": 15, "team1_name": "Team Q", "team2_name": "Team R", "match_date": "2025-10-01",
+                "match_time": "10:00:00", "is_complete": False, "result": None, "team1_id": 170, "team2_id": 180,
+                "region": "INT", "tournament": test_tournament, "match_metadata": None
+            },
+            {
+                "match_id": 16, "team1_name": "Team S", "team2_name": "Team T", "match_date": "2025-10-01",
+                "match_time": "13:00:00", "is_complete": False, "result": None, "team1_id": 190, "team2_id": 200,
+                "region": "INT", "tournament": test_tournament, "match_metadata": json.dumps({"venue": "Arena"})
+            }
+        ]
+        mock_db.fetch_many.return_value = mock_rows
+
+        matches = await Match.get_by_tournament(mock_db, test_tournament, limit=5, offset=0)
+
+        self.assertEqual(len(matches), 2)
+        self.assertEqual(matches[0].match_id, 15)
+        self.assertEqual(matches[0].tournament, test_tournament)
+        self.assertIsNone(matches[0].match_metadata)
+        self.assertEqual(matches[1].match_id, 16)
+        self.assertEqual(matches[1].tournament, test_tournament)
+        self.assertEqual(matches[1].match_metadata, {"venue": "Arena"})
+
+        expected_query = """
+            SELECT * FROM matches
+            WHERE tournament = ?
+            ORDER BY match_date, match_time
+            LIMIT ? OFFSET ?
+        """.strip()
+        mock_db.fetch_many.assert_called_once_with(expected_query, (test_tournament, 5, 0))
+        mock_log.info.assert_called_once_with(f"Retrieving matches for tournament '{test_tournament}' with limit 5 and offset 0")
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_tournament_no_matches(self, mock_log):
+        """Test retrieving matches for a tournament with no matches."""
+        mock_db = AsyncMock()
+        test_tournament = "NonExistent Cup"
+        mock_db.fetch_many.return_value = []
+
+        matches = await Match.get_by_tournament(mock_db, test_tournament)
+
+        self.assertEqual(len(matches), 0)
+        expected_query = """
+            SELECT * FROM matches
+            WHERE tournament = ?
+            ORDER BY match_date, match_time
+            LIMIT ? OFFSET ?
+        """.strip()
+        # Default limit=100, offset=0
+        mock_db.fetch_many.assert_called_once_with(expected_query, (test_tournament, 100, 0))
+        mock_log.info.assert_any_call(f"Retrieving matches for tournament '{test_tournament}' with limit 100 and offset 0")
+        mock_log.info.assert_any_call(f"No matches found for tournament '{test_tournament}'.")
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_tournament_empty_name(self, mock_log):
+        """Test retrieving matches with an empty tournament name."""
+        mock_db = AsyncMock()
+
+        matches = await Match.get_by_tournament(mock_db, "")
+
+        self.assertEqual(len(matches), 0)
+        mock_db.fetch_many.assert_not_called()
+        mock_log.error.assert_called_once_with("Tournament name cannot be empty.")
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_tournament_json_decode_error(self, mock_log):
+        """Test handling JSONDecodeError when retrieving matches by tournament."""
+        mock_db = AsyncMock()
+        test_tournament = "Regional Finals"
+        mock_rows = [
+            {
+                "match_id": 17, "team1_name": "Team U", "team2_name": "Team V", "match_date": "2025-09-15",
+                "match_time": "18:00:00", "is_complete": False, "result": None, "team1_id": 210, "team2_id": 220,
+                "region": "LPL", "tournament": test_tournament, "match_metadata": '{"bad json"}'
+            }
+        ]
+        mock_db.fetch_many.return_value = mock_rows
+
+        matches = await Match.get_by_tournament(mock_db, test_tournament)
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].match_id, 17)
+        self.assertIsNone(matches[0].match_metadata)
+        mock_log.warning.assert_called_once_with("Failed to decode metadata for match 17")
+        expected_query = """
+            SELECT * FROM matches
+            WHERE tournament = ?
+            ORDER BY match_date, match_time
+            LIMIT ? OFFSET ?
+        """.strip()
+        mock_db.fetch_many.assert_called_once_with(expected_query, (test_tournament, 100, 0))
+        mock_log.info.assert_called_once_with(f"Retrieving matches for tournament '{test_tournament}' with limit 100 and offset 0")
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_tournament_exception(self, mock_log):
+        """Test database exception when retrieving matches by tournament."""
+        mock_db = AsyncMock()
+        test_tournament = "MSI"
+        mock_db.fetch_many.side_effect = Exception("DB Query Error")
+
+        matches = await Match.get_by_tournament(mock_db, test_tournament)
+
+        self.assertEqual(len(matches), 0)
+        expected_query = """
+            SELECT * FROM matches
+            WHERE tournament = ?
+            ORDER BY match_date, match_time
+            LIMIT ? OFFSET ?
+        """.strip()
+        mock_db.fetch_many.assert_called_once_with(expected_query, (test_tournament, 100, 0))
+        mock_log.info.assert_called_once_with(f"Retrieving matches for tournament '{test_tournament}' with limit 100 and offset 0")
+        mock_log.error.assert_called_once_with(f"Error retrieving matches for tournament '{test_tournament}': DB Query Error")
 
