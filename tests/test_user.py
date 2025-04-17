@@ -166,14 +166,15 @@ class TestUser(unittest.IsolatedAsyncioTestCase):
             await User.get_by_discord_user_id(mock_db, -1)
         self.assertEqual(str(context.exception), "Invalid discord_user_id provided. Must be a positive integer.")
 
-    async def test_get_by_discord_user_id_exception(self):
+    @patch("src.database.models.user.log")
+    async def test_get_by_discord_user_id_exception(self, mock_log):
         mock_db = AsyncMock()
         mock_db.fetch_one.side_effect = Exception("Database error")
 
-        with self.assertRaises(Exception) as context:
-            await User.get_by_discord_user_id(mock_db, 12345)
-        self.assertEqual(str(context.exception), "Database error")
-        mock_db.fetch_one.assert_called_once_with("SELECT * FROM users WHERE discord_user_id = ?", (12345,))
+        user = await User.get_by_discord_user_id(mock_db, 12345)
+
+        self.assertIsNone(user)
+        mock_log.error.assert_called_with("Error retrieving user with Discord user ID 12345: Database error")
 
     # --- Tests for User.get_all ---
 

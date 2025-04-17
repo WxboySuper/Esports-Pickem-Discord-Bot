@@ -112,7 +112,7 @@ class User:
             return None
         except Exception as e:
             log.error(f"Error retrieving user with Discord user ID {discord_user_id}: {str(e)}")
-            raise e  # Re-raise the exception for further handling
+            return None
 
     @staticmethod
     async def get_all(db: Database, limit: int = 100, offset: int = 0) -> List['User']:
