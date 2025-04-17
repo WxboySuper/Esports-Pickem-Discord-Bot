@@ -1,6 +1,6 @@
 import unittest
 import json
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 from src.database.models.match import Match
 
 class TestMatch(unittest.IsolatedAsyncioTestCase):
