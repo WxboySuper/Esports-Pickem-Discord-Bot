@@ -2,7 +2,6 @@ import unittest
 from unittest.mock import patch, AsyncMock, MagicMock
 from src.database.models.match import Match
 import json
-import textwrap
 
 class TestMatch(unittest.IsolatedAsyncioTestCase):
 
@@ -35,12 +34,12 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(match.match_time, "18:00:00")
         self.assertEqual(match.match_metadata, metadata)
         self.assertFalse(match.is_complete)
-        expected_query = textwrap.dedent("""
+        expected_query = """
             INSERT INTO matches (team1_id, team1_name, team2_id, team2_name, region, tournament, match_date, match_time, match_metadata)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """)
+        """.strip()  # Strip leading/trailing whitespace
         expected_params = (10, "Team A", 20, "Team B", "NA", "Summer Split", "2025-07-01", "18:00:00", json.dumps(metadata))
-        mock_db.execute.assert_called_once_with(expected_query, expected_params)
+        mock_db.execute.assert_called_once_with(expected_query, expected_params)  # Remove redundant strip() call
         mock_log.info.assert_called()
 
     @patch("src.database.models.match.log")
@@ -134,6 +133,29 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         mock_db.fetch_one.assert_called_once_with("SELECT * FROM matches WHERE match_id = ?", (5,))
         mock_log.error.assert_called_with("Error retrieving match with ID 5: Fetch error")
 
+    @patch("src.database.models.match.log")
+    async def test_get_by_id_json_decode_error(self, mock_log):
+        """Test handling of JSONDecodeError when fetching a match by ID."""
+        mock_db = AsyncMock()
+        invalid_metadata_json = '{"key": "value", invalid json}'
+        mock_db.fetch_one.return_value = {
+            "match_id": 6,
+            "team1_id": 11, "team1_name": "Team C",
+            "team2_id": 21, "team2_name": "Team D",
+            "region": "EU", "tournament": "Spring Split",
+            "match_date": "2025-04-01", "match_time": "17:00:00",
+            "result": None, "is_complete": False,
+            "match_metadata": invalid_metadata_json
+        }
+
+        match = await Match.get_by_id(mock_db, 6)
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.match_id, 6)
+        self.assertIsNone(match.match_metadata) # Metadata should be None after decode error
+        mock_db.fetch_one.assert_called_once_with("SELECT * FROM matches WHERE match_id = ?", (6,))
+        mock_log.warning.assert_called_once_with("Failed to decode metadata for match 6")
+
     # --- Tests for Match.get_upcoming ---
 
     @patch("src.database.models.match.log")
@@ -157,19 +179,13 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(matches), 2)
         self.assertEqual(matches[0].match_id, 1)
         self.assertEqual(matches[0].team1_name, "Team C")
-        expected_query = textwrap.dedent("""
-            SELECT * FROM matches
-            WHERE is_complete = 0
-            ORDER BY match_date, match_time
-            LIMIT ? OFFSET ?
-        """)
         expected_query = """
             SELECT * FROM matches
             WHERE is_complete = 0
             ORDER BY match_date, match_time
             LIMIT ? OFFSET ?
-        """
-        mock_db.fetch_many.assert_called_once_with(expected_query, (10, 0))
+        """.strip()  # Strip leading/trailing whitespace
+        mock_db.fetch_many.assert_called_once_with(expected_query, (10, 0))  # Remove redundant strip() call
         mock_log.info.assert_called_with("Retrieving upcoming matches with limit 10 and offset 0")
 
     @patch("src.database.models.match.log")
@@ -194,11 +210,52 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         mock_db.fetch_many.assert_called_once()
         mock_log.error.assert_called_with("Error retrieving upcoming matches: Fetch many error")
 
+    @patch("src.database.models.match.log")
+    async def test_get_upcoming_json_decode_error(self, mock_log):
+        """Test handling of JSONDecodeError when fetching upcoming matches."""
+        mock_db = AsyncMock()
+        valid_metadata = {"stream": "youtube"}
+        invalid_metadata_json = '{"info": bad json}'
+        mock_db.fetch_many.return_value = [
+            {
+                "match_id": 7, "team1_name": "Team G", "team2_name": "Team H",
+                "match_date": "2025-08-01", "match_time": "16:00:00", "is_complete": False, "result": None,
+                 "team1_id": 70, "team2_id": 80, "region": "KR", "tournament": "LCK Finals", "match_metadata": json.dumps(valid_metadata)
+            },
+            {
+                "match_id": 8, "team1_name": "Team I", "team2_name": "Team J",
+                "match_date": "2025-08-02", "match_time": "19:00:00", "is_complete": False, "result": None,
+                 "team1_id": 90, "team2_id": 100, "region": "KR", "tournament": "LCK Finals", "match_metadata": invalid_metadata_json
+            }
+        ]
+
+        matches = await Match.get_upcoming(mock_db, limit=5)
+
+        self.assertEqual(len(matches), 2)
+        # Check the first match (valid metadata)
+        self.assertEqual(matches[0].match_id, 7)
+        self.assertEqual(matches[0].match_metadata, valid_metadata)
+        # Check the second match (invalid metadata)
+        self.assertEqual(matches[1].match_id, 8)
+        self.assertIsNone(matches[1].match_metadata) # Metadata should be None
+
+        expected_query = """
+            SELECT * FROM matches
+            WHERE is_complete = 0
+            ORDER BY match_date, match_time
+            LIMIT ? OFFSET ?
+        """.strip()
+        mock_db.fetch_many.assert_called_once_with(expected_query, (5, 0))
+        mock_log.warning.assert_called_once_with("Failed to decode metadata for match 8")
+        # Ensure info log for retrieval was also called
+        mock_log.info.assert_any_call("Retrieving upcoming matches with limit 5 and offset 0")
+
+
     # --- Tests for Match.update_result ---
 
     @patch("src.database.models.match.log")
     async def test_update_result_success(self, mock_log):
-        expected_query = textwrap.dedent("UPDATE matches SET result = ?, is_complete = ? WHERE match_id = ?")
+        expected_query = "UPDATE matches SET result = ?, is_complete = ? WHERE match_id = ?"
         mock_db = AsyncMock()
         # Assume execute returns non-None on success for this test case
         mock_db.execute.return_value = 1 # Or some non-None value indicating success

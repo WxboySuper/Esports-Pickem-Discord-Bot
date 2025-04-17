@@ -3,7 +3,6 @@ from typing import Optional, List, Dict, Any
 from src.database.database import Database
 from src.utils.logging_config import configure_logging
 import datetime
-import textwrap
 
 log = configure_logging()
 
@@ -38,11 +37,10 @@ class Match:
                      match_metadata: Optional[Dict[str, Any]] = None) -> Optional['Match']:
         """Create a new match in the database."""
         log.info(f"Creating match: {team1_name} vs {team2_name} on {match_date}")
-        import textwrap
-        query = textwrap.dedent("""
+        query = """
             INSERT INTO matches (team1_id, team1_name, team2_id, team2_name, region, tournament, match_date, match_time, match_metadata)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """)
+        """.strip()  # Strip leading/trailing whitespace
         # Convert metadata dict to JSON string for storage
         metadata_str = json.dumps(match_metadata) if match_metadata else None
         params = (team1_id, team1_name, team2_id, team2_name, region, tournament, match_date, match_time, metadata_str)
@@ -68,9 +66,7 @@ class Match:
             return None
 
         log.info(f"Retrieving match with ID {match_id}")
-        query = textwrap.dedent("""
-            SELECT * FROM matches WHERE match_id = ?
-        """)
+        query = "SELECT * FROM matches WHERE match_id = ?"
         try:
             row = await db.fetch_one(query, (match_id,))
             if row:
@@ -92,14 +88,12 @@ class Match:
     async def get_upcoming(db: Database, limit: int = 100, offset: int = 0) -> List['Match']:
         """Retrieve upcoming (not complete) matches."""
         log.info(f"Retrieving upcoming matches with limit {limit} and offset {offset}")
-        # Assuming match_date and match_time can be combined for ordering
-        # This might need adjustment based on actual date/time format
-        query = textwrap.dedent("""
+        query = """
             SELECT * FROM matches
             WHERE is_complete = 0
             ORDER BY match_date, match_time
             LIMIT ? OFFSET ?
-        """)
+        """.strip()  # Strip leading/trailing whitespace
         try:
             rows = await db.fetch_many(query, (limit, offset))
             matches = []
@@ -129,9 +123,7 @@ class Match:
         # TODO: Implement result validation after teams database is created
 
         log.info(f"Updating result for match ID {match_id} to {result}")
-        query = textwrap.dedent("""
-            UPDATE matches SET result = ?, is_complete = ? WHERE match_id = ?
-        """)
+        query = "UPDATE matches SET result = ?, is_complete = ? WHERE match_id = ?"
         try:
             rows_affected = await db.execute(query, (result, is_complete, match_id))
             if rows_affected == 0 or rows_affected is None:
