@@ -76,7 +76,10 @@ class User:
         try:
             row = await db.fetch_one(query, (user_id,))
             if row:
-                return User(**row)
+                # normalise column names → constructor kwargs
+                row = dict(row)
+                if "id" in row:
+                    row["db_id"] = row.pop("id")
             log.warning(f"No user found with ID {user_id}")
             return None
         except Exception as e:
