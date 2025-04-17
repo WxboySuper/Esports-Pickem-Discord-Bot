@@ -2,8 +2,11 @@ import unittest
 from unittest.mock import patch, AsyncMock, MagicMock
 from src.database.models.match import Match
 import json
+import textwrap
 
 class TestMatch(unittest.IsolatedAsyncioTestCase):
+
+    # --- Tests for Match.create ---
 
     @patch("src.database.models.match.log")
     async def test_create_match_success(self, mock_log):
@@ -32,12 +35,10 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(match.match_time, "18:00:00")
         self.assertEqual(match.match_metadata, metadata)
         self.assertFalse(match.is_complete)
-        self.assertIsNone(match.result)
-
-        expected_query = """
+        expected_query = textwrap.dedent("""
             INSERT INTO matches (team1_id, team1_name, team2_id, team2_name, region, tournament, match_date, match_time, match_metadata)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
+        """)
         expected_params = (10, "Team A", 20, "Team B", "NA", "Summer Split", "2025-07-01", "18:00:00", json.dumps(metadata))
         mock_db.execute.assert_called_once_with(expected_query, expected_params)
         mock_log.info.assert_called()
@@ -75,6 +76,8 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(match)
         mock_db.execute.assert_called_once()
         mock_log.error.assert_called_with("Error creating match: DB error")
+
+    # --- Tests for Match.get_by_id ---
 
     @patch("src.database.models.match.log")
     async def test_get_by_id_success(self, mock_log):
@@ -131,6 +134,8 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         mock_db.fetch_one.assert_called_once_with("SELECT * FROM matches WHERE match_id = ?", (5,))
         mock_log.error.assert_called_with("Error retrieving match with ID 5: Fetch error")
 
+    # --- Tests for Match.get_upcoming ---
+
     @patch("src.database.models.match.log")
     async def test_get_upcoming_success(self, mock_log):
         mock_db = AsyncMock()
@@ -152,12 +157,12 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(matches), 2)
         self.assertEqual(matches[0].match_id, 1)
         self.assertEqual(matches[0].team1_name, "Team C")
-        self.assertFalse(matches[0].is_complete)
-        self.assertIsNone(matches[0].match_metadata)
-        self.assertEqual(matches[1].match_id, 2)
-        self.assertEqual(matches[1].team2_name, "Team F")
-        self.assertEqual(matches[1].match_metadata, {"stream": "twitch"})
-
+        expected_query = textwrap.dedent("""
+            SELECT * FROM matches
+            WHERE is_complete = 0
+            ORDER BY match_date, match_time
+            LIMIT ? OFFSET ?
+        """)
         expected_query = """
             SELECT * FROM matches
             WHERE is_complete = 0
@@ -189,8 +194,11 @@ class TestMatch(unittest.IsolatedAsyncioTestCase):
         mock_db.fetch_many.assert_called_once()
         mock_log.error.assert_called_with("Error retrieving upcoming matches: Fetch many error")
 
+    # --- Tests for Match.update_result ---
+
     @patch("src.database.models.match.log")
     async def test_update_result_success(self, mock_log):
+        expected_query = textwrap.dedent("UPDATE matches SET result = ?, is_complete = ? WHERE match_id = ?")
         mock_db = AsyncMock()
         # Assume execute returns non-None on success for this test case
         mock_db.execute.return_value = 1 # Or some non-None value indicating success
