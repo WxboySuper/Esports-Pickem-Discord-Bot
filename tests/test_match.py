@@ -1,0 +1,237 @@
+import unittest
+from unittest.mock import patch, AsyncMock, MagicMock
+from src.database.models.match import Match
+import json
+
+class TestMatch(unittest.IsolatedAsyncioTestCase):
+
+    @patch("src.database.models.match.log")
+    async def test_create_match_success(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.execute.return_value = 1 # Simulate successful insertion with match ID 1
+        metadata = {"key": "value"}
+
+        match = await Match.create(
+            db=mock_db,
+            team1_id=10, team1_name="Team A",
+            team2_id=20, team2_name="Team B",
+            region="NA", tournament="Summer Split",
+            match_date="2025-07-01", match_time="18:00:00",
+            match_metadata=metadata
+        )
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.match_id, 1)
+        self.assertEqual(match.team1_id, 10)
+        self.assertEqual(match.team1_name, "Team A")
+        self.assertEqual(match.team2_id, 20)
+        self.assertEqual(match.team2_name, "Team B")
+        self.assertEqual(match.region, "NA")
+        self.assertEqual(match.tournament, "Summer Split")
+        self.assertEqual(match.match_date, "2025-07-01")
+        self.assertEqual(match.match_time, "18:00:00")
+        self.assertEqual(match.match_metadata, metadata)
+        self.assertFalse(match.is_complete)
+        self.assertIsNone(match.result)
+
+        expected_query = """
+            INSERT INTO matches (team1_id, team1_name, team2_id, team2_name, region, tournament, match_date, match_time, match_metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        expected_params = (10, "Team A", 20, "Team B", "NA", "Summer Split", "2025-07-01", "18:00:00", json.dumps(metadata))
+        mock_db.execute.assert_called_once_with(expected_query, expected_params)
+        mock_log.info.assert_called()
+
+    @patch("src.database.models.match.log")
+    async def test_create_match_failure(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.execute.return_value = None # Simulate failed insertion
+
+        match = await Match.create(
+            db=mock_db,
+            team1_id=10, team1_name="Team A",
+            team2_id=20, team2_name="Team B",
+            region="NA", tournament="Summer Split",
+            match_date="2025-07-01", match_time="18:00:00"
+        )
+
+        self.assertIsNone(match)
+        mock_db.execute.assert_called_once()
+        mock_log.error.assert_called_with("Failed to create match.")
+
+    @patch("src.database.models.match.log")
+    async def test_create_match_exception(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.execute.side_effect = Exception("DB error")
+
+        match = await Match.create(
+            db=mock_db,
+            team1_id=10, team1_name="Team A",
+            team2_id=20, team2_name="Team B",
+            region="NA", tournament="Summer Split",
+            match_date="2025-07-01", match_time="18:00:00"
+        )
+
+        self.assertIsNone(match)
+        mock_db.execute.assert_called_once()
+        mock_log.error.assert_called_with("Error creating match: DB error")
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_id_success(self, mock_log):
+        mock_db = AsyncMock()
+        metadata = {"info": "extra"}
+        mock_db.fetch_one.return_value = {
+            "match_id": 5,
+            "team1_id": 10, "team1_name": "Team A",
+            "team2_id": 20, "team2_name": "Team B",
+            "region": "NA", "tournament": "Summer Split",
+            "match_date": "2025-07-01", "match_time": "18:00:00",
+            "result": "team1", "is_complete": True,
+            "match_metadata": json.dumps(metadata)
+        }
+
+        match = await Match.get_by_id(mock_db, 5)
+
+        self.assertIsNotNone(match)
+        self.assertEqual(match.match_id, 5)
+        self.assertEqual(match.team1_name, "Team A")
+        self.assertEqual(match.result, "team1")
+        self.assertTrue(match.is_complete)
+        self.assertEqual(match.match_metadata, metadata)
+        mock_db.fetch_one.assert_called_once_with("SELECT * FROM matches WHERE match_id = ?", (5,))
+        mock_log.info.assert_called_with("Retrieving match with ID 5")
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_id_not_found(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.fetch_one.return_value = None
+
+        match = await Match.get_by_id(mock_db, 99)
+
+        self.assertIsNone(match)
+        mock_db.fetch_one.assert_called_once_with("SELECT * FROM matches WHERE match_id = ?", (99,))
+        mock_log.warning.assert_called_with("No match found with ID 99")
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_id_invalid_input(self, mock_log):
+        mock_db = AsyncMock()
+        match = await Match.get_by_id(mock_db, -1)
+        self.assertIsNone(match)
+        mock_log.error.assert_called_with("Invalid match_id provided.")
+        mock_db.fetch_one.assert_not_called()
+
+    @patch("src.database.models.match.log")
+    async def test_get_by_id_exception(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.fetch_one.side_effect = Exception("Fetch error")
+
+        match = await Match.get_by_id(mock_db, 5)
+
+        self.assertIsNone(match)
+        mock_db.fetch_one.assert_called_once_with("SELECT * FROM matches WHERE match_id = ?", (5,))
+        mock_log.error.assert_called_with("Error retrieving match with ID 5: Fetch error")
+
+    @patch("src.database.models.match.log")
+    async def test_get_upcoming_success(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.fetch_many.return_value = [
+            {
+                "match_id": 1, "team1_name": "Team C", "team2_name": "Team D",
+                "match_date": "2025-07-02", "match_time": "15:00:00", "is_complete": False, "result": None,
+                 "team1_id": 30, "team2_id": 40, "region": "EU", "tournament": "Playoffs", "match_metadata": None
+            },
+            {
+                "match_id": 2, "team1_name": "Team E", "team2_name": "Team F",
+                "match_date": "2025-07-02", "match_time": "18:00:00", "is_complete": False, "result": None,
+                 "team1_id": 50, "team2_id": 60, "region": "EU", "tournament": "Playoffs", "match_metadata": json.dumps({"stream": "twitch"})
+            }
+        ]
+
+        matches = await Match.get_upcoming(mock_db, limit=10, offset=0)
+
+        self.assertEqual(len(matches), 2)
+        self.assertEqual(matches[0].match_id, 1)
+        self.assertEqual(matches[0].team1_name, "Team C")
+        self.assertFalse(matches[0].is_complete)
+        self.assertIsNone(matches[0].match_metadata)
+        self.assertEqual(matches[1].match_id, 2)
+        self.assertEqual(matches[1].team2_name, "Team F")
+        self.assertEqual(matches[1].match_metadata, {"stream": "twitch"})
+
+        expected_query = """
+            SELECT * FROM matches
+            WHERE is_complete = 0
+            ORDER BY match_date, match_time
+            LIMIT ? OFFSET ?
+        """
+        mock_db.fetch_many.assert_called_once_with(expected_query, (10, 0))
+        mock_log.info.assert_called_with("Retrieving upcoming matches with limit 10 and offset 0")
+
+    @patch("src.database.models.match.log")
+    async def test_get_upcoming_empty(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.fetch_many.return_value = []
+
+        matches = await Match.get_upcoming(mock_db)
+
+        self.assertEqual(len(matches), 0)
+        mock_db.fetch_many.assert_called_once()
+        mock_log.info.assert_called_with("No upcoming matches found.")
+
+    @patch("src.database.models.match.log")
+    async def test_get_upcoming_exception(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.fetch_many.side_effect = Exception("Fetch many error")
+
+        matches = await Match.get_upcoming(mock_db)
+
+        self.assertEqual(len(matches), 0)
+        mock_db.fetch_many.assert_called_once()
+        mock_log.error.assert_called_with("Error retrieving upcoming matches: Fetch many error")
+
+    @patch("src.database.models.match.log")
+    async def test_update_result_success(self, mock_log):
+        mock_db = AsyncMock()
+        # Assume execute returns non-None on success for this test case
+        mock_db.execute.return_value = 1 # Or some non-None value indicating success
+
+        success = await Match.update_result(mock_db, match_id=15, result="team2", is_complete=True)
+
+        self.assertTrue(success)
+        expected_query = "UPDATE matches SET result = ?, is_complete = ? WHERE match_id = ?"
+        mock_db.execute.assert_called_once_with(expected_query, ("team2", True, 15))
+        mock_log.info.assert_called_with("Match 15 result updated successfully.")
+
+    @patch("src.database.models.match.log")
+    async def test_update_result_not_found_or_fail(self, mock_log):
+        mock_db = AsyncMock()
+        # Simulate execute failing or finding no rows (returning None)
+        mock_db.execute.return_value = None
+
+        success = await Match.update_result(mock_db, match_id=16, result="draw")
+
+        self.assertFalse(success)
+        expected_query = "UPDATE matches SET result = ?, is_complete = ? WHERE match_id = ?"
+        mock_db.execute.assert_called_once_with(expected_query, ("draw", True, 16))
+        mock_log.warning.assert_called_with("No rows affected. Match 16 may not exist or update failed.")
+
+    @patch("src.database.models.match.log")
+    async def test_update_result_invalid_id(self, mock_log):
+        mock_db = AsyncMock()
+        success = await Match.update_result(mock_db, match_id=-5, result="team1")
+        self.assertFalse(success)
+        mock_log.error.assert_called_with("Invalid match_id provided for update.")
+        mock_db.execute.assert_not_called()
+
+    @patch("src.database.models.match.log")
+    async def test_update_result_exception(self, mock_log):
+        mock_db = AsyncMock()
+        mock_db.execute.side_effect = Exception("Update error")
+
+        success = await Match.update_result(mock_db, match_id=17, result="team1")
+
+        self.assertFalse(success)
+        expected_query = "UPDATE matches SET result = ?, is_complete = ? WHERE match_id = ?"
+        mock_db.execute.assert_called_once_with(expected_query, ("team1", True, 17))
+        mock_log.error.assert_called_with("Error updating result for match 17: Update error")
+
