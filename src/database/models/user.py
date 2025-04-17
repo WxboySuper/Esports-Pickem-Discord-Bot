@@ -94,7 +94,14 @@ class User:
 
         Returns:
             A User instance if found, None otherwise.
+
+        Raises:
+            ValueError: If the discord_user_id is invalid (e.g., non-positive).
         """
+        if discord_user_id <= 0:
+            log.error("Invalid discord_user_id provided.")
+            raise ValueError("Invalid discord_user_id provided. Must be a positive integer.")
+
         log.info(f"Retrieving user with Discord user ID {discord_user_id}")
         query = "SELECT * FROM users WHERE discord_user_id = ?"
         try:
@@ -105,7 +112,7 @@ class User:
             return None
         except Exception as e:
             log.error(f"Error retrieving user with Discord user ID {discord_user_id}: {str(e)}")
-            return None
+            raise e  # Re-raise the exception for further handling
 
     @staticmethod
     async def get_all(db: Database, limit: int = 100, offset: int = 0) -> List['User']:
@@ -122,10 +129,10 @@ class User:
         query = "SELECT * FROM users LIMIT ? OFFSET ?"
         try:
             rows = await db.fetch_many(query, (limit, offset))
-            if rows:
-                return [User(**row) for row in rows]
-            log.warning("No users found in the database")
-            return []
+            if not rows:
+                log.warning("No users found in the database")
+                return []
+            return [User(**row) for row in rows]
         except Exception as e:
             log.error(f"Error retrieving all users from the database: {str(e)}")
             return []

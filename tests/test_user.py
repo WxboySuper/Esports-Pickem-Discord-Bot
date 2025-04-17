@@ -117,6 +117,22 @@ class TestUser(unittest.IsolatedAsyncioTestCase):
         mock_db.fetch_one.assert_called_once_with("SELECT * FROM users WHERE discord_user_id = ?", (12345,))
         mock_log.info.assert_called_with("Retrieving user with Discord user ID 12345")
 
+    async def test_get_by_discord_user_id_invalid_input(self):
+        mock_db = AsyncMock()
+
+        with self.assertRaises(ValueError) as context:
+            await User.get_by_discord_user_id(mock_db, -1)
+        self.assertEqual(str(context.exception), "Invalid discord_user_id provided. Must be a positive integer.")
+
+    async def test_get_by_discord_user_id_exception(self):
+        mock_db = AsyncMock()
+        mock_db.fetch_one.side_effect = Exception("Database error")
+
+        with self.assertRaises(Exception) as context:
+            await User.get_by_discord_user_id(mock_db, 12345)
+        self.assertEqual(str(context.exception), "Database error")
+        mock_db.fetch_one.assert_called_once_with("SELECT * FROM users WHERE discord_user_id = ?", (12345,))
+
     @patch("src.database.models.user.log")
     async def test_get_all_users_success(self, mock_log):
         mock_db = AsyncMock()
@@ -160,13 +176,14 @@ class TestUser(unittest.IsolatedAsyncioTestCase):
     @patch("src.database.models.user.log")
     async def test_get_all_users_empty(self, mock_log):
         mock_db = AsyncMock()
-        mock_db.fetch_all.return_value = []
+        mock_db.fetch_many.return_value = []
 
         users = await User.get_all(mock_db)
 
         self.assertEqual(len(users), 0)
         mock_db.fetch_many.assert_called_once_with('SELECT * FROM users LIMIT ? OFFSET ?', (100, 0))
         mock_log.info.assert_called_with('Retrieving all users from the database with limit 100 and offset 0')
+        mock_log.warning.assert_called_with('No users found in the database')
 
     @patch("src.database.models.user.log")
     async def test_create_user_invalid_input(self, mock_log):
