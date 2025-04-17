@@ -6,6 +6,7 @@ import datetime
 
 log = configure_logging()
 
+
 class Match:
     """
     Interface for match-related database operations.
@@ -25,11 +26,11 @@ class Match:
         self.team2_name = team2_name
         self.region = region
         self.tournament = tournament
-        self.match_date = match_date # Store as ISO format string or date object? Let's use string for now.
-        self.match_time = match_time # Store as ISO format string or time object? Let's use string for now.
-        self.result = result # e.g., 'team1', 'team2', 'draw'
+        self.match_date = match_date  # Store as ISO format string or date object? Let's use string for now.
+        self.match_time = match_time  # Store as ISO format string or time object? Let's use string for now.
+        self.result = result  # e.g., 'team1', 'team2', 'draw'
         self.is_complete = is_complete
-        self.match_metadata = match_metadata # Store as JSON string in DB, dict here
+        self.match_metadata = match_metadata  # Store as JSON string in DB, dict here
 
     @staticmethod
     async def create(db: Database, team1_id: int, team1_name: str, team2_id: int, team2_name: str,
@@ -76,7 +77,7 @@ class Match:
                         row['match_metadata'] = json.loads(row['match_metadata'])
                     except json.JSONDecodeError:
                         log.warning(f"Failed to decode metadata for match {match_id}")
-                        row['match_metadata'] = None # Or handle differently
+                        row['match_metadata'] = None  # Or handle differently
                 return Match(**row)
             log.warning(f"No match found with ID {match_id}")
             return None
@@ -98,7 +99,7 @@ class Match:
             rows = await db.fetch_many(query, (limit, offset))
             matches = []
             for row in rows:
-                 # Convert metadata JSON string back to dict
+                # Convert metadata JSON string back to dict
                 if row.get('match_metadata'):
                     try:
                         row['match_metadata'] = json.loads(row['match_metadata'])
