@@ -2,7 +2,6 @@ import json
 from typing import Optional, List, Dict, Any
 from src.database.database import Database
 from src.utils.logging_config import configure_logging
-import datetime
 
 log = configure_logging()
 
