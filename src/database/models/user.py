@@ -76,10 +76,12 @@ class User:
         try:
             row = await db.fetch_one(query, (user_id,))
             if row:
-                # normalise column names → constructor kwargs
-                row = dict(row)
-                if "id" in row:
-                    row["db_id"] = row.pop("id")
+                # Map 'id' from row to 'db_id' for the constructor
+                user_data = dict(row)
+                user_data['db_id'] = user_data.pop('id')
+                return User(**user_data)  # Return the User instance here
+
+            # This part is reached only if row is None
             log.warning(f"No user found with ID {user_id}")
             return None
         except Exception as e:
@@ -103,14 +105,17 @@ class User:
         """
         if discord_user_id <= 0:
             log.error("Invalid discord_user_id provided.")
-            raise ValueError("Invalid discord_user_id provided. Must be a positive integer.")
+            return None # Return None instead of raising ValueError
 
         log.info(f"Retrieving user with Discord user ID {discord_user_id}")
         query = "SELECT * FROM users WHERE discord_user_id = ?"
         try:
             row = await db.fetch_one(query, (discord_user_id,))
             if row:
-                return User(**row)
+                # Map 'id' from row to 'db_id' for the constructor
+                user_data = dict(row)
+                user_data['db_id'] = user_data.pop('id')
+                return User(**user_data)
             log.warning(f"No user found with Discord user ID {discord_user_id}")
             return None
         except Exception as e:
@@ -135,7 +140,13 @@ class User:
             if not rows:
                 log.warning("No users found in the database")
                 return []
-            return [User(**row) for row in rows]
+            # Map 'id' from rows to 'db_id' for the constructor
+            user_list = []
+            for row in rows:
+                user_data = dict(row)
+                user_data['db_id'] = user_data.pop('id')
+                user_list.append(User(**user_data))
+            return user_list
         except Exception as e:
             log.error(f"Error retrieving all users from the database: {str(e)}")
             return []
