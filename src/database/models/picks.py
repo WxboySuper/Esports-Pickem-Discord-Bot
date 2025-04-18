@@ -39,7 +39,7 @@ class Pick:
         self.pick_timestamp = pick_timestamp if isinstance(pick_timestamp, datetime) else None
         self.is_correct = is_correct
         self.points_earned = points_earned
-    
+
     @staticmethod
     async def create(db: Database, user_id: int, match_id: int, pick_selection: str) -> 'Pick':
         """
@@ -89,10 +89,10 @@ class Pick:
                 log.info(f"Pick successfully created with ID {pick_id}")
                 return Pick(pick_id=pick_id, user_id=user_id, match_id=match_id,
                             pick_selection=pick_selection, pick_timestamp=current_time)
-            else:
-                # This case might indicate an issue with db.execute returning a non-ID value on success
-                log.error(f"Failed to create pick for user {user_id} on match {match_id} - no ID returned.")
-                raise RuntimeError(f"Failed to create pick for user {user_id} on match {match_id} - no ID returned.")
+
+            # This case might indicate an issue with db.execute returning a non-ID value on success
+            log.error(f"Failed to create pick for user {user_id} on match {match_id} - no ID returned.")
+            raise RuntimeError(f"Failed to create pick for user {user_id} on match {match_id} - no ID returned.")
         except Exception as e:
             log.error(f"Database error creating pick for user {user_id} on match {match_id}: {str(e)}")
             # Re-raise as a runtime error to be caught upstream
