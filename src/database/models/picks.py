@@ -315,3 +315,53 @@ class Pick:
         except Exception as e:
             log.error(f"Error retrieving all picks: {str(e)}")
             raise RuntimeError(f"Error retrieving all picks: {str(e)}") from e
+
+    @staticmethod
+    async def update(db: Database, pick_id: int, is_correct: Optional[bool] = None,
+                     points_earned: Optional[int] = None) -> Optional['Pick']:
+        """
+        Update a pick in the database.
+
+        Args:
+            db (Database): Database instance to use for the query.
+            pick_id (int): The ID of the pick to update.
+            is_correct (Optional[bool]): Indicates if the prediction was correct.
+            points_earned (Optional[int]): Points awarded for a correct prediction.
+
+        Returns:
+            Pick: The updated Pick instance if successful, None otherwise.
+
+        Raises:
+            ValueError: If pick_id is invalid (<= 0).
+            RuntimeError: If there's an error during database update or retrieval.
+        """
+        log.debug("Validating pick_id for update")
+
+        if pick_id <= 0:
+            log.error("Invalid pick_id provided.")
+            raise ValueError("Invalid pick_id provided.")
+
+        # Validate pick existence
+        existing_pick = await Pick.get_by_id(db, pick_id)
+        if not existing_pick:
+            log.error(f"Pick with ID {pick_id} does not exist.")
+            raise ValueError(f"Pick with ID {pick_id} does not exist.")
+
+        log.info(f"Updating pick with ID {pick_id}")
+        query = """
+            UPDATE Picks
+            SET is_correct = ?, points_earned = ?
+            WHERE pick_id = ?
+        """
+        try:
+            await db.execute(query, (is_correct, points_earned, pick_id))
+            updated_pick = await Pick.get_by_id(db, pick_id)
+            if updated_pick:
+                log.info(f"Pick with ID {pick_id} updated successfully.")
+                return updated_pick
+
+            log.warning(f"Failed to retrieve updated pick with ID {pick_id}")
+            return None
+        except Exception as e:
+            log.error(f"Error updating pick with ID {pick_id}: {str(e)}")
+            raise RuntimeError(f"Error updating pick: {str(e)}") from e
