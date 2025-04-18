@@ -105,7 +105,7 @@ class User:
         """
         if discord_user_id <= 0:
             log.error("Invalid discord_user_id provided.")
-            return None # Return None instead of raising ValueError
+            return None  # Return None instead of raising ValueError
 
         log.info(f"Retrieving user with Discord user ID {discord_user_id}")
         query = "SELECT * FROM users WHERE discord_user_id = ?"
