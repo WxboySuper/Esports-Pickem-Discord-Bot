@@ -120,6 +120,7 @@ class Match:
             log.error("Invalid match_id provided for update.")
             return False
 
+        # skipcq: W0511
         # TODO: Implement result validation after teams database is created
 
         log.info(f"Updating result for match ID {match_id} to {result}")
