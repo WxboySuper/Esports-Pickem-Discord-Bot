@@ -60,6 +60,8 @@ class Pick:
             ValueError: If the specified match_id does not exist.
             RuntimeError: If there's an error during database insertion or if the pick_id is not returned.
         """
+        log.debug("Validating user and match existence for pick creation")
+
         if user_id <= 0 or match_id <= 0:
             log.error("Invalid user_id or match_id provided.")
             raise ValueError("Invalid user_id or match_id provided.")
@@ -112,6 +114,8 @@ class Pick:
             ValueError: If pick_id is invalid (<= 0).
             RuntimeError: If there's an error during database retrieval.
         """
+        log.debug("Validating pick_id for retrieval")
+
         if pick_id <= 0:
             log.error("Invalid pick_id provided.")
             raise ValueError("Invalid pick_id provided.")
@@ -152,6 +156,8 @@ class Pick:
             ValueError: If user_id is invalid (<= 0).
             RuntimeError: If there's an error during database retrieval.
         """
+        log.debug("Validating user_id for pick retrieval")
+
         if user_id <= 0:
             log.error("Invalid user_id provided.")
             raise ValueError("Invalid user_id provided.")
@@ -196,6 +202,8 @@ class Pick:
             ValueError: If match_id is invalid (<= 0).
             RuntimeError: If there's an error during database retrieval.
         """
+        log.debug("Validating match_id for pick retrieval")
+
         if match_id <= 0:
             log.error("Invalid match_id provided.")
             raise ValueError("Invalid match_id provided.")
@@ -241,6 +249,8 @@ class Pick:
             ValueError: If user_id or match_id are invalid (<= 0) or, if the user or match does not exist.
             RuntimeError: If there's an error during database retrieval.
         """
+        log.debug("Validating user_id and match_id for pick retrieval")
+
         if user_id <= 0 or match_id <= 0:
             log.error("Invalid user_id or match_id provided.")
             raise ValueError("Invalid user_id or match_id provided.")
