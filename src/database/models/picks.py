@@ -95,3 +95,44 @@ class Pick:
             log.error(f"Database error creating pick for user {user_id} on match {match_id}: {str(e)}")
             # Re-raise as a runtime error to be caught upstream
             raise RuntimeError(f"Database error creating pick: {str(e)}") from e
+
+    @staticmethod
+    async def get_by_id(db: Database, pick_id: int) -> Optional['Pick']:
+        """
+        Retrieve a pick by its ID.
+
+        Args:
+            db (Database): Database instance to use for the query.
+            pick_id (int): The ID of the pick to retrieve.
+
+        Returns:
+            Pick: A Pick instance if found, None otherwise.
+
+        Raises:
+            ValueError: If pick_id is invalid (<= 0).
+            RuntimeError: If there's an error during database retrieval.
+        """
+        if pick_id <= 0:
+            log.error("Invalid pick_id provided.")
+            raise ValueError("Invalid pick_id provided.")
+
+        log.info(f"Retrieving pick with ID: {pick_id}")
+        query = """
+            SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
+            FROM Picks
+            WHERE pick_id = ?
+        """
+        try:
+            row = await db.fetch_one(query, (pick_id,))
+            if row:
+                log.info(f"Pick with ID {pick_id} retrieved successfully.")
+                pick_data = dict(row)
+                pick_data['pick_id'] = pick_data.pop('pick_id')
+                return Pick(**pick_data)  # Return the Pick instance here
+
+            log.warning(f"No pick found with ID {pick_id}")
+            return None
+        except Exception as e:
+            log.error(f"Error retrieving pick with ID {pick_id}: {str(e)}")
+            raise RuntimeError(f"Error retrieving pick: {str(e)}") from e
+
