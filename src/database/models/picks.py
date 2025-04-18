@@ -2,7 +2,7 @@ from src.database.database import Database
 from src.utils.logging_config import configure_logging
 from src.database.models.user import User
 from src.database.models.match import Match
-from typing import Optional
+from typing import Optional, List
 from datetime import timezone, datetime
 
 log = configure_logging()
@@ -136,3 +136,46 @@ class Pick:
             log.error(f"Error retrieving pick with ID {pick_id}: {str(e)}")
             raise RuntimeError(f"Error retrieving pick: {str(e)}") from e
 
+    @staticmethod
+    async def get_by_user_id(db: Database, user_id: int) -> List['Pick']:
+        """
+        Retrieve all picks made by a user.
+
+        Args:
+            db (Database): Database instance to use for the query.
+            user_id (int): The ID of the user whose picks to retrieve.
+
+        Returns:
+            List[Pick]: A list of Pick instances if found, empty list otherwise.
+
+        Raises:
+            ValueError: If user_id is invalid (<= 0).
+            RuntimeError: If there's an error during database retrieval.
+        """
+        if user_id <= 0:
+            log.error("Invalid user_id provided.")
+            raise ValueError("Invalid user_id provided.")
+
+        # Validate user_id existence
+        user = await User.get_by_id(db, user_id)
+        if not user:
+            log.error(f"User with ID {user_id} does not exist.")
+            raise ValueError(f"User with ID {user_id} does not exist.")
+
+        log.info(f"Retrieving picks for user with ID: {user_id}")
+        query = """
+            SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
+            FROM Picks
+            WHERE user_id = ?
+        """
+        try:
+            rows = await db.fetch_all(query, (user_id,))
+            if rows:
+                log.info(f"Picks for user {user_id} retrieved successfully.")
+                return [Pick(**dict(row)) for row in rows]  # Return a list of Pick instances
+
+            log.warning(f"No picks found for user with ID {user_id}")
+            return []
+        except Exception as e:
+            log.error(f"Error retrieving picks for user with ID {user_id}: {str(e)}")
+            raise RuntimeError(f"Error retrieving picks: {str(e)}") from e
