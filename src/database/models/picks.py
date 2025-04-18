@@ -179,3 +179,47 @@ class Pick:
         except Exception as e:
             log.error(f"Error retrieving picks for user with ID {user_id}: {str(e)}")
             raise RuntimeError(f"Error retrieving picks: {str(e)}") from e
+
+    @staticmethod
+    async def get_by_match_id(db: Database, match_id: int) -> List['Pick']:
+        """
+        Retrieve all picks made for a specific match.
+
+        Args:
+            db (Database): Database instance to use for the query.
+            match_id (int): The ID of the match whose picks to retrieve.
+
+        Returns:
+            List[Pick]: A list of Pick instances if found, empty list otherwise.
+
+        Raises:
+            ValueError: If match_id is invalid (<= 0).
+            RuntimeError: If there's an error during database retrieval.
+        """
+        if match_id <= 0:
+            log.error("Invalid match_id provided.")
+            raise ValueError("Invalid match_id provided.")
+
+        # Validate match_id existence
+        match = await Match.get_by_id(db, match_id)
+        if not match:
+            log.error(f"Match with ID {match_id} does not exist.")
+            raise ValueError(f"Match with ID {match_id} does not exist.")
+
+        log.info(f"Retrieving picks for match with ID: {match_id}")
+        query = """
+            SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
+            FROM Picks
+            WHERE match_id = ?
+        """
+        try:
+            rows = await db.fetch_all(query, (match_id,))
+            if rows:
+                log.info(f"Picks for match {match_id} retrieved successfully.")
+                return [Pick(**dict(row)) for row in rows]  # Return a list of Pick instances
+
+            log.warning(f"No picks found for match with ID {match_id}")
+            return []
+        except Exception as e:
+            log.error(f"Error retrieving picks for match with ID {match_id}: {str(e)}")
+            raise RuntimeError(f"Error retrieving picks: {str(e)}") from e
