@@ -309,7 +309,7 @@ class Pick:
         try:
             rows = await db.fetch_all(query, (limit, offset))
             if rows:
-                log.info(f"All picks retrieved successfully.")
+                log.info("All picks retrieved successfully.")
                 return [Pick(**dict(row)) for row in rows]  # Return a list of Pick instances
 
             log.warning("No picks found in the database")
