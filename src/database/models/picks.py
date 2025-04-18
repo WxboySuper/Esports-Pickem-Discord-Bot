@@ -130,9 +130,7 @@ class Pick:
             row = await db.fetch_one(query, (pick_id,))
             if row:
                 log.info(f"Pick with ID {pick_id} retrieved successfully.")
-                pick_data = dict(row)
-                pick_data['pick_id'] = pick_data.pop('pick_id')
-                return Pick(**pick_data)  # Return the Pick instance here
+                return Pick(**dict(row))  # Return the Pick instance here
 
             log.warning(f"No pick found with ID {pick_id}")
             return None
