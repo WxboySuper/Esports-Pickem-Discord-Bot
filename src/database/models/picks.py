@@ -273,3 +273,37 @@ class Pick:
         except Exception as e:
             log.error(f"Error retrieving pick for user {user_id} on match {match_id}: {str(e)}")
             raise RuntimeError(f"Error retrieving pick: {str(e)}") from e
+
+    @staticmethod
+    async def get_all(db: Database, limit: int = 100, offset: int = 0) -> List['Pick']:
+        """
+        Retrieve all picks from the database.
+
+        Args:
+            db (Database): Database instance to use for the query.
+            limit (int): Maximum number of picks to retrieve.
+            offset (int): Number of picks to skip before starting to collect the result set.
+
+        Returns:
+            List[Pick]: A list of Pick instances if found, empty list otherwise.
+
+        Raises:
+            RuntimeError: If there's an error during database retrieval.
+        """
+        log.info(f"Retrieving all picks with limit {limit} and offset {offset}")
+        query = """
+            SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
+            FROM Picks
+            LIMIT ? OFFSET ?
+        """
+        try:
+            rows = await db.fetch_all(query, (limit, offset))
+            if rows:
+                log.info(f"All picks retrieved successfully.")
+                return [Pick(**dict(row)) for row in rows]  # Return a list of Pick instances
+
+            log.warning("No picks found in the database")
+            return []
+        except Exception as e:
+            log.error(f"Error retrieving all picks: {str(e)}")
+            raise RuntimeError(f"Error retrieving all picks: {str(e)}") from e
