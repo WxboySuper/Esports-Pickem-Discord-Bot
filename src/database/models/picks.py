@@ -81,21 +81,26 @@ class Pick:
         query = """
             INSERT INTO Picks (user_id, match_id, pick_selection, pick_timestamp)
             VALUES (?, ?, ?, ?)
-        """
+        """.strip()
         current_time = datetime.now(timezone.utc)
+        
         try:
             pick_id = await db.execute(query, (user_id, match_id, pick_selection, current_time))
             if pick_id is not None:
                 log.info(f"Pick successfully created with ID {pick_id}")
                 return Pick(pick_id=pick_id, user_id=user_id, match_id=match_id,
-                            pick_selection=pick_selection, pick_timestamp=current_time)
+                          pick_selection=pick_selection, pick_timestamp=current_time)
 
-            # This case might indicate an issue with db.execute returning a non-ID value on success
-            log.error(f"Failed to create pick for user {user_id} on match {match_id} - no ID returned.")
-            raise RuntimeError(f"Failed to create pick for user {user_id} on match {match_id} - no ID returned.")
+            # This case indicates db.execute returned None instead of an ID
+            error_msg = f"Failed to create pick for user {user_id} on match {match_id} - no ID returned."
+            log.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        except RuntimeError:
+            raise  # Re-raise RuntimeError without modification
         except Exception as e:
-            log.error(f"Database error creating pick for user {user_id} on match {match_id}: {str(e)}")
-            # Re-raise as a runtime error to be caught upstream
+            error_msg = f"Database error creating pick for user {user_id} on match {match_id}: {str(e)}"
+            log.error(error_msg)
             raise RuntimeError(f"Database error creating pick: {str(e)}") from e
 
     @staticmethod
