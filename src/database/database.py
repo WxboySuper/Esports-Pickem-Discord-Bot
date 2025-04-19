@@ -164,6 +164,14 @@ class Database:
                         await self._migration_2(conn)
                         await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
                         log.info("Upgraded database to version 2.")
+                        current_version = 2 # Update current version after migration
+
+                    # Apply migration 3 if needed
+                    if current_version < 3:
+                        log.info("Applying migration to version 3...")
+                        await self._migration_3(conn)
+                        await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (3,))
+                        log.info("Upgraded database to version 3.")
                     else:
                         log.info("Database is up to date. No migrations needed.")
 
@@ -185,7 +193,8 @@ class Database:
     # Include Migrations here when needed
     @staticmethod
     async def _migration_2(conn: _create_connection):
-        """Migration 2: Update the users table to include discord_guild_id and rename discord_id to discord_user_id."""
+        """Migration 2: Update the users table to include discord_guild_id and
+        rename discord_id to discord_user_id."""
         log.info("Starting migration to version 2...")
 
         # Rename the existing table to a temporary name
@@ -218,6 +227,32 @@ class Database:
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_users_discord_guild_id ON users (discord_guild_id)")
 
         log.info("Migration to version 2 completed.")
+
+    @staticmethod
+    async def _migration_3(conn: _create_connection):
+        """Migration 3: Add the Picks table."""
+        log.info("Starting migration to version 3...")
+
+        # Create the Picks table
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS Picks (
+                pick_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                match_id INTEGER NOT NULL,
+                pick_selection TEXT NOT NULL,
+                pick_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                is_correct BOOLEAN,
+                points_earned INTEGER,
+                FOREIGN KEY(user_id) REFERENCES users(id),
+                FOREIGN KEY(match_id) REFERENCES Matches(match_id)
+            )
+        """)
+
+        # Create indexes for the Picks table
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_picks_user_id ON Picks(user_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_picks_match_id ON Picks(match_id)")
+
+        log.info("Migration to version 3 completed.")
 
     async def close_all_connections(self) -> None:
         """
