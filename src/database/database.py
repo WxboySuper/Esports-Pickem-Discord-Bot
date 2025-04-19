@@ -146,7 +146,7 @@ class Database:
                         log.info(f"Loaded schema from {self.schema_path}")
                     else:
                         log.warning(f"Schema file not found: {self.schema_path}")
-                        return False                    # Insert latest schema version
+                        return False  # Abort initialization due to missing schema file
                     await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (3,))
                     log.info("Database initialized with schema version 3.")
                 else:
