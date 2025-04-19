@@ -2,7 +2,7 @@ from src.database.database import Database
 from src.utils.logging_config import configure_logging
 from src.database.models.user import User
 from src.database.models.match import Match
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import timezone, datetime
 
 log = configure_logging()
@@ -317,16 +317,20 @@ class Pick:
             raise RuntimeError(f"Error retrieving all picks: {str(e)}") from e
 
     @staticmethod
-    async def update(db: Database, pick_id: int, is_correct: Optional[bool] = None,
-                     points_earned: Optional[int] = None) -> Optional['Pick']:
+    async def update(update_mode: Literal['pick', 'result'], db: Database, pick_id: int, is_correct: Optional[bool] = None,
+                     points_earned: Optional[int] = None, pick_selection: Optional[str] = None,
+                     pick_timestamp: Optional[datetime] = None) -> Optional['Pick']:
         """
         Update a pick in the database.
 
         Args:
+            update_mode (str): Mode of update to perform, e.g., 'pick' and 'result'.
             db (Database): Database instance to use for the query.
             pick_id (int): The ID of the pick to update.
             is_correct (Optional[bool]): Indicates if the prediction was correct.
             points_earned (Optional[int]): Points awarded for a correct prediction.
+            pick_selection (Optional[str]): The selection made by the user.
+            pick_timestamp (Optional[datetime]): The timestamp of the pick.
 
         Returns:
             Pick: The updated Pick instance if successful, None otherwise.
@@ -347,21 +351,36 @@ class Pick:
             log.error(f"Pick with ID {pick_id} does not exist.")
             raise ValueError(f"Pick with ID {pick_id} does not exist.")
 
-        log.info(f"Updating pick with ID {pick_id}")
-        query = """
-            UPDATE Picks
-            SET is_correct = ?, points_earned = ?
-            WHERE pick_id = ?
-        """
-        try:
-            await db.execute(query, (is_correct, points_earned, pick_id))
-            updated_pick = await Pick.get_by_id(db, pick_id)
-            if updated_pick:
-                log.info(f"Pick with ID {pick_id} updated successfully.")
-                return updated_pick
+        log.info(f"{update_mode.capitalize()} update for pick with ID: {pick_id}")
 
-            log.warning(f"Failed to retrieve updated pick with ID {pick_id}")
-            return None
-        except Exception as e:
-            log.error(f"Error updating pick with ID {pick_id}: {str(e)}")
-            raise RuntimeError(f"Error updating pick: {str(e)}") from e
+        if update_mode == 'pick':
+            query = """
+                UPDATE Picks
+                SET pick_selection = ?, pick_timestamp = ?
+                WHERE pick_id = ?
+            """
+            try:
+                await db.execute(query, (pick_selection, pick_timestamp, pick_id))
+                log.info(f"Pick with ID {pick_id} updated successfully.")
+                return await Pick.get_by_id(db, pick_id)  # Return the updated Pick instance
+
+            except Exception as e:
+                log.error(f"Error updating pick with ID {pick_id}: {str(e)}")
+                raise RuntimeError(f"Error updating pick: {str(e)}") from e
+        elif update_mode == 'result':
+            query = """
+                UPDATE Picks
+                SET is_correct = ?, points_earned = ?
+                WHERE pick_id = ?
+            """
+            try:
+                await db.execute(query, (is_correct, points_earned, pick_id))
+                log.info(f"Result for pick with ID {pick_id} updated successfully.")
+                return await Pick.get_by_id(db, pick_id)  # Return the updated Pick instance
+
+            except Exception as e:
+                log.error(f"Error updating result for pick with ID {pick_id}: {str(e)}")
+                raise RuntimeError(f"Error updating result: {str(e)}") from e
+        else:
+            log.error(f"Invalid update mode: {update_mode}. Must be 'pick' or 'result'.")
+            raise ValueError(f"Invalid update mode: {update_mode}. Must be 'pick' or 'result'.")
