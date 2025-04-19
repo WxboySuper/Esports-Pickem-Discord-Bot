@@ -135,16 +135,15 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
         try:
             cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
             row = await cursor.fetchone()
-
             self.assertIsNotNone(row, "Schema version table is empty or not created.")
-            self.assertEqual(row["version"], 2)
+            self.assertEqual(row["version"], 3)
         finally:
             await conn.close()
 
     async def create_version_1_schema(self):
         """Helper method to create the version 1 schema"""
         async with aiosqlite.connect(self.test_db_path) as conn:
-            await conn.executescript("""
+            await conn.executescript(""" 
                 PRAGMA foreign_keys = ON;
 
                 CREATE TABLE IF NOT EXISTS users (
@@ -170,36 +169,68 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
             """)
             await conn.commit()
 
-    async def test_migration_1_to_2(self):
-        # Create the version 1 schema
-        await self.create_version_1_schema()
+    async def create_version_2_schema(self):
+        """Helper method to create the version 2 schema"""
+        async with aiosqlite.connect(self.test_db_path) as conn:
+            await conn.executescript("""
+                PRAGMA foreign_keys = ON;
 
-        # Run the database initialization (This should include the migration)
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    discord_user_id INTEGER NOT NULL UNIQUE,
+                    discord_guild_id INTEGER NOT NULL DEFAULT 0,
+                    username TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_active TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CHECK (discord_user_id > 0)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_users_discord_user_id ON users(discord_user_id);
+                CREATE INDEX IF NOT EXISTS idx_users_discord_guild_id ON users(discord_guild_id);
+
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                INSERT INTO schema_version (version) VALUES (2);
+
+                INSERT INTO users (discord_user_id, discord_guild_id, username, created_at, last_active)
+                VALUES (12345, 67890, 'TestUser', '2025-03-01 12:00:00', '2025-03-01 12:00:00');
+            """)
+            await conn.commit()
+
+    async def test_migration_2_to_3(self):
+        """Test migration from schema version 2 to version 3"""
+        # Create a version 2 database
+        await self.create_version_2_schema()
+
+        # Run the database initialization (This should apply migration to version 3)
         success = await self.db.initialize()
         self.assertTrue(success)
 
-        # Verify the schema version is updated to 2
+        # Verify the schema version is updated to 3
         async with aiosqlite.connect(self.test_db_path) as conn:
             cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
             row = await cursor.fetchone()
-            self.assertEqual(row[0], 2)
+            self.assertEqual(row[0], 3)
 
-            # Verify the new schema
-            cursor = await conn.execute("PRAGMA table_info(users)")
-            columns = [col[1] for col in await cursor.fetchall()]
-            self.assertIn("discord_user_id", columns)
-            self.assertIn("discord_guild_id", columns)
+            # Verify the Picks table was created
+            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Picks'")
+            table = await cursor.fetchone()
+            self.assertIsNotNone(table)
+            
+            # Check that indexes were created
+            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_picks_user_id'")
+            idx1 = await cursor.fetchone()
+            self.assertIsNotNone(idx1)
+            
+            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_picks_match_id'")
+            idx2 = await cursor.fetchone()
+            self.assertIsNotNone(idx2)
 
-            # Verify the migrated data
-            cursor = await conn.execute("SELECT * FROM users WHERE discord_user_id = 12345")
-            user = await cursor.fetchone()
-            self.assertIsNotNone(user)
-            self.assertEqual(user[1], 12345)
-            self.assertEqual(user[2], 0)  # Default value
-            self.assertEqual(user[3], "TestUser")
-
-    async def test_no_migration_for_version_2(self):
-        # Create a version 2 database
+    async def test_no_migration_for_version_3(self):
+        # Create a version 3 database
         await self.db.initialize()
 
         # Re-initialize the database
@@ -208,7 +239,7 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
 
         # Verify no additional migrations were applied
         async with aiosqlite.connect(self.test_db_path) as conn:
-            cursor = await conn.execute("SELECT COUNT(*) FROM schema_version WHERE version = 2")
+            cursor = await conn.execute("SELECT COUNT(*) FROM schema_version WHERE version = 3")
             row = await cursor.fetchone()
             self.assertEqual(row[0], 1)
 
