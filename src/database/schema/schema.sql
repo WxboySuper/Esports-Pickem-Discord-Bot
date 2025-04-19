@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS Picks (
     pick_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     is_correct BOOLEAN,
     points_earned INTEGER,
-    FOREIGN KEY(user_id) REFERENCES users(id),
-    FOREIGN KEY(match_id) REFERENCES Matches(match_id)
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY(match_id) REFERENCES Matches(match_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_picks_user_id ON Picks(user_id);
 CREATE INDEX IF NOT EXISTS idx_picks_match_id ON Picks(match_id);
