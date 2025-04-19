@@ -162,7 +162,7 @@ class Database:
                         await self._migration_2(conn)
                         await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (2,))
                         log.info("Upgraded database to version 2.")
-                        current_version = 2 # Update current version after migration
+                        current_version = 2  # Update current version after migration
 
                     # Apply migration 3 if needed
                     if current_version < 3:
@@ -191,8 +191,10 @@ class Database:
     # Include Migrations here when needed
     @staticmethod
     async def _migration_2(conn: _create_connection):
-        """Migration 2: Update the users table to include discord_guild_id and
-        rename discord_id to discord_user_id."""
+        """
+        Migration 2: Update the users table to include discord_guild_id and
+        rename discord_id to discord_user_id.
+        """
         log.info("Starting migration to version 2...")
 
         # Rename the existing table to a temporary name
