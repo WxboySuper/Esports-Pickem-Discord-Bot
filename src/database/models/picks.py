@@ -173,7 +173,7 @@ class Pick:
             WHERE user_id = ?
         """
         try:
-            rows = await db.fetch_all(query, (user_id,))
+            rows = await db.fetch_many(query, (user_id,))
             if rows:
                 log.info(f"Picks for user {user_id} retrieved successfully.")
                 return [Pick(**dict(row)) for row in rows]  # Return a list of Pick instances
@@ -219,7 +219,7 @@ class Pick:
             WHERE match_id = ?
         """
         try:
-            rows = await db.fetch_all(query, (match_id,))
+            rows = await db.fetch_many(query, (match_id,))
             if rows:
                 log.info(f"Picks for match {match_id} retrieved successfully.")
                 return [Pick(**dict(row)) for row in rows]  # Return a list of Pick instances
@@ -305,7 +305,7 @@ class Pick:
             LIMIT ? OFFSET ?
         """
         try:
-            rows = await db.fetch_all(query, (limit, offset))
+            rows = await db.fetch_many(query, (limit, offset))
             if rows:
                 log.info("All picks retrieved successfully.")
                 return [Pick(**dict(row)) for row in rows]  # Return a list of Pick instances
@@ -354,6 +354,9 @@ class Pick:
         log.info(f"{update_mode.capitalize()} update for pick with ID: {pick_id}")
 
         if update_mode == 'pick':
+            if pick_selection is None or pick_timestamp is None:
+                log.error("pick_selection and pick_timestamp must be provided for 'pick' update mode.")
+                raise ValueError("pick_selection and pick_timestamp must be provided for 'pick' update mode.")
             query = """
                 UPDATE Picks
                 SET pick_selection = ?, pick_timestamp = ?
