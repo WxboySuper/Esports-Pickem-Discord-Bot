@@ -130,7 +130,7 @@ class Pick:
             SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
             FROM Picks
             WHERE pick_id = ?
-        """
+        """.strip()
         try:
             row = await db.fetch_one(query, (pick_id,))
             if row:

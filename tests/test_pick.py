@@ -214,3 +214,102 @@ class TestPick(unittest.IsolatedAsyncioTestCase):
         mock_get_user.assert_called_once_with(mock_db, 1)
         mock_get_match.assert_called_once_with(mock_db, 1)
         mock_log.error.assert_called_with("Failed to create pick for user 1 on match 1 - no ID returned.")
+
+    # --- Tests for Pick.get_by_id ---
+    @patch("src.database.models.picks.log")
+    async def test_get_by_id_success(self, mock_log):
+        """Test successful retrieval of a pick by ID"""
+        mock_db = AsyncMock()
+        pick_id = 1
+        expected_data = {
+            "pick_id": pick_id,
+            "user_id": 100,
+            "match_id": 200,
+            "pick_selection": "team1",
+            "pick_timestamp": datetime.now(timezone.utc),
+            "is_correct": True,
+            "points_earned": 10
+        }
+        mock_db.fetch_one.return_value = expected_data
+
+        pick = await Pick.get_by_id(mock_db, pick_id)
+
+        self.assertIsNotNone(pick)
+        self.assertEqual(pick.pick_id, expected_data["pick_id"])
+        self.assertEqual(pick.user_id, expected_data["user_id"])
+        self.assertEqual(pick.match_id, expected_data["match_id"])
+        self.assertEqual(pick.pick_selection, expected_data["pick_selection"])
+        self.assertEqual(pick.pick_timestamp, expected_data["pick_timestamp"])
+        self.assertEqual(pick.is_correct, expected_data["is_correct"])
+        self.assertEqual(pick.points_earned, expected_data["points_earned"])
+
+        expected_query = """
+            SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
+            FROM Picks
+            WHERE pick_id = ?
+        """.strip()
+        mock_db.fetch_one.assert_called_once()
+        call_args = mock_db.fetch_one.call_args[0]
+        self.assertEqual(call_args[0], expected_query)
+        self.assertEqual(call_args[1], (pick_id,))
+
+        mock_log.debug.assert_called_once_with("Validating pick_id for retrieval")
+        mock_log.info.assert_any_call(f"Retrieving pick with ID: {pick_id}")
+        mock_log.info.assert_any_call(f"Pick with ID {pick_id} retrieved successfully.")
+
+    @patch("src.database.models.picks.log")
+    async def test_get_by_id_invalid_id(self, mock_log):
+        """Test that retrieving a pick with invalid ID raises ValueError"""
+        mock_db = AsyncMock()
+        
+        with self.assertRaises(ValueError) as context:
+            await Pick.get_by_id(mock_db, 0)  # Invalid pick_id
+        
+        self.assertEqual(str(context.exception), "Invalid pick_id provided.")
+        mock_db.fetch_one.assert_not_called()
+        mock_log.error.assert_called_with("Invalid pick_id provided.")
+
+    @patch("src.database.models.picks.log")
+    async def test_get_by_id_not_found(self, mock_log):
+        """Test handling of non-existent pick ID"""
+        mock_db = AsyncMock()
+        pick_id = 999
+        mock_db.fetch_one.return_value = None  # Simulate no pick found
+
+        pick = await Pick.get_by_id(mock_db, pick_id)
+
+        self.assertIsNone(pick)
+        expected_query = """
+            SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
+            FROM Picks
+            WHERE pick_id = ?
+        """.strip()
+        mock_db.fetch_one.assert_called_once()
+        call_args = mock_db.fetch_one.call_args[0]
+        self.assertEqual(call_args[0], expected_query)
+        self.assertEqual(call_args[1], (pick_id,))
+
+        mock_log.warning.assert_called_once_with(f"No pick found with ID {pick_id}")
+
+    @patch("src.database.models.picks.log")
+    async def test_get_by_id_database_error(self, mock_log):
+        """Test handling of database error during pick retrieval"""
+        mock_db = AsyncMock()
+        pick_id = 1
+        mock_db.fetch_one.side_effect = Exception("Database error")
+
+        with self.assertRaises(RuntimeError) as context:
+            await Pick.get_by_id(mock_db, pick_id)
+
+        self.assertEqual(str(context.exception), "Error retrieving pick: Database error")
+        mock_log.error.assert_called_with(f"Error retrieving pick with ID {pick_id}: Database error")
+
+        expected_query = """
+            SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
+            FROM Picks
+            WHERE pick_id = ?
+        """.strip()
+        mock_db.fetch_one.assert_called_once()
+        call_args = mock_db.fetch_one.call_args[0]
+        self.assertEqual(call_args[0], expected_query)
+        self.assertEqual(call_args[1], (pick_id,))
