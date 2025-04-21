@@ -81,8 +81,9 @@ class Pick:
         query = """
             INSERT INTO Picks (user_id, match_id, pick_selection, pick_timestamp)
             VALUES (?, ?, ?, ?)
-        """
+        """.strip()
         current_time = datetime.now(timezone.utc)
+
         try:
             pick_id = await db.execute(query, (user_id, match_id, pick_selection, current_time))
             if pick_id is not None:
@@ -90,12 +91,16 @@ class Pick:
                 return Pick(pick_id=pick_id, user_id=user_id, match_id=match_id,
                             pick_selection=pick_selection, pick_timestamp=current_time)
 
-            # This case might indicate an issue with db.execute returning a non-ID value on success
-            log.error(f"Failed to create pick for user {user_id} on match {match_id} - no ID returned.")
-            raise RuntimeError(f"Failed to create pick for user {user_id} on match {match_id} - no ID returned.")
+            # This case indicates db.execute returned None instead of an ID
+            error_msg = f"Failed to create pick for user {user_id} on match {match_id} - no ID returned."
+            log.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        except RuntimeError:
+            raise  # Re-raise RuntimeError without modification
         except Exception as e:
-            log.error(f"Database error creating pick for user {user_id} on match {match_id}: {str(e)}")
-            # Re-raise as a runtime error to be caught upstream
+            error_msg = f"Database error creating pick for user {user_id} on match {match_id}: {str(e)}"
+            log.error(error_msg)
             raise RuntimeError(f"Database error creating pick: {str(e)}") from e
 
     @staticmethod
@@ -125,7 +130,7 @@ class Pick:
             SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
             FROM Picks
             WHERE pick_id = ?
-        """
+        """.strip()
         try:
             row = await db.fetch_one(query, (pick_id,))
             if row:
@@ -171,7 +176,7 @@ class Pick:
             SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
             FROM Picks
             WHERE user_id = ?
-        """
+        """.strip()
         try:
             rows = await db.fetch_many(query, (user_id,))
             if rows:
@@ -217,7 +222,7 @@ class Pick:
             SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
             FROM Picks
             WHERE match_id = ?
-        """
+        """.strip()
         try:
             rows = await db.fetch_many(query, (match_id,))
             if rows:
@@ -269,7 +274,7 @@ class Pick:
             SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
             FROM Picks
             WHERE user_id = ? AND match_id = ?
-        """
+        """.strip()
         try:
             row = await db.fetch_one(query, (user_id, match_id))
             if row:
@@ -303,7 +308,7 @@ class Pick:
             SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
             FROM Picks
             LIMIT ? OFFSET ?
-        """
+        """.strip()
         try:
             rows = await db.fetch_many(query, (limit, offset))
             if rows:
@@ -358,10 +363,10 @@ class Pick:
                 log.error("pick_selection and pick_timestamp must be provided for 'pick' update mode.")
                 raise ValueError("pick_selection and pick_timestamp must be provided for 'pick' update mode.")
             query = """
-                UPDATE Picks
-                SET pick_selection = ?, pick_timestamp = ?
-                WHERE pick_id = ?
-            """
+            UPDATE Picks
+            SET pick_selection = ?, pick_timestamp = ?
+            WHERE pick_id = ?
+            """.strip()
             try:
                 await db.execute(query, (pick_selection, pick_timestamp, pick_id))
                 log.info(f"Pick with ID {pick_id} updated successfully.")
@@ -372,10 +377,10 @@ class Pick:
                 raise RuntimeError(f"Error updating pick: {str(e)}") from e
         elif update_mode == 'result':
             query = """
-                UPDATE Picks
-                SET is_correct = ?, points_earned = ?
-                WHERE pick_id = ?
-            """
+            UPDATE Picks
+            SET is_correct = ?, points_earned = ?
+            WHERE pick_id = ?
+            """.strip()
             try:
                 await db.execute(query, (is_correct, points_earned, pick_id))
                 log.info(f"Result for pick with ID {pick_id} updated successfully.")
