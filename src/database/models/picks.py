@@ -83,7 +83,7 @@ class Pick:
             VALUES (?, ?, ?, ?)
         """.strip()
         current_time = datetime.now(timezone.utc)
-        
+
         try:
             pick_id = await db.execute(query, (user_id, match_id, pick_selection, current_time))
             if pick_id is not None:
