@@ -119,17 +119,17 @@ class Database:
 
     async def initialize(self) -> bool:
         """
-        Initialize the database schema and apply migrations if needed.
+Initialize the database schema and apply migrations if needed.
 
         Returns:
             True if successful, False otherwise
-        """
+"""
         try:
             log.info("Starting database initialization...")
-            # Create a dedicated connection for initialization
+# Create a dedicated connection for initialization
             conn = await self._create_connection()
             try:
-                # Check if schema_version table exists
+# Check if schema_version table exists
                 cursor = await conn.execute("""
                     SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'
                 """)
@@ -143,12 +143,12 @@ class Database:
                         with open(self.schema_path, 'r') as f:
                             schema = f.read()
                         await conn.executescript(schema)
+                        await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (4,))
+                        log.info("Database initialized with schema version 4.")
                         log.info(f"Loaded schema from {self.schema_path}")
                     else:
                         log.warning(f"Schema file not found: {self.schema_path}")
                         return False  # Abort initialization due to missing schema file
-                    await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (3,))
-                    log.info("Database initialized with schema version 3.")
                 else:
                     # Existing Database Logic
                     cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
@@ -170,6 +170,14 @@ class Database:
                         await self._migration_3(conn)
                         await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (3,))
                         log.info("Upgraded database to version 3.")
+                        current_version = 3
+
+                    # Apply migration 4 if needed
+                    if current_version < 4:
+                        log.info("Applying migration to version 4...")
+                        await self._migration_4(conn)
+                        await conn.execute("INSERT INTO schema_version (version) VALUES (?)", (4,))
+                        log.info("Upgraded database to version 4.")
                     else:
                         log.info("Database is up to date. No migrations needed.")
 
@@ -253,6 +261,69 @@ class Database:
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_picks_match_id ON Picks(match_id)")
 
         log.info("Migration to version 3 completed.")
+
+    @staticmethod
+    async def _migration_4(conn: aiosqlite.Connection):
+        """Migration 4: Add constraints to Matches and Picks tables."""
+        log.info("Starting migration to version 4...")
+
+        # Add constraints to Matches table
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS Matches_new (
+                match_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                team1_id INTEGER NOT NULL,
+                team1_name TEXT NOT NULL,
+                team2_id INTEGER NOT NULL,
+                team2_name TEXT NOT NULL,
+                region TEXT NOT NULL,
+                tournament TEXT NOT NULL,
+                match_date TEXT NOT NULL,    -- Stored in ISO format
+                match_time TEXT NOT NULL,    -- Stored in ISO format
+                result TEXT,                 -- team1, team2, draw, or null if pending
+                is_complete BOOLEAN NOT NULL DEFAULT 0,
+                match_metadata TEXT,         -- JSON string for additional match data
+                CHECK (match_id > 0),
+                CHECK (team1_id > 0),
+                CHECK (team2_id > 0),
+                CHECK (team1_id != team2_id),
+                CHECK (result IN ('team1', 'team2', 'draw', NULL)),
+                CHECK (match_date LIKE '____-__-__'), -- Enforces YYYY-MM-DD format
+                CHECK (match_time LIKE '__:__:__')    -- Enforces HH:MM:SS format
+            )
+        """)
+        await conn.execute("INSERT INTO Matches_new SELECT * FROM Matches")
+        await conn.execute("DROP TABLE Matches")
+        await conn.execute("ALTER TABLE Matches_new RENAME TO Matches")
+
+        # Add constraints to Picks table
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS Picks_new (
+                pick_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                match_id INTEGER NOT NULL,
+                pick_selection TEXT NOT NULL,
+                pick_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                is_correct BOOLEAN,
+                points_earned INTEGER,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+                FOREIGN KEY(match_id) REFERENCES Matches(match_id) ON DELETE CASCADE ON UPDATE CASCADE,
+                CHECK (pick_id > 0),
+                CHECK (pick_selection IN ('team1', 'team2', 'draw')),
+                CHECK (points_earned IS NULL OR points_earned >= 0)
+            )
+        """)
+        await conn.execute("INSERT INTO Picks_new SELECT * FROM Picks")
+        await conn.execute("DROP TABLE Picks")
+        await conn.execute("ALTER TABLE Picks_new RENAME TO Picks")
+
+        # Recreate indexes
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_date ON Matches(match_date)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_tournament ON Matches(tournament)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_region ON Matches(region)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_picks_user_id ON Picks(user_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_picks_match_id ON Picks(match_id)")
+
+        log.info("Migration to version 4 completed.")
 
     async def close_all_connections(self) -> None:
         """
