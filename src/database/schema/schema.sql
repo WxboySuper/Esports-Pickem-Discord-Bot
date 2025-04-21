@@ -15,6 +15,27 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_user_discord_user_id ON users(discord_user_id);
 CREATE INDEX IF NOT EXISTS idx_user_guild_id ON users(discord_guild_id);
 
+-- Table: Matches
+CREATE TABLE IF NOT EXISTS Matches (
+    match_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team1_id INTEGER NOT NULL,
+    team1_name TEXT NOT NULL,
+    team2_id INTEGER NOT NULL,
+    team2_name TEXT NOT NULL,
+    region TEXT NOT NULL,
+    tournament TEXT NOT NULL,
+    match_date TEXT NOT NULL,    -- Stored in ISO format
+    match_time TEXT NOT NULL,    -- Stored in ISO format
+    result TEXT,                 -- team1, team2, draw, or null if pending
+    is_complete BOOLEAN NOT NULL DEFAULT 0,
+    match_metadata TEXT          -- JSON string for additional match data
+);
+
+-- Create indexes for common match queries
+CREATE INDEX IF NOT EXISTS idx_matches_date ON Matches(match_date);
+CREATE INDEX IF NOT EXISTS idx_matches_tournament ON Matches(tournament);
+CREATE INDEX IF NOT EXISTS idx_matches_region ON Matches(region);
+
 -- Table: Picks
 CREATE TABLE IF NOT EXISTS Picks (
     pick_id INTEGER PRIMARY KEY AUTOINCREMENT,
