@@ -89,7 +89,7 @@ class Pick:
             if pick_id is not None:
                 log.info(f"Pick successfully created with ID {pick_id}")
                 return Pick(pick_id=pick_id, user_id=user_id, match_id=match_id,
-                          pick_selection=pick_selection, pick_timestamp=current_time)
+                            pick_selection=pick_selection, pick_timestamp=current_time)
 
             # This case indicates db.execute returned None instead of an ID
             error_msg = f"Failed to create pick for user {user_id} on match {match_id} - no ID returned."
