@@ -176,7 +176,7 @@ class Pick:
             SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
             FROM Picks
             WHERE user_id = ?
-        """
+        """.strip()
         try:
             rows = await db.fetch_many(query, (user_id,))
             if rows:
@@ -222,7 +222,7 @@ class Pick:
             SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
             FROM Picks
             WHERE match_id = ?
-        """
+        """.strip()
         try:
             rows = await db.fetch_many(query, (match_id,))
             if rows:
@@ -274,7 +274,7 @@ class Pick:
             SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
             FROM Picks
             WHERE user_id = ? AND match_id = ?
-        """
+        """.strip()
         try:
             row = await db.fetch_one(query, (user_id, match_id))
             if row:
@@ -308,7 +308,7 @@ class Pick:
             SELECT pick_id, user_id, match_id, pick_selection, pick_timestamp, is_correct, points_earned
             FROM Picks
             LIMIT ? OFFSET ?
-        """
+        """.strip()
         try:
             rows = await db.fetch_many(query, (limit, offset))
             if rows:
@@ -366,7 +366,7 @@ class Pick:
                 UPDATE Picks
                 SET pick_selection = ?, pick_timestamp = ?
                 WHERE pick_id = ?
-            """
+            """.strip()
             try:
                 await db.execute(query, (pick_selection, pick_timestamp, pick_id))
                 log.info(f"Pick with ID {pick_id} updated successfully.")
