@@ -363,9 +363,9 @@ class Pick:
                 log.error("pick_selection and pick_timestamp must be provided for 'pick' update mode.")
                 raise ValueError("pick_selection and pick_timestamp must be provided for 'pick' update mode.")
             query = """
-                UPDATE Picks
-                SET pick_selection = ?, pick_timestamp = ?
-                WHERE pick_id = ?
+            UPDATE Picks
+            SET pick_selection = ?, pick_timestamp = ?
+            WHERE pick_id = ?
             """.strip()
             try:
                 await db.execute(query, (pick_selection, pick_timestamp, pick_id))
@@ -377,10 +377,10 @@ class Pick:
                 raise RuntimeError(f"Error updating pick: {str(e)}") from e
         elif update_mode == 'result':
             query = """
-                UPDATE Picks
-                SET is_correct = ?, points_earned = ?
-                WHERE pick_id = ?
-            """
+            UPDATE Picks
+            SET is_correct = ?, points_earned = ?
+            WHERE pick_id = ?
+            """.strip()
             try:
                 await db.execute(query, (is_correct, points_earned, pick_id))
                 log.info(f"Result for pick with ID {pick_id} updated successfully.")

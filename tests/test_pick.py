@@ -1,9 +1,9 @@
 import unittest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock, MagicMock, call
 from src.database.models.picks import Pick
-from src.database.models.user import User # Added import
-from src.database.models.match import Match # Added import
-from datetime import datetime, timezone # Added import
+from src.database.models.user import User
+from src.database.models.match import Match
+from datetime import datetime, timezone
 
 class TestPick(unittest.IsolatedAsyncioTestCase):
 
@@ -981,3 +981,301 @@ class TestPick(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call_args[1], (100, 0))  # Default values
 
         mock_log.error.assert_called_with("Error retrieving all picks: Database error")
+
+
+    # --- Tests for Pick.update ---
+
+    @patch("src.database.models.picks.log")
+    async def test_update_pick_mode_success(self, mock_log):
+        """Test successful update of a pick in 'pick' mode"""
+        mock_db = AsyncMock()
+        pick_id = 1
+        pick_selection = "team2"
+        pick_timestamp = datetime.now(timezone.utc)
+
+        # Mock existing pick
+        existing_pick = {
+            "pick_id": pick_id,
+            "user_id": 100,
+            "match_id": 200,
+            "pick_selection": "team1",
+            "pick_timestamp": datetime.now(timezone.utc),
+            "is_correct": None,
+            "points_earned": None
+        }
+
+        # Mock updated pick
+        updated_pick = {
+            "pick_id": pick_id,
+            "user_id": 100,
+            "match_id": 200,
+            "pick_selection": pick_selection,
+            "pick_timestamp": pick_timestamp,
+            "is_correct": None,
+            "points_earned": None
+        }
+
+        mock_db.fetch_one.side_effect = [existing_pick, updated_pick]  # First call returns existing pick, second call returns updated pick
+        mock_db.execute.return_value = None  # Update successful
+
+        pick = await Pick.update(
+            update_mode='pick',
+            db=mock_db,
+            pick_id=pick_id,
+            pick_selection=pick_selection,
+            pick_timestamp=pick_timestamp
+        )
+
+        self.assertIsNotNone(pick)
+        self.assertEqual(pick.pick_id, pick_id)
+        self.assertEqual(pick.pick_selection, pick_selection)
+        self.assertEqual(pick.pick_timestamp, pick_timestamp)
+
+        # Verify SQL query for update
+        expected_query = """
+            UPDATE Picks
+            SET pick_selection = ?, pick_timestamp = ?
+            WHERE pick_id = ?
+        """.strip()
+        mock_db.execute.assert_called_once()
+        call_args = mock_db.execute.call_args[0]
+        self.assertEqual(call_args[0], expected_query)
+        self.assertEqual(call_args[1], (pick_selection, pick_timestamp, pick_id))        # Check all debug calls are as expected
+        debug_calls = [
+            call("Validating pick_id for update"),
+            call("Validating pick_id for retrieval"),
+            call("Validating pick_id for retrieval")
+        ]
+        mock_log.debug.assert_has_calls(debug_calls)
+        mock_log.info.assert_any_call("Pick update for pick with ID: 1")
+        mock_log.info.assert_any_call("Pick with ID 1 updated successfully.")
+
+    @patch("src.database.models.picks.log")
+    async def test_update_result_mode_success(self, mock_log):
+        """Test successful update of a pick in 'result' mode"""
+        mock_db = AsyncMock()
+        pick_id = 1
+        is_correct = True
+        points_earned = 10
+
+        # Mock existing pick
+        existing_pick = {
+            "pick_id": pick_id,
+            "user_id": 100,
+            "match_id": 200,
+            "pick_selection": "team1",
+            "pick_timestamp": datetime.now(timezone.utc),
+            "is_correct": None,
+            "points_earned": None
+        }
+
+        # Mock updated pick
+        updated_pick = {
+            "pick_id": pick_id,
+            "user_id": 100,
+            "match_id": 200,
+            "pick_selection": "team1",
+            "pick_timestamp": datetime.now(timezone.utc),
+            "is_correct": is_correct,
+            "points_earned": points_earned
+        }
+
+        mock_db.fetch_one.side_effect = [existing_pick, updated_pick]
+        mock_db.execute.return_value = None
+
+        pick = await Pick.update(
+            update_mode='result',
+            db=mock_db,
+            pick_id=pick_id,
+            is_correct=is_correct,
+            points_earned=points_earned
+        )
+
+        self.assertIsNotNone(pick)
+        self.assertEqual(pick.pick_id, pick_id)
+        self.assertEqual(pick.is_correct, is_correct)
+        self.assertEqual(pick.points_earned, points_earned)
+
+        # Verify SQL query for update
+        expected_query = """
+            UPDATE Picks
+            SET is_correct = ?, points_earned = ?
+            WHERE pick_id = ?
+        """.strip()
+        mock_db.execute.assert_called_once()
+        call_args = mock_db.execute.call_args[0]
+        self.assertEqual(call_args[0], expected_query)
+        self.assertEqual(call_args[1], (is_correct, points_earned, pick_id))        # Check all debug calls are as expected
+        debug_calls = [
+            call("Validating pick_id for update"),
+            call("Validating pick_id for retrieval"),
+            call("Validating pick_id for retrieval")
+        ]
+        mock_log.debug.assert_has_calls(debug_calls, any_order=True)
+        mock_log.info.assert_any_call("Result update for pick with ID: 1")
+        mock_log.info.assert_any_call("Result for pick with ID 1 updated successfully.")
+
+    @patch("src.database.models.picks.log")
+    async def test_update_invalid_pick_id(self, mock_log):
+        """Test that updating with invalid pick_id raises ValueError"""
+        mock_db = AsyncMock()
+        
+        with self.assertRaises(ValueError) as context:
+            await Pick.update(
+                update_mode='pick',
+                db=mock_db,
+                pick_id=0,  # Invalid pick_id
+                pick_selection="team1",
+                pick_timestamp=datetime.now(timezone.utc)
+            )
+        
+        self.assertEqual(str(context.exception), "Invalid pick_id provided.")
+        mock_db.fetch_one.assert_not_called()
+        mock_db.execute.assert_not_called()
+        mock_log.error.assert_called_with("Invalid pick_id provided.")
+
+    @patch("src.database.models.picks.log")
+    async def test_update_nonexistent_pick(self, mock_log):
+        """Test that updating non-existent pick raises ValueError"""
+        mock_db = AsyncMock()
+        pick_id = 999
+        mock_db.fetch_one.return_value = None  # Pick not found
+        
+        with self.assertRaises(ValueError) as context:
+            await Pick.update(
+                update_mode='pick',
+                db=mock_db,
+                pick_id=pick_id,
+                pick_selection="team1",
+                pick_timestamp=datetime.now(timezone.utc)
+            )
+        
+        self.assertEqual(str(context.exception), f"Pick with ID {pick_id} does not exist.")
+        mock_db.execute.assert_not_called()
+        mock_log.error.assert_called_with(f"Pick with ID {pick_id} does not exist.")
+
+    @patch("src.database.models.picks.log")
+    async def test_update_invalid_mode(self, mock_log):
+        """Test that invalid update mode raises ValueError"""
+        mock_db = AsyncMock()
+        pick_id = 1
+        invalid_mode = 'invalid'
+
+        # Mock existing pick
+        existing_pick = {
+            "pick_id": pick_id,
+            "user_id": 100,
+            "match_id": 200,
+            "pick_selection": "team1",
+            "pick_timestamp": datetime.now(timezone.utc),
+            "is_correct": None,
+            "points_earned": None
+        }
+        mock_db.fetch_one.return_value = existing_pick
+
+        with self.assertRaises(ValueError) as context:
+            await Pick.update(
+                update_mode=invalid_mode,
+                db=mock_db,
+                pick_id=pick_id
+            )
+        
+        self.assertEqual(str(context.exception), f"Invalid update mode: {invalid_mode}. Must be 'pick' or 'result'.")
+        mock_db.execute.assert_not_called()
+        mock_log.error.assert_called_with(f"Invalid update mode: {invalid_mode}. Must be 'pick' or 'result'.")
+
+    @patch("src.database.models.picks.log")
+    async def test_update_pick_mode_missing_params(self, mock_log):
+        """Test that pick mode without required parameters raises ValueError"""
+        mock_db = AsyncMock()
+        pick_id = 1
+
+        # Mock existing pick
+        existing_pick = {
+            "pick_id": pick_id,
+            "user_id": 100,
+            "match_id": 200,
+            "pick_selection": "team1",
+            "pick_timestamp": datetime.now(timezone.utc),
+            "is_correct": None,
+            "points_earned": None
+        }
+        mock_db.fetch_one.return_value = existing_pick
+
+        with self.assertRaises(ValueError) as context:
+            await Pick.update(
+                update_mode='pick',
+                db=mock_db,
+                pick_id=pick_id,
+                pick_selection="team1"  # Missing pick_timestamp
+            )
+        
+        self.assertEqual(str(context.exception), "pick_selection and pick_timestamp must be provided for 'pick' update mode.")
+        mock_db.execute.assert_not_called()
+        mock_log.error.assert_called_with("pick_selection and pick_timestamp must be provided for 'pick' update mode.")
+
+    @patch("src.database.models.picks.log")
+    async def test_update_pick_mode_database_error(self, mock_log):
+        """Test handling of database error during pick mode update"""
+        mock_db = AsyncMock()
+        pick_id = 1
+        pick_selection = "team2"
+        pick_timestamp = datetime.now(timezone.utc)
+
+        # Mock existing pick
+        existing_pick = {
+            "pick_id": pick_id,
+            "user_id": 100,
+            "match_id": 200,
+            "pick_selection": "team1",
+            "pick_timestamp": datetime.now(timezone.utc),
+            "is_correct": None,
+            "points_earned": None
+        }
+        mock_db.fetch_one.return_value = existing_pick
+        mock_db.execute.side_effect = Exception("Database error")
+
+        with self.assertRaises(RuntimeError) as context:
+            await Pick.update(
+                update_mode='pick',
+                db=mock_db,
+                pick_id=pick_id,
+                pick_selection=pick_selection,
+                pick_timestamp=pick_timestamp
+            )
+
+        self.assertEqual(str(context.exception), "Error updating pick: Database error")
+        mock_log.error.assert_called_with(f"Error updating pick with ID {pick_id}: Database error")
+
+    @patch("src.database.models.picks.log")
+    async def test_update_result_mode_database_error(self, mock_log):
+        """Test handling of database error during result mode update"""
+        mock_db = AsyncMock()
+        pick_id = 1
+        is_correct = True
+        points_earned = 10
+
+        # Mock existing pick
+        existing_pick = {
+            "pick_id": pick_id,
+            "user_id": 100,
+            "match_id": 200,
+            "pick_selection": "team1",
+            "pick_timestamp": datetime.now(timezone.utc),
+            "is_correct": None,
+            "points_earned": None
+        }
+        mock_db.fetch_one.return_value = existing_pick
+        mock_db.execute.side_effect = Exception("Database error")
+
+        with self.assertRaises(RuntimeError) as context:
+            await Pick.update(
+                update_mode='result',
+                db=mock_db,
+                pick_id=pick_id,
+                is_correct=is_correct,
+                points_earned=points_earned
+            )
+
+        self.assertEqual(str(context.exception), "Error updating result: Database error")
+        mock_log.error.assert_called_with(f"Error updating result for pick with ID {pick_id}: Database error")
