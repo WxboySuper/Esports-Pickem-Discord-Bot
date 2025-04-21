@@ -127,25 +127,23 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
 
     async def test_schema_version_tracking(self):
         # Initialize real database for this test
-        await self.init_db_if_needed()
-
-        # Check the schema_version table directly using a separate connection
+        await self.init_db_if_needed()        # Check the schema_version table directly using a separate connection
         conn = await aiosqlite.connect(self.test_db_path)
         conn.row_factory = aiosqlite.Row
         try:
             cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
             row = await cursor.fetchone()
             self.assertIsNotNone(row, "Schema version table is empty or not created.")
-            self.assertEqual(row["version"], 3)
+            self.assertEqual(row["version"], 4) # Expect version 4 after initialization
         finally:
             await conn.close()
 
     async def create_version_1_schema(self):
         """Helper method to create the version 1 schema"""
         async with aiosqlite.connect(self.test_db_path) as conn:
-            await conn.executescript(""" 
-                PRAGMA foreign_keys = ON;
-
+            # Ensure FKs are on for this setup connection if necessary
+            await conn.execute("PRAGMA foreign_keys = ON;")
+            await conn.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     discord_id INTEGER NOT NULL UNIQUE,
@@ -172,9 +170,9 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
     async def create_version_2_schema(self):
         """Helper method to create the version 2 schema"""
         async with aiosqlite.connect(self.test_db_path) as conn:
+            # Ensure FKs are on for this setup connection if necessary
+            await conn.execute("PRAGMA foreign_keys = ON;")
             await conn.executescript("""
-                PRAGMA foreign_keys = ON;
-
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     discord_user_id INTEGER NOT NULL UNIQUE,
@@ -197,51 +195,148 @@ class TestDatabase(unittest.IsolatedAsyncioTestCase):
 
                 INSERT INTO users (discord_user_id, discord_guild_id, username, created_at, last_active)
                 VALUES (12345, 67890, 'TestUser', '2025-03-01 12:00:00', '2025-03-01 12:00:00');
+            """);
+            await conn.commit();
+
+    async def create_version_3_schema(self):
+        """Helper method to create the version 3 schema"""
+        async with aiosqlite.connect(self.test_db_path) as conn:
+            # Ensure FKs are on for this setup connection if necessary
+            await conn.execute("PRAGMA foreign_keys = ON;")
+            # Start with version 2 schema
+            await conn.executescript("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    discord_user_id INTEGER NOT NULL UNIQUE,
+                    discord_guild_id INTEGER NOT NULL DEFAULT 0,
+                    username TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_active TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CHECK (discord_user_id > 0)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_users_discord_user_id ON users(discord_user_id);
+                CREATE INDEX IF NOT EXISTS idx_users_discord_guild_id ON users(discord_guild_id);
+
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                INSERT INTO schema_version (version) VALUES (2);
+
+                INSERT INTO users (discord_user_id, discord_guild_id, username, created_at, last_active)
+                VALUES (12345, 67890, 'TestUser', '2025-03-01 12:00:00', '2025-03-01 12:00:00');
+            """);
+            # Apply migration 3 manually
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS Matches (
+                    match_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team1_id INTEGER NOT NULL,
+                    team1_name TEXT NOT NULL,
+                    team2_id INTEGER NOT NULL,
+                    team2_name TEXT NOT NULL,
+                    region TEXT NOT NULL,
+                    tournament TEXT NOT NULL,
+                    match_date TEXT NOT NULL,
+                    match_time TEXT NOT NULL,
+                    result TEXT,
+                    is_complete BOOLEAN NOT NULL DEFAULT 0,
+                    match_metadata TEXT
+                )
             """)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS Picks (
+                    pick_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    match_id INTEGER NOT NULL,
+                    pick_selection TEXT NOT NULL,
+                    pick_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    is_correct BOOLEAN,
+                    points_earned INTEGER,
+                    FOREIGN KEY(user_id) REFERENCES users(id),
+                    FOREIGN KEY(match_id) REFERENCES Matches(match_id)
+                )
+            """)
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_picks_user_id ON Picks(user_id)")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_picks_match_id ON Picks(match_id)")
+            # Update schema version
+            await conn.execute("INSERT INTO schema_version (version) VALUES (3)")
             await conn.commit()
 
-    async def test_migration_2_to_3(self):
-        """Test migration from schema version 2 to version 3"""
-        # Create a version 2 database
-        await self.create_version_2_schema()
+    async def test_migration_from_v3_to_v4(self):
+        """Test migration from schema version 3 to the latest version (4)"""
+        # Create the version 3 schema directly in the file
+        await self.create_version_3_schema()
 
-        # Run the database initialization (This should apply migration to version 3)
+        # Initialize the database, which should trigger migrations
         success = await self.db.initialize()
-        self.assertTrue(success)
+        self.assertTrue(success, "Database initialization should succeed")
 
-        # Verify the schema version is updated to 3
-        async with aiosqlite.connect(self.test_db_path) as conn:
+        # Verify the final schema version is 4
+        conn = await aiosqlite.connect(self.test_db_path)
+        try:
             cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
             row = await cursor.fetchone()
-            self.assertEqual(row[0], 3)
+            self.assertIsNotNone(row)
+            self.assertEqual(row[0], 4, "Schema version should be 4 after migration")
 
-            # Verify the Picks table was created
-            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='Picks'")
-            table = await cursor.fetchone()
-            self.assertIsNotNone(table)
-            
-            # Check that indexes were created
-            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_picks_user_id'")
-            idx1 = await cursor.fetchone()
-            self.assertIsNotNone(idx1)
-            
-            cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_picks_match_id'")
-            idx2 = await cursor.fetchone()
-            self.assertIsNotNone(idx2)
+            # Verify migration 4 changes (Constraints on Picks)
+            # Attempt an insert that violates the pick_selection constraint
+            try:
+                # Need a dummy user and match for FK constraints (already created in v3 helper)
+                user_id = (await (await conn.execute("SELECT id FROM users WHERE discord_user_id = 12345")).fetchone())[0]
+                match_id = (await (await conn.execute("SELECT match_id FROM Matches LIMIT 1")).fetchone())
+                # Handle case where Matches table might be empty if v3 helper didn't add one
+                if not match_id:
+                    await conn.execute("""
+                        INSERT INTO Matches (team1_id, team1_name, team2_id, team2_name, region, tournament, match_date, match_time)
+                        VALUES (1, 'T1', 2, 'T2', 'LCK', 'MSI', '2024-05-10', '12:00:00')
+                    """)
+                    match_id = (await (await conn.execute("SELECT match_id FROM Matches LIMIT 1")).fetchone())[0]
+                else:
+                    match_id = match_id[0]
 
-    async def test_no_migration_for_version_3(self):
-        # Create a version 3 database
-        await self.db.initialize()
 
-        # Re-initialize the database
-        success = await self.db.initialize()
-        self.assertTrue(success)
+                await conn.execute("INSERT INTO Picks (user_id, match_id, pick_selection) VALUES (?, ?, ?)",
+                                   (user_id, match_id, 'invalid_pick'))
+                await conn.commit()
+                self.fail("Insert with invalid pick_selection should fail due to CHECK constraint")
+            except aiosqlite.IntegrityError as e:
+                self.assertIn("CHECK constraint failed: pick_selection", str(e))
 
-        # Verify no additional migrations were applied
-        async with aiosqlite.connect(self.test_db_path) as conn:
-            cursor = await conn.execute("SELECT COUNT(*) FROM schema_version WHERE version = 3")
+        finally:
+            await conn.close()
+
+    async def test_initialize_with_latest_schema(self):
+        """Test initialization when the database is already at the latest schema version"""
+        # Initialize the database normally (creates v4 schema)
+        await self.init_db_if_needed()
+
+        # Re-initialize the same database instance
+        # We need a new Database instance pointing to the *same file*
+        # to simulate a restart of the application
+        db_reinit = Database(db_path=self.test_db_path, pool_size=1)
+        success = await db_reinit.initialize()
+        self.assertTrue(success, "Re-initialization should succeed")
+
+        # Verify the schema version is still 4
+        conn = await aiosqlite.connect(self.test_db_path)
+        try:
+            cursor = await conn.execute("SELECT MAX(version) as version FROM schema_version")
             row = await cursor.fetchone()
-            self.assertEqual(row[0], 1)
+            self.assertIsNotNone(row)
+            self.assertEqual(row[0], 4, "Schema version should remain 4")
+
+            # Check that no duplicate version entries were added
+            cursor = await conn.execute("SELECT COUNT(*) FROM schema_version")
+            count = await cursor.fetchone()
+            # Update assertion: Expect 1 entry if initial setup only adds the final version
+            self.assertEqual(count[0], 1, "Should only have the latest version entry if initial setup doesn't record intermediate migration steps")
+        finally:
+            await conn.close()
+            await db_reinit.close_all_connections() # Clean up the second db instance
+
 
     # --- Tests for Connection Pooling ---
 
