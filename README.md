@@ -2,6 +2,9 @@
 
 A Discord bot for managing esports pick'em contests where users can predict match outcomes and compete on leaderboards.
 
+> [!NOTE]
+> This project is currently in active development and all features and commands may not be fully implemented yet. Please refer to [ITERATIONS.md](./ITERATIONS.md) for the development roadmap.
+
 ## Overview
 
 This bot allows Discord communities to run esports prediction contests where:
@@ -15,7 +18,7 @@ See [ITERATIONS.md](./ITERATIONS.md) for the development roadmap and detailed fe
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.9 or higher
 - PostgreSQL database
 - Discord Application with Bot Token
 - Git
