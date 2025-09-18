@@ -8,6 +8,7 @@ A Discord bot for managing esports pick'em contests where users can predict matc
 ## Overview
 
 This bot allows Discord communities to run esports prediction contests where:
+
 - Admins can upload match schedules via CSV and enter results
 - Users can submit picks for upcoming matches
 - Automatic scoring and leaderboard tracking
@@ -47,6 +48,7 @@ cp .env.example .env
 ```
 
 Edit `.env` with your configuration:
+
 - `DISCORD_TOKEN`: Your Discord bot token from the Discord Developer Portal
 - `DATABASE_URL`: PostgreSQL connection string (e.g., `postgresql://user:password@localhost:5432/pickem_bot`)
 - `ADMIN_IDS`: Comma-separated list of Discord user IDs who can run admin commands
@@ -90,7 +92,8 @@ GRANT ALL PRIVILEGES ON DATABASE pickem_bot TO pickem_user;
 ```
 
 Update your `.env` file with the local database URL:
-```
+
+```plaintext
 DATABASE_URL=postgresql://pickem_user:your_password@localhost:5432/pickem_bot
 ```
 
@@ -130,7 +133,7 @@ Once the bot is running in your Discord server:
 
 ## Project Structure
 
-```
+```plaintext
 ├── src/               # Main application code
 ├── tests/             # Test files
 ├── migrations/        # Database migrations
@@ -157,5 +160,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Support
 
 For questions or issues:
+
 - Open an issue on GitHub
 - Contact the maintainer: @WxboySuper
