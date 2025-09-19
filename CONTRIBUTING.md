@@ -20,10 +20,8 @@ Open a new issue with a description of the desired feature, why it's useful, and
 ## Development Setup
 1. Fork the repo and clone your fork.
 2. Install dependencies:
-   - Example for Node projects: `npm install` or `yarn`
+   - `pip install -r requirements.txt`
 3. Configure any required environment variables (e.g., Discord bot token) in a `.env` file. Do NOT commit secrets.
-
-(If you want, I can add a sample `.env.example` file.)
 
 ## Coding Style
 - Follow existing project conventions.
