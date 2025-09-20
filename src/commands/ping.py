@@ -12,10 +12,7 @@ async def setup(bot):
     async def ping(interaction: discord.Interaction):
         logger.debug("Ping command invoked by user %s", interaction.user.id)
         # Use bot.latency for websocket heartbeat latency and report ms
-        latency_ms = int(bot.latency * 1000) if getattr(bot,
-                                                        "latency",
-                                                        None
-                                                        ) is not None else -1
+        latency_ms = int(bot.latency * 1000) if bot.latency else "unknown"
         await interaction.response.send_message(
             f"Pong! websocket latency: {latency_ms} ms",
             ephemeral=True
