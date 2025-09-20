@@ -1,0 +1,61 @@
+name: Deploy Bot to VPS
+
+# Minimal deploy workflow (password-based SSH). Expects these repo secrets:
+# - PROD_DEPLOY_HOST
+# - PROD_DEPLOY_USER
+# - PROD_DEPLOY_PATH
+# - PROD_SSH_PASSWORD
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_branch:
+        description: 'Branch to deploy'
+        required: true
+        default: 'main'
+        type: string
+      deployment_type:
+        description: 'Deployment type'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - backend-only
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.deployment_branch }}
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass rsync
+
+      - name: Package backend
+        run: |
+          mkdir -p deployment-package
+          rsync -av --exclude='*.pyc' --exclude='__pycache__' --exclude='.env' --exclude='venv/' \
+            src/ deployment-package/src/
+          cp requirements.txt deployment-package/
+
+      - name: Deploy to server
+        run: |
+          REMOTE_DIR="${{ secrets.PROD_DEPLOY_PATH }}/releases/$(date +%Y%m%d-%H%M%S)"
+          sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
+            ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }} "mkdir -p ${REMOTE_DIR}"
+          
+          rsync -avz --delete -e "sshpass -p '${{ secrets.PROD_SSH_PASSWORD }}' ssh -o StrictHostKeyChecking=no" \
+            deployment-package/ ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }}:${REMOTE_DIR}/
+
+          sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
+            ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }} "ln -sfn ${REMOTE_DIR} ${{ secrets.PROD_DEPLOY_PATH }}/current || true; echo 'Deployed to' ${REMOTE_DIR}"

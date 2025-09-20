@@ -1,0 +1,179 @@
+name: First Deployment Setup (VPS)
+
+# First-deployment workflow using password-only SSH auth.
+# Repository secrets required:
+# - PROD_DEPLOY_HOST
+# - PROD_DEPLOY_USER
+# - PROD_DEPLOY_PATH
+# - PROD_SSH_PASSWORD
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.PROD_DEPLOY_USER }}
+  DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+
+jobs:
+  first-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python on runner (for packaging)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install helper tools on runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass rsync tar
+
+      - name: Prepare deployment-package
+        run: |
+          # Package only what we need to deploy
+          mkdir -p deployment-package
+          # Copy source
+          rsync -av --exclude='*.pyc' --exclude='__pycache__' --exclude='.env' --exclude='venv/' \
+            ./src/ deployment-package/src/
+          # Copy top-level requirements if present
+          if [ -f "requirements.txt" ]; then
+            cp requirements.txt deployment-package/
+          else
+            echo "WARNING: requirements.txt not found in repo root"
+          fi
+          # Copy any executable scripts or config if present
+          if [ -d "scripts" ]; then
+            rsync -av scripts/ deployment-package/scripts/
+          fi
+          if [ -d "config" ]; then
+            rsync -av config/ deployment-package/config/
+          fi
+          tar -czf deployment-package.tar.gz deployment-package
+
+      - name: Install sshpass on runner (ensure present)
+        run: |
+          sudo apt-get install -y sshpass
+
+      - name: Create remote release directory
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          RELEASE_DIR="${{ env.DEPLOY_PATH }}/releases/release-${TIMESTAMP}"
+          echo "RELEASE_DIR=${RELEASE_DIR}" >> $GITHUB_ENV
+          sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
+            "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" "mkdir -p '${RELEASE_DIR}' && mkdir -p '${{ env.DEPLOY_PATH }}/releases'"
+
+      - name: Upload package to remote
+        run: |
+          # Use rsync over sshpass to copy the prepared package
+          sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no" \
+            deployment-package/ "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}:${RELEASE_DIR}/"
+          # Also copy the tarball as a backup artifact
+          sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" scp -o StrictHostKeyChecking=no deployment-package.tar.gz \
+            "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}:${RELEASE_DIR}/"
+
+      - name: Configure remote environment (venv, pip install)
+        run: |
+          sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
+            RELEASE_DIR="${RELEASE_DIR}" "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" <<'EOF'
+          set -euo pipefail
+          cd "$RELEASE_DIR" || exit 1
+
+          # Create Python virtualenv and install dependencies
+          # Use python3 if present, otherwise use system python
+          if command -v python3 >/dev/null 2>&1; then
+            PYTHON=python3
+          else
+            PYTHON=python
+          fi
+
+          # Create venv
+          $PYTHON -m venv venv
+          # Activate and upgrade pip
+          . venv/bin/activate
+          pip install --upgrade pip setuptools wheel || true
+
+          # Install requirements if provided
+          if [ -f "../requirements.txt" ]; then
+            pip install -r ../requirements.txt || true
+          elif [ -f "requirements.txt" ]; then
+          if [ -f "requirements.txt" ]; then
+          fi
+
+          # Ensure current symlink path exists parent
+          mkdir -p "${DEPLOY_PATH}"
+          EOF
+        env:
+          DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
+        # Note: the here-doc replaces placeholders at remote; we're setting RELEASE_DIR via $GITHUB_ENV earlier
+
+      - name: Install systemd service (esports-bot)
+        run: |
+          SERVICE_NAME="esports-bot"
+          CURRENT_PATH="${{ env.DEPLOY_PATH }}/current"
+          sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
+            "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" bash -s <<'EOF'
+          set -euo pipefail
+          DEPLOY_PATH=\"$DEPLOY_PATH\"
+          RELEASE_DIR=\"$RELEASE_DIR\"
+          # Create a simple systemd unit file that runs the bot with venv python
+          SERVICE_FILE="/etc/systemd/system/esports-bot.service"
+          sudo tee "${SERVICE_FILE}" > /dev/null <<'SERVICEEOF'
+          [Unit]
+          Description=Esports Pick'em Discord Bot
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=${{ env.DEPLOY_USER }}
+          WorkingDirectory=${DEPLOY_PATH}/current
+          # You may need to adjust ExecStart to the correct module path for your bot entrypoint
+          ExecStart=${DEPLOY_PATH}/current/venv/bin/python -m src.app
+          Restart=on-failure
+          RestartSec=5
+          Environment=PYTHONUNBUFFERED=1
+
+          [Install]
+          WantedBy=multi-user.target
+          SERVICEEOF
+
+          sudo systemctl daemon-reload
+          sudo systemctl enable esports-bot || true
+          EOF
+        env:
+          DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
+          RELEASE_DIR: ${{ env.RELEASE_DIR }}
+
+      - name: Atomic switch to new release and start service
+        run: |
+          # Symlink the new release to current and start service
+          sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
+            "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" bash -s <<'EOF'
+          set -euo pipefail
+          DEPLOY_PATH=\"$DEPLOY_PATH\"
+          RELEASE_DIR=\"$RELEASE_DIR\"
+          ln -sfn "${RELEASE_DIR}" "${DEPLOY_PATH}/current"
+          # Ensure proper ownership
+          sudo chown -R ${USER}:${USER} "${DEPLOY_PATH}"
+          # Start (or restart) service
+          sudo systemctl restart esports-bot || sudo systemctl start esports-bot
+          # Give service a few seconds to start
+          sleep 5
+          sudo systemctl is-active --quiet esports-bot && echo "Service is active" || (echo "Service failed to start"; sudo journalctl -u esports-bot --no-pager -n 200; exit 1)
+          EOF
+        env:
+          DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
+          RELEASE_DIR: ${{ env.RELEASE_DIR }}
+
+      - name: Verification and Guidance
+        run: |
+          echo "First-deployment completed. Remote release: $RELEASE_DIR"
+          echo "If the service failed to start, check journalctl -u esports-bot on the remote host."
+          echo "Remember to add PROD_DEPLOY_HOST, PROD_DEPLOY_USER, PROD_DEPLOY_PATH, PROD_SSH_PASSWORD to repository secrets as needed."
