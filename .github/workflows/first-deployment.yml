@@ -82,11 +82,8 @@ jobs:
       - name: Configure remote environment (venv, pip install)
         run: |
           sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
-            "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" <<'EOF'
+            RELEASE_DIR="${RELEASE_DIR}" "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" <<'EOF'
           set -euo pipefail
-          RELEASE_DIR="{{RELEASE_DIR_PLACEHOLDER}}"
-          # Replace placeholder with actual env var provided by GH Actions
-          RELEASE_DIR="${RELEASE_DIR}"
           cd "$RELEASE_DIR" || exit 1
 
           # Create Python virtualenv and install dependencies
@@ -107,13 +104,11 @@ jobs:
           if [ -f "../requirements.txt" ]; then
             pip install -r ../requirements.txt || true
           elif [ -f "requirements.txt" ]; then
-            pip install -r requirements.txt || true
-          else
-            echo "No requirements.txt found in release; skipping pip install"
+          if [ -f "requirements.txt" ]; then
           fi
 
           # Ensure current symlink path exists parent
-          mkdir -p "{{DEPLOY_PATH}}"
+          mkdir -p "${DEPLOY_PATH}"
           EOF
         env:
           DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
@@ -126,8 +121,8 @@ jobs:
           sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
             "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" bash -s <<'EOF'
           set -euo pipefail
-          DEPLOY_PATH="{{DEPLOY_PATH}}"
-          RELEASE_DIR="{{RELEASE_DIR}}"
+          DEPLOY_PATH=\"$DEPLOY_PATH\"
+          RELEASE_DIR=\"$RELEASE_DIR\"
           # Create a simple systemd unit file that runs the bot with venv python
           SERVICE_FILE="/etc/systemd/system/esports-bot.service"
           sudo tee "${SERVICE_FILE}" > /dev/null <<'SERVICEEOF'
@@ -162,8 +157,8 @@ jobs:
           sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
             "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" bash -s <<'EOF'
           set -euo pipefail
-          DEPLOY_PATH="{{DEPLOY_PATH}}"
-          RELEASE_DIR="{{RELEASE_DIR}}"
+          DEPLOY_PATH=\"$DEPLOY_PATH\"
+          RELEASE_DIR=\"$RELEASE_DIR\"
           ln -sfn "${RELEASE_DIR}" "${DEPLOY_PATH}/current"
           # Ensure proper ownership
           sudo chown -R ${USER}:${USER} "${DEPLOY_PATH}"
