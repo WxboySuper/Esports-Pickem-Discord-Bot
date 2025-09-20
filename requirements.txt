@@ -1,0 +1,2 @@
+discord.py==2.2.2
+python-dotenv==0.21.0  # optional for local dev if you want to load .env
