@@ -119,10 +119,10 @@ jobs:
           SERVICE_NAME="esports-bot"
           CURRENT_PATH="${{ env.DEPLOY_PATH }}/current"
           sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
-            "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" bash -s <<'EOF'
+            "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" \
+            "export DEPLOY_PATH='${{ env.DEPLOY_PATH }}'; export RELEASE_DIR='${{ env.RELEASE_DIR }}'; bash -s" <<'EOF'
           set -euo pipefail
-          DEPLOY_PATH=\"$DEPLOY_PATH\"
-          RELEASE_DIR=\"$RELEASE_DIR\"
+          # Now you can use $DEPLOY_PATH and $RELEASE_DIR safely
           # Create a simple systemd unit file that runs the bot with venv python
           SERVICE_FILE="/etc/systemd/system/esports-bot.service"
           sudo tee "${SERVICE_FILE}" > /dev/null <<'SERVICEEOF'
