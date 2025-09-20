@@ -10,6 +10,9 @@ Environment variables used:
 import os
 import logging
 import sys
+import importlib
+import pkgutil
+import inspect
 
 import discord
 from discord.ext import commands
@@ -49,13 +52,40 @@ class EsportsBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Import and register command modules
-        # Each command module exposes async def setup(bot)
-        from commands import ping, info  # local imports
-        await ping.setup(self)
-        await info.setup(self)
+        # Dynamically discover and load all commands in the commands directory.
+        try:
+            import commands  # root-level package containing command modules
+        except ImportError:
+            logger.error(
+                "Could not import 'commands' package; "
+                "no commands loaded."
+            )
+        else:
+            for module_info in pkgutil.iter_modules(commands.__path__):
+                name = module_info.name
+                if name.startswith("_"):
+                    continue  # skip private/dunder modules
+                full_name = f"{commands.__name__}.{name}"
+                try:
+                    mod = importlib.import_module(full_name)
+                    setup_fn = getattr(mod, "setup", None)
+                    if setup_fn is None:
+                        logger.debug(
+                            "Module %s has no setup(bot); skipping", full_name
+                        )
+                        continue
+                    if inspect.iscoroutinefunction(setup_fn):
+                        await setup_fn(self)
+                    else:
+                        setup_fn(self)
+                    logger.info("Loaded command module: %s", full_name)
+                except Exception:
+                    logger.exception(
+                        "Failed loading command module %s",
+                        full_name,
+                    )
 
-        # Always perform GLOBAL sync; guild-specific sync disabled.
+        # Global sync
         try:
             logger.info("Starting Global Sync...")
             await self.tree.sync()
