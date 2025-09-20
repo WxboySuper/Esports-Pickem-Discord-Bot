@@ -102,9 +102,9 @@ jobs:
 
           # Install requirements if provided
           if [ -f "../requirements.txt" ]; then
-            pip install -r ../requirements.txt || true
+              pip install -r ../requirements.txt || true
           elif [ -f "requirements.txt" ]; then
-          if [ -f "requirements.txt" ]; then
+              pip install -r requirements.txt || true
           fi
 
           # Ensure current symlink path exists parent
