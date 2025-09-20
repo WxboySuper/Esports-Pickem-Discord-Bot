@@ -123,8 +123,6 @@ jobs:
             "export DEPLOY_PATH='${{ env.DEPLOY_PATH }}'; export RELEASE_DIR='${{ env.RELEASE_DIR }}'; bash -s" <<'EOF'
           set -euo pipefail
           # Now you can use $DEPLOY_PATH and $RELEASE_DIR safely
-          DEPLOY_PATH=\"$DEPLOY_PATH\"
-          RELEASE_DIR=\"$RELEASE_DIR\"
           # Create a simple systemd unit file that runs the bot with venv python
           SERVICE_FILE="/etc/systemd/system/esports-bot.service"
           sudo tee "${SERVICE_FILE}" > /dev/null <<'SERVICEEOF'
