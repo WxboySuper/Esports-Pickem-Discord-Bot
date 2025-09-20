@@ -82,8 +82,9 @@ jobs:
       - name: Configure remote environment (venv, pip install)
         run: |
           sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
-            RELEASE_DIR="${RELEASE_DIR}" "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" <<'EOF'
+            "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" <<'EOF'
           set -euo pipefail
+          RELEASE_DIR="${RELEASE_DIR}"
           cd "$RELEASE_DIR" || exit 1
 
           # Create Python virtualenv and install dependencies
