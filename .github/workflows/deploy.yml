@@ -58,5 +58,4 @@ jobs:
             deployment-package/ ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }}:${REMOTE_DIR}/
 
           sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
-            ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }} "ln -sfn ${REMOTE_DIR} ${{
-            secrets.PROD_DEPLOY_PATH }}/current || true; echo 'Deployed to' ${REMOTE_DIR}"
+            ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }} "ln -sfn ${REMOTE_DIR} ${{ secrets.PROD_DEPLOY_PATH }}/current || true; echo 'Deployed to' ${REMOTE_DIR}"
