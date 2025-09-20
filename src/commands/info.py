@@ -15,7 +15,7 @@ async def setup(bot):
         logger.debug("Info command invoked by user %s", interaction.user.id)
         embed = discord.Embed(
             title="Esports Pick'em Bot",
-            description="Minimal bot skeleton.",
+            description="A list of commands plus extra tips.",
             color=0x2d9cdb,
         )
         embed.add_field(name="Commands",
