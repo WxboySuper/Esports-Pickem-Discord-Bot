@@ -19,7 +19,10 @@ async def setup(bot):
             color=0x2d9cdb,
         )
         embed.add_field(name="Commands",
-                        value="/ping — latency check\n/info — this message",
+                        value='\n'.join([
+                            f"/{c.name} - {c.description}"
+                            for c in bot.tree.get_commands()
+                        ]),
                         inline=False
                         )
         embed.set_footer(
