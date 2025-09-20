@@ -23,9 +23,23 @@ logger = logging.getLogger("esports-bot")
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DEV_GUILD_ID = os.getenv("DEVELOPER_GUILD_ID")
-ADMIN_IDS = [
-    s.strip() for s in os.getenv("ADMIN_IDS", "").split(",") if s.strip()
-    ]
+_raw_admin_ids = os.getenv("ADMIN_IDS", "")
+ADMIN_IDS: list[int] = []
+if _raw_admin_ids.strip():
+    for part in _raw_admin_ids.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        if token.isdigit():
+            try:
+                ADMIN_IDS.append(int(token))
+            except ValueError:
+                logger.warning(
+                    "ADMIN_IDS entry could not be converted to int: %r",
+                    token,
+                )
+        else:
+            logger.warning("Ignoring non-numeric ADMIN_IDS entry: %r", token)
 
 intents = discord.Intents.default()
 
