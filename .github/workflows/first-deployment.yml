@@ -82,7 +82,7 @@ jobs:
       - name: Configure remote environment (venv, pip install)
         run: |
           sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
-            "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" "export DEPLOY_PATH='${{ env.DEPLOY_PATH }}'; RELEASE_DIR='${RELEASE_DIR}' bash -s" <<'EOF'
+            "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" "export DEPLOY_PATH='${{ env.DEPLOY_PATH }}'; RELEASE_DIR='${{ env.RELEASE_DIR }}' bash -s" <<'EOF'
           set -euo pipefail
           cd "$RELEASE_DIR" || exit 1
 
