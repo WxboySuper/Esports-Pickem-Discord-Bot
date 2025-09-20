@@ -108,7 +108,7 @@ jobs:
           fi
 
           # Ensure current symlink path exists parent
-          mkdir -p "${DEPLOY_PATH}"
+          mkdir -p "${{ env.DEPLOY_PATH }}"
           EOF
         env:
           DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
