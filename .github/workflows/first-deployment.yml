@@ -156,7 +156,7 @@ jobs:
           # Symlink the new release to current and start service
           sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
             "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" \
-            "export DEPLOY_PATH='${{ env.DEPLOY_PATH }}'; export RELEASE_DIR='${{ env.RELEASE_DIR }}'; bash -s" <<'EOF'
+            "export DEPLOY_PATH='${{ env.DEPLOY_PATH }}'; export RELEASE_DIR='${{ env.RELEASE_DIR }}'; export DEPLOY_USER='${{ env.DEPLOY_USER }}'; bash -s" <<'EOF'
           set -euo pipefail
           echo "DEPLOY_PATH=\$DEPLOY_PATH"
           echo "RELEASE_DIR=\$RELEASE_DIR"
