@@ -39,7 +39,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y sshpass rsync flock
+          sudo apt-get install -y sshpass rsync util-linux
 
       - name: Package backend
         run: |
