@@ -156,14 +156,18 @@ jobs:
           # Symlink the new release to current and start service
           sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
             "${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}" \
-            "export DEPLOY_PATH='${{ env.DEPLOY_PATH }}'; export RELEASE_DIR='${{ env.RELEASE_DIR }}'; bash -s" <<'EOF'
+            "export DEPLOY_PATH='${{ env.DEPLOY_PATH }}'; export RELEASE_DIR='${{ env.RELEASE_DIR }}'; bash -s" <<EOF
           set -euo pipefail
-          DEPLOY_PATH=\"$DEPLOY_PATH\"
-          RELEASE_DIR=\"$RELEASE_DIR\"
-          mkdir -p "${DEPLOY_PATH}"
-          ln -sfn "${RELEASE_DIR}" "${DEPLOY_PATH}/current"
+          echo "DEPLOY_PATH=\$DEPLOY_PATH"
+          echo "RELEASE_DIR=\$RELEASE_DIR"
+          mkdir -p "\$DEPLOY_PATH"
+          echo "Before symlink:"
+          ls -l "\$DEPLOY_PATH"
+          ln -sfn "\$RELEASE_DIR" "\$DEPLOY_PATH/current"
+          echo "After symlink:"
+          ls -l "\$DEPLOY_PATH"
           # Ensure proper ownership
-          sudo chown -R ${USER}:${USER} "${DEPLOY_PATH}"
+          sudo chown -R \$USER:\$USER "\$DEPLOY_PATH"
           # Start (or restart) service
           sudo systemctl restart esports-bot || sudo systemctl start esports-bot
           # Give service a few seconds to start
