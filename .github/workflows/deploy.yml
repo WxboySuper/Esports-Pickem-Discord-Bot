@@ -85,7 +85,7 @@ jobs:
               fi;
 
               # Create venv inside the release and install requirements (if present)
-              python3 -m venv \"'\"'${REMOTE_DIR}'\"'/venv\";
+              python3 -m venv \"${REMOTE_DIR}/venv\";
               \"'\"'${REMOTE_DIR}'\"'/venv/bin/pip\" install --upgrade pip setuptools wheel || true;
               if [ -f \"'\"'${REMOTE_DIR}'\"'/requirements.txt\" ]; then
                 \"'\"'${REMOTE_DIR}'\"'/venv/bin/pip\" install -r \"'\"'${REMOTE_DIR}'\"'/requirements.txt\" || true;
