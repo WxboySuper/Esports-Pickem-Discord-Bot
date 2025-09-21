@@ -166,8 +166,13 @@ jobs:
           ln -sfn "\$RELEASE_DIR" "\$DEPLOY_PATH/current"
           echo "After symlink:"
           ls -l "\$DEPLOY_PATH"
-          # Ensure proper ownership
-          sudo chown -R "\$DEPLOY_USER:\$DEPLOY_USER" "\$DEPLOY_PATH"
+          # Ensure proper ownership if user exists
+          if id "\$DEPLOY_USER" &>/dev/null; then
+            sudo chown -R "\$DEPLOY_USER:\$DEPLOY_USER" "\$DEPLOY_PATH"
+          else
+            echo "User \$DEPLOY_USER does not exist. Please create the user or set DEPLOY_USER correctly."
+            exit 1
+          fi
           # Start (or restart) service
           sudo systemctl restart esports-bot || sudo systemctl start esports-bot
           # Give service a few seconds to start
