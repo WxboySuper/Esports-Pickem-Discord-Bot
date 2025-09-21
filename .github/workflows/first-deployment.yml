@@ -167,10 +167,10 @@ jobs:
           echo "After symlink:"
           ls -l "\$DEPLOY_PATH"
           # Ensure proper ownership if user exists
-          if id "\$DEPLOY_USER" &>/dev/null; then
-            sudo chown -R "\$DEPLOY_USER:\$DEPLOY_USER" "\$DEPLOY_PATH"
+          if id "$DEPLOY_USER" &>/dev/null; then
+            sudo chown -R "$DEPLOY_USER:$DEPLOY_USER" "\$DEPLOY_PATH"
           else
-            echo "User \$DEPLOY_USER does not exist. Please create the user or set DEPLOY_USER correctly."
+            echo "User $DEPLOY_USER does not exist. Please create the user or set DEPLOY_USER correctly."
             exit 1
           fi
           # Start (or restart) service
