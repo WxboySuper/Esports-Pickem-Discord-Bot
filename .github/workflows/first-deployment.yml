@@ -167,7 +167,7 @@ jobs:
           echo "After symlink:"
           ls -l "\$DEPLOY_PATH"
           # Ensure proper ownership
-          sudo chown -R \$USER:\$USER "\$DEPLOY_PATH"
+          sudo chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "$DEPLOY_PATH"
           # Start (or restart) service
           sudo systemctl restart esports-bot || sudo systemctl start esports-bot
           # Give service a few seconds to start
