@@ -5,6 +5,9 @@ name: Deploy Bot to VPS
 # - PROD_DEPLOY_USER
 # - PROD_DEPLOY_PATH
 # - PROD_SSH_PASSWORD
+# Optional secrets used to populate .env:
+# - PROD_DOTENV (full .env contents, optional)
+# - BOT_TOKEN, DATABASE_URL, SECRET_KEY, ... (individual keys, optional)
 
 on:
   workflow_dispatch:
@@ -30,6 +33,12 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      # ensure these are available to steps that need them; set in repo secrets
+      PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+      PROD_DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+      PROD_DEPLOY_USER: ${{ secrets.PROD_DEPLOY_USER }}
+      PROD_SSH_PASSWORD: ${{ secrets.PROD_SSH_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,19 +50,41 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sshpass rsync util-linux
 
-      - name: Package backend
+      - name: Package backend and build .env
+        env:
+          # optional: full dotenv content; if set it will be used instead of individual keys
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+          ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
+          DEVELOPER_USER_ID: ${{ secrets.DEVELOPER_USER_ID }}
+          DEVELOPER_GUILD_ID: ${{ secrets.DEVELOPER_GUILD_ID }}
+          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
         run: |
+          set -euo pipefail
           mkdir -p deployment-package
+
+          # Copy source (exclude venv and local env files)
           rsync -av --exclude='*.pyc' --exclude='__pycache__' --exclude='.env' --exclude='venv/' \
             src/ deployment-package/src/
           cp requirements.txt deployment-package/ || true
 
+          # Build deployment-package/.env either from a single PROD_DOTENV secret or by composing from individual secrets
+          if [ -n "${PROD_DOTENV:-}" ]; then
+            printf '%s\n' "${PROD_DOTENV}" > deployment-package/.env
+          else
+            cat > deployment-package/.env <<EOF
+          BOT_TOKEN=${BOT_TOKEN:-}
+          DATABASE_URL=${DATABASE_URL:-}
+          SECRET_KEY=${SECRET_KEY:-}
+          # Add other keys as needed; set them as repository secrets
+          EOF
+
+          fi
+          chmod 600 deployment-package/.env
+          echo "Packaged backend with .env (content masked by GitHub Secrets)."
+
       - name: Deploy to server
-        env:
-          PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
-          PROD_DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
-          PROD_DEPLOY_USER: ${{ secrets.PROD_DEPLOY_USER }}
-          PROD_SSH_PASSWORD: ${{ secrets.PROD_SSH_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -72,7 +103,6 @@ jobs:
 
           echo "Finalizing deploy on remote host (atomic privileged block)"
           KEEP=5
-          # Pass REMOTE_DIR into the sudo environment so the remote block uses the same directory we uploaded to.
           sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
             ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} \
             "sudo PROD_DEPLOY_PATH='${PROD_DEPLOY_PATH}' PROD_DEPLOY_USER='${PROD_DEPLOY_USER}' REMOTE_DIR='${REMOTE_DIR}' bash -s" <<'EOF'
@@ -91,30 +121,42 @@ jobs:
           # Use the REMOTE_DIR passed from the runner (do NOT recompute TIMESTAMP/REMOTE_DIR here)
           echo "Using REMOTE_DIR: ${REMOTE_DIR}"
 
+          # Create venv and install requirements inside the uploaded release
           python3 -m venv "${REMOTE_DIR}/venv"
           "${REMOTE_DIR}/venv/bin/pip" install --upgrade pip setuptools wheel || true
           if [ -f "${REMOTE_DIR}/requirements.txt" ]; then
             "${REMOTE_DIR}/venv/bin/pip" install -r "${REMOTE_DIR}/requirements.txt" || true
           fi
 
+          # Secure the uploaded .env
+          if [ -f "${REMOTE_DIR}/.env" ]; then
+            chmod 600 "${REMOTE_DIR}/.env" || true
+            chown ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} "${REMOTE_DIR}/.env" || true
+          fi
+
+          # If current exists and is not a symlink, move it to a backup to avoid ln putting the link inside it
           if [ -e "${PROD_DEPLOY_PATH}/current" ] && [ ! -L "${PROD_DEPLOY_PATH}/current" ]; then
             mv "${PROD_DEPLOY_PATH}/current" "${PROD_DEPLOY_PATH}/releases/previous-current-$(date +%Y%m%d-%H%M%S)" || true
           fi
 
+          # Atomically update current to point to the new release
           ln -sfn "${REMOTE_DIR}" "${PROD_DEPLOY_PATH}/current"
+          # Immediately show what current points to
           echo "SYMLINK_AFTER_UPDATE: $(readlink -f "${PROD_DEPLOY_PATH}/current")"
 
+          # Fix ownership (best-effort)
           chown -R ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} "${REMOTE_DIR}" || true
           chown -h ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} "${PROD_DEPLOY_PATH}/current" || true
 
+          # Cleanup older releases
           cd "${RELEASE_ROOT}" || exit 0
           ls -1dt * 2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -rf || true
 
-          if systemctl list-units --full -all | grep -q '^esports-bot.service'; then
-            systemctl daemon-reload || true
-            systemctl restart esports-bot || true
-            systemctl status esports-bot --no-pager || true
-          fi
+          # Reload and restart service and print status (so Actions logs show if restart succeeded)
+          systemctl daemon-reload || true
+          systemctl restart esports-bot || true
+          echo "SYSTEMD_STATUS:"
+          systemctl status esports-bot --no-pager || true
 
           echo "Deployed to ${REMOTE_DIR}"
           EOF

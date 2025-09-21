@@ -28,7 +28,6 @@ logger.info("Startup cwd=%s", os.getcwd())
 logger.debug("Startup sys.path (first entries)=%s", sys.path[:6])
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-DEV_GUILD_ID = os.getenv("DEVELOPER_GUILD_ID")
 _raw_admin_ids = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS: list[int] = []
 if _raw_admin_ids.strip():
@@ -56,19 +55,37 @@ class EsportsBot(commands.Bot):
 
     async def setup_hook(self):
         # Dynamically discover and load all commands in the commands directory.
-        try:
-            import commands  # root-level package containing command modules
-        except ImportError:
-            logger.error(
-                "Could not import 'commands' package; "
-                "no commands loaded."
-            )
-        else:
-            for module_info in pkgutil.iter_modules(commands.__path__):
+        commands_pkg = None
+
+        # Prefer importing the commands package relative to this module's
+        # package.
+        if __package__:
+            pkg_name = f"{__package__}.commands"
+            try:
+                commands_pkg = importlib.import_module(pkg_name)
+            except ImportError:
+                logger.debug("Package %s not found: %s",
+                             pkg_name, sys.path[:6])
+
+        # Fallback: try importing top-level 'commands' package
+        if commands_pkg is None:
+            try:
+                commands_pkg = importlib.import_module("commands")
+            except ImportError:
+                logger.error(
+                    "Could not import 'commands' package; no commands loaded. "
+                    "Ensure either: (1) you run the app as a module "
+                    "or (2) /path/to/src is on PYTHONPATH, or change imports "
+                    "to be relative."
+                )
+                commands_pkg = None
+
+        if commands_pkg is not None:
+            for module_info in pkgutil.iter_modules(commands_pkg.__path__):
                 name = module_info.name
                 if name.startswith("_"):
                     continue  # skip private/dunder modules
-                full_name = f"{commands.__name__}.{name}"
+                full_name = f"{commands_pkg.__name__}.{name}"
                 try:
                     mod = importlib.import_module(full_name)
                     setup_fn = getattr(mod, "setup", None)
