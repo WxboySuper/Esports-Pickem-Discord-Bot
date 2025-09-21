@@ -39,14 +39,14 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y sshpass rsync
+          sudo apt-get install -y sshpass rsync flock
 
       - name: Package backend
         run: |
           mkdir -p deployment-package
           rsync -av --exclude='*.pyc' --exclude='__pycache__' --exclude='.env' --exclude='venv/' \
             src/ deployment-package/src/
-          cp requirements.txt deployment-package/
+          cp requirements.txt deployment-package/ || true
 
       - name: Deploy to server
         env:
@@ -70,15 +70,19 @@ jobs:
           rsync -avz --delete -e "sshpass -p '${PROD_SSH_PASSWORD}' ssh -o StrictHostKeyChecking=no" \
             deployment-package/ ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST}:"${REMOTE_DIR}/"
 
-          echo "Finalizing deploy on remote host"
-          # Make the new release the 'current' symlink atomically, create a venv, install requirements,
-          # set ownership, restart service, and cleanup older releases.
+          echo "Finalizing deploy on remote host (atomic privileged block)"
           KEEP=5
+          # All privileged actions happen inside one sudo bash -lc block which is wrapped in flock to avoid concurrent deploy races.
           sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
             ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} \
-            "sudo bash -lc 'set -e;
+            "sudo bash -lc 'set -euo pipefail; set -x;
+              LOCKFILE=\"/var/lock/esports-deploy.lock\";
+              exec 9>\"${LOCKFILE}\";
+              flock -n 9 || { echo \"Could not acquire deploy lock\" >&2; exit 1; };
+
               mkdir -p \"${RELEASE_ROOT}\";
-              # Ensure python3 is available
+
+              # Ensure python3 exists
               if ! command -v python3 >/dev/null 2>&1; then
                 echo \"python3 not found on remote host\" >&2; exit 1;
               fi;
@@ -90,13 +94,16 @@ jobs:
                 \"'\"'${REMOTE_DIR}'\"'/venv/bin/pip\" install -r \"'\"'${REMOTE_DIR}'\"'/requirements.txt\" || true;
               fi;
 
-              # If current exists and is not a symlink, move it to a backup to avoid ln putting the link inside it
+              # If current exists and is not a symlink, move it to a backup to avoid ln putting the link inside it.
               if [ -e \"'\"'${PROD_DEPLOY_PATH}'\"'/current\" ] && [ ! -L \"'\"'${PROD_DEPLOY_PATH}'\"'/current\" ]; then
                 mv \"'\"'${PROD_DEPLOY_PATH}'\"'/current\" \"'\"'${PROD_DEPLOY_PATH}'\"'/releases/previous-current-$(date +%Y%m%d-%H%M%S)\" || true;
               fi;
 
               # Atomically update current to point to the new release
               ln -sfn \"'\"'${REMOTE_DIR}'\"' \"'\"'${PROD_DEPLOY_PATH}'\"'/current\";
+              # Immediately show what current points to (resolved absolute path) so Actions log proves it
+              echo \"SYMLINK_AFTER_UPDATE: \$(readlink -f \"'\"'${PROD_DEPLOY_PATH}'\"'/current)\";
+
               # Fix ownership for the release dir and the symlink (best-effort)
               chown -R ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} \"'\"'${REMOTE_DIR}'\"'\" || true;
               chown -h ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} \"'\"'${PROD_DEPLOY_PATH}'\"'/current\" || true;
@@ -105,14 +112,14 @@ jobs:
               cd \"'\"'${RELEASE_ROOT}'\"' || exit 0;
               ls -1dt * 2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -rf || true;
 
-              # Restart service if it exists (adjust service name if needed)
+              # Restart the service (if present)
               if systemctl list-units --full -all | grep -q '^esports-bot.service'; then
                 systemctl daemon-reload || true;
                 systemctl restart esports-bot || true;
+                systemctl status esports-bot --no-pager || true;
               fi;
 
-              echo \"Deployed to ${REMOTE_DIR}\"'"
+              echo \"Deployed to ${REMOTE_DIR}\";
+            '"
 
-          echo "Deployment finished. Current points to:"
-          sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
-            ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} "readlink -f '${PROD_DEPLOY_PATH}/current' || true"
+          echo "Deployment finished. Run Actions logs to confirm SYMLINK_AFTER_UPDATE and Deployed messages."
