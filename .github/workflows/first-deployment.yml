@@ -160,6 +160,7 @@ jobs:
           set -euo pipefail
           DEPLOY_PATH=\"$DEPLOY_PATH\"
           RELEASE_DIR=\"$RELEASE_DIR\"
+          mkdir -p "${DEPLOY_PATH}"
           ln -sfn "${RELEASE_DIR}" "${DEPLOY_PATH}/current"
           # Ensure proper ownership
           sudo chown -R ${USER}:${USER} "${DEPLOY_PATH}"
