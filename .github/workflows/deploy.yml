@@ -76,9 +76,6 @@ jobs:
           sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
             ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} \
             "sudo bash -lc 'set -euo pipefail; set -x;
-              LOCKFILE="/var/lock/esports-deploy.lock";
-              exec 9>"${LOCKFILE}";
-              flock -n 9 || { echo "Could not acquire deploy lock" >&2; exit 1; };
 
               mkdir -p \"${RELEASE_ROOT}\";
 
