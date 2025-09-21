@@ -71,22 +71,46 @@ jobs:
             deployment-package/ ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST}:"${REMOTE_DIR}/"
 
           echo "Finalizing deploy on remote host"
-          # Make the new release the 'current' symlink atomically, set ownership, restart service, and cleanup older releases.
+          # Make the new release the 'current' symlink atomically, create a venv, install requirements,
+          # set ownership, restart service, and cleanup older releases.
           KEEP=5
           sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
             ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} \
-            "sudo bash -lc 'set -e; \
-              mkdir -p \"${RELEASE_ROOT}\"; \
-              ln -sfn \"${REMOTE_DIR}\" \"${PROD_DEPLOY_PATH}/current\"; \
-              chown -R ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} \"${REMOTE_DIR}\" || true; \
-              chown -h ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} \"${PROD_DEPLOY_PATH}/current\" || true; \
-              cd \"${RELEASE_ROOT}\" || exit 0; \
-              ls -1dt * 2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -rf || true; \
-              # restart service if present (adjust service name as needed) \
-              if sudo systemctl list-units --full -all | grep -q '^esports-bot.service'; then \
-                sudo systemctl daemon-reload || true; \
-                sudo systemctl restart esports-bot || true; \
-              fi; \
+            "sudo bash -lc 'set -e;
+              mkdir -p \"${RELEASE_ROOT}\";
+              # Ensure python3 is available
+              if ! command -v python3 >/dev/null 2>&1; then
+                echo \"python3 not found on remote host\" >&2; exit 1;
+              fi;
+
+              # Create venv inside the release and install requirements (if present)
+              python3 -m venv \"'\"'${REMOTE_DIR}'\"'/venv\";
+              \"'\"'${REMOTE_DIR}'\"'/venv/bin/pip\" install --upgrade pip setuptools wheel || true;
+              if [ -f \"'\"'${REMOTE_DIR}'\"'/requirements.txt\" ]; then
+                \"'\"'${REMOTE_DIR}'\"'/venv/bin/pip\" install -r \"'\"'${REMOTE_DIR}'\"'/requirements.txt\" || true;
+              fi;
+
+              # If current exists and is not a symlink, move it to a backup to avoid ln putting the link inside it
+              if [ -e \"'\"'${PROD_DEPLOY_PATH}'\"'/current\" ] && [ ! -L \"'\"'${PROD_DEPLOY_PATH}'\"'/current\" ]; then
+                mv \"'\"'${PROD_DEPLOY_PATH}'\"'/current\" \"'\"'${PROD_DEPLOY_PATH}'\"'/releases/previous-current-$(date +%Y%m%d-%H%M%S)\" || true;
+              fi;
+
+              # Atomically update current to point to the new release
+              ln -sfn \"'\"'${REMOTE_DIR}'\"' \"'\"'${PROD_DEPLOY_PATH}'\"'/current\";
+              # Fix ownership for the release dir and the symlink (best-effort)
+              chown -R ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} \"'\"'${REMOTE_DIR}'\"'\" || true;
+              chown -h ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} \"'\"'${PROD_DEPLOY_PATH}'\"'/current\" || true;
+
+              # Cleanup older releases
+              cd \"'\"'${RELEASE_ROOT}'\"' || exit 0;
+              ls -1dt * 2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -rf || true;
+
+              # Restart service if it exists (adjust service name if needed)
+              if systemctl list-units --full -all | grep -q '^esports-bot.service'; then
+                systemctl daemon-reload || true;
+                systemctl restart esports-bot || true;
+              fi;
+
               echo \"Deployed to ${REMOTE_DIR}\"'"
 
           echo "Deployment finished. Current points to:"
