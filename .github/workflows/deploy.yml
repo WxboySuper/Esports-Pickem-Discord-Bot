@@ -74,7 +74,8 @@ jobs:
           KEEP=5
           # All privileged actions happen inside one sudo bash -lc block which is wrapped in flock to avoid concurrent deploy races.
           sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
-            ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} sudo bash -s <<'EOF'
+            ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} \
+            "sudo PROD_DEPLOY_PATH='${PROD_DEPLOY_PATH}' PROD_DEPLOY_USER='${PROD_DEPLOY_USER}' bash -s" <<'EOF'
           set -euo pipefail
           set -x
 
