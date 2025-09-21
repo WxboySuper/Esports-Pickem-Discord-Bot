@@ -177,6 +177,7 @@ jobs:
         env:
           DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
           RELEASE_DIR: ${{ env.RELEASE_DIR }}
+          DEPLOY_USER: ${{ env.DEPLOY_USER }}
 
       - name: Verification and Guidance
         run: |
