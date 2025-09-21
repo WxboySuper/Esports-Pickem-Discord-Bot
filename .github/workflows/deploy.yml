@@ -49,13 +49,46 @@ jobs:
           cp requirements.txt deployment-package/
 
       - name: Deploy to server
+        env:
+          PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+          PROD_DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+          PROD_DEPLOY_USER: ${{ secrets.PROD_DEPLOY_USER }}
+          PROD_SSH_PASSWORD: ${{ secrets.PROD_SSH_PASSWORD }}
         run: |
-          REMOTE_DIR="${{ secrets.PROD_DEPLOY_PATH }}/releases/$(date +%Y%m%d-%H%M%S)"
-          sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
-            ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }} "mkdir -p ${REMOTE_DIR}"
-          
-          rsync -avz --delete -e "sshpass -p '${{ secrets.PROD_SSH_PASSWORD }}' ssh -o StrictHostKeyChecking=no" \
-            deployment-package/ ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }}:${REMOTE_DIR}/
+          set -euo pipefail
 
-          sshpass -p "${{ secrets.PROD_SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
-            ${{ secrets.PROD_DEPLOY_USER }}@${{ secrets.PROD_DEPLOY_HOST }} "ln -sfn ${REMOTE_DIR} ${{ secrets.PROD_DEPLOY_PATH }}/current || true; echo 'Deployed to' ${REMOTE_DIR}"
+          # Release layout
+          RELEASE_ROOT="${PROD_DEPLOY_PATH}/releases"
+          TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+          REMOTE_DIR="${RELEASE_ROOT}/${TIMESTAMP}"
+
+          echo "Creating remote release dir: ${REMOTE_DIR}"
+          sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
+            ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} "mkdir -p '${REMOTE_DIR}'"
+
+          echo "Uploading files to ${REMOTE_DIR}"
+          rsync -avz --delete -e "sshpass -p '${PROD_SSH_PASSWORD}' ssh -o StrictHostKeyChecking=no" \
+            deployment-package/ ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST}:"${REMOTE_DIR}/"
+
+          echo "Finalizing deploy on remote host"
+          # Make the new release the 'current' symlink atomically, set ownership, restart service, and cleanup older releases.
+          KEEP=5
+          sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
+            ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} \
+            "sudo bash -lc 'set -e; \
+              mkdir -p \"${RELEASE_ROOT}\"; \
+              ln -sfn \"${REMOTE_DIR}\" \"${PROD_DEPLOY_PATH}/current\"; \
+              chown -R ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} \"${REMOTE_DIR}\" || true; \
+              chown -h ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} \"${PROD_DEPLOY_PATH}/current\" || true; \
+              cd \"${RELEASE_ROOT}\" || exit 0; \
+              ls -1dt * 2>/dev/null | tail -n +$((KEEP+1)) | xargs -r rm -rf || true; \
+              # restart service if present (adjust service name as needed) \
+              if sudo systemctl list-units --full -all | grep -q '^esports-bot.service'; then \
+                sudo systemctl daemon-reload || true; \
+                sudo systemctl restart esports-bot || true; \
+              fi; \
+              echo \"Deployed to ${REMOTE_DIR}\"'"
+
+          echo "Deployment finished. Current points to:"
+          sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
+            ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} "readlink -f '${PROD_DEPLOY_PATH}/current' || true"
