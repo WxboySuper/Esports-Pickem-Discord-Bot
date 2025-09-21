@@ -74,9 +74,13 @@ jobs:
             printf '%s\n' "${PROD_DOTENV}" > deployment-package/.env
           else
             cat > deployment-package/.env <<EOF
-          BOT_TOKEN=${BOT_TOKEN:-}
-          DATABASE_URL=${DATABASE_URL:-}
-          SECRET_KEY=${SECRET_KEY:-}
+          DISCORD_TOKEN=${DISCORD_TOKEN:-}
+          DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
+          DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}
+          ADMIN_IDS=${ADMIN_IDS:-}
+          DEVELOPER_USER_ID=${DEVELOPER_USER_ID:-}
+          DEVELOPER_GUILD_ID=${DEVELOPER_GUILD_ID:-}
+          LOG_LEVEL=${LOG_LEVEL:-INFO}
           # Add other keys as needed; set them as repository secrets
           EOF
 
