@@ -24,6 +24,9 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger("esports-bot")
 
+logger.info("Startup cwd=%s", os.getcwd())
+logger.info("Startup sys.path (first entries)=%s", sys.path[:6])
+
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DEV_GUILD_ID = os.getenv("DEVELOPER_GUILD_ID")
 _raw_admin_ids = os.getenv("ADMIN_IDS", "")
