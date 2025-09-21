@@ -57,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Release layout
+          # Compute release path once on the runner
           RELEASE_ROOT="${PROD_DEPLOY_PATH}/releases"
           TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
           REMOTE_DIR="${RELEASE_ROOT}/${TIMESTAMP}"
@@ -72,16 +72,14 @@ jobs:
 
           echo "Finalizing deploy on remote host (atomic privileged block)"
           KEEP=5
-          # All privileged actions happen inside one sudo bash -lc block which is wrapped in flock to avoid concurrent deploy races.
+          # Pass REMOTE_DIR into the sudo environment so the remote block uses the same directory we uploaded to.
           sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
             ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} \
-            "sudo PROD_DEPLOY_PATH='${PROD_DEPLOY_PATH}' PROD_DEPLOY_USER='${PROD_DEPLOY_USER}' bash -s" <<'EOF'
+            "sudo PROD_DEPLOY_PATH='${PROD_DEPLOY_PATH}' PROD_DEPLOY_USER='${PROD_DEPLOY_USER}' REMOTE_DIR='${REMOTE_DIR}' bash -s" <<'EOF'
           set -euo pipefail
           set -x
 
           RELEASE_ROOT="${PROD_DEPLOY_PATH}/releases"
-          TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-          REMOTE_DIR="${RELEASE_ROOT}/${TIMESTAMP}"
           KEEP=5
 
           mkdir -p "${RELEASE_ROOT}"
@@ -89,6 +87,9 @@ jobs:
           if ! command -v python3 >/dev/null 2>&1; then
             echo "python3 not found on remote host" >&2; exit 1
           fi
+
+          # Use the REMOTE_DIR passed from the runner (do NOT recompute TIMESTAMP/REMOTE_DIR here)
+          echo "Using REMOTE_DIR: ${REMOTE_DIR}"
 
           python3 -m venv "${REMOTE_DIR}/venv"
           "${REMOTE_DIR}/venv/bin/pip" install --upgrade pip setuptools wheel || true
@@ -117,3 +118,7 @@ jobs:
 
           echo "Deployed to ${REMOTE_DIR}"
           EOF
+
+          echo "Deployment finished. Current points to:"
+          sshpass -p "${PROD_SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no \
+            ${PROD_DEPLOY_USER}@${PROD_DEPLOY_HOST} "readlink -f '${PROD_DEPLOY_PATH}/current' || true"
