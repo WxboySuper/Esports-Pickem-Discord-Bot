@@ -117,5 +117,3 @@ jobs:
 
           echo "Deployed to ${REMOTE_DIR}"
           EOF
-
-          echo "Deployment finished. Run Actions logs to confirm SYMLINK_AFTER_UPDATE and Deployed messages."
