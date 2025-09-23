@@ -1,4 +1,2 @@
 discord.py==2.6.3
 python-dotenv==1.1.1  # optional for local dev if you want to load .env
-pytest==8.4.2
-pytest-asyncio==1.2.0
