@@ -47,4 +47,4 @@ class Result(SQLModel, table=True):
     match_id: int = Field(foreign_key="match.id", unique=True)
     winner: str
     score: Optional[str]
-    match: Optional[Match] = Relationship(back_populates="result")
+    match: "Match" = Relationship(back_populates="result")
