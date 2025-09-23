@@ -2,12 +2,6 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 from alembic import context
-from importlib import import_module
-
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
-import_module("src.models")
 
 config = context.config
 fileConfig(config.config_file_name)
