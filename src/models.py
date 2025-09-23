@@ -1,6 +1,10 @@
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlmodel import SQLModel, Field, Relationship
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class User(SQLModel, table=True):
@@ -36,7 +40,7 @@ class Pick(SQLModel, table=True):
     contest_id: int = Field(foreign_key="contest.id")
     match_id: int = Field(foreign_key="match.id")
     chosen_team: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_now_utc)
     user: Optional[User] = Relationship(back_populates="picks")
     contest: Optional[Contest] = Relationship(back_populates="picks")
     match: Optional[Match] = Relationship(back_populates="picks")
