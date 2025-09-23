@@ -1,14 +1,7 @@
 import importlib
 import pkgutil
-import os
-import sys
 import pytest
 import inspect
-
-# Ensure src/ is importable
-sys.path.insert(0, os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "src")
-))
 
 
 def test_commands_package_importable():
