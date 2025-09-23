@@ -3,6 +3,11 @@ from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 from alembic import context
 
+# importlib is used to import the models module so model classes are registered
+# without using a wildcard import or leaving an unused import name.
+import importlib
+importlib.import_module("src.models")
+
 config = context.config
 fileConfig(config.config_file_name)
 target_metadata = SQLModel.metadata
