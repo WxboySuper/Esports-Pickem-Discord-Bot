@@ -25,7 +25,6 @@ class Match(SQLModel, table=True):
     team1: str
     team2: str
     scheduled_time: datetime
-    result_id: Optional[int] = Field(default=None, foreign_key="result.id")
     contest: Optional[Contest] = Relationship(back_populates="matches")
     result: Optional["Result"] = Relationship(back_populates="match")
     picks: List["Pick"] = Relationship(back_populates="match")
