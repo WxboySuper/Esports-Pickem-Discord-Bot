@@ -1,10 +1,41 @@
 from typing import Optional, List
 from datetime import datetime, timezone
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column
+from sqlalchemy.types import TypeDecorator, String
 
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class TZDateTime(TypeDecorator):
+    """Stores tz-aware datetimes as ISO-8601 strings with offset.
+
+    SQLite lacks native timezone support; this decorator serializes datetimes
+    to ISO strings including the UTC offset, and deserializes back to aware
+    datetimes using datetime.fromisoformat.
+    """
+
+    impl = String(64)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            # Treat naive as UTC for consistency
+            value = value.replace(tzinfo=timezone.utc)
+            # Serialize as UTC ISO string
+            return value.isoformat()
+        # For aware datetimes, preserve original offset
+        return value.isoformat()
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        # fromisoformat returns aware dt if string has offset
+        return datetime.fromisoformat(value)
 
 
 class User(SQLModel, table=True):
@@ -16,7 +47,7 @@ class User(SQLModel, table=True):
 
 class Contest(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
+    name: str = Field(index=True)
     start_date: datetime
     end_date: datetime
     matches: List["Match"] = Relationship(back_populates="contest")
@@ -25,10 +56,10 @@ class Contest(SQLModel, table=True):
 
 class Match(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    contest_id: int = Field(foreign_key="contest.id")
+    contest_id: int = Field(foreign_key="contest.id", index=True)
     team1: str
     team2: str
-    scheduled_time: datetime
+    scheduled_time: datetime = Field(index=True)
     contest: Optional[Contest] = Relationship(back_populates="matches")
     result: Optional["Result"] = Relationship(back_populates="match")
     picks: List["Pick"] = Relationship(back_populates="match")
@@ -36,11 +67,14 @@ class Match(SQLModel, table=True):
 
 class Pick(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id")
-    contest_id: int = Field(foreign_key="contest.id")
-    match_id: int = Field(foreign_key="match.id")
+    user_id: int = Field(foreign_key="user.id", index=True)
+    contest_id: int = Field(foreign_key="contest.id", index=True)
+    match_id: int = Field(foreign_key="match.id", index=True)
     chosen_team: str
-    timestamp: datetime = Field(default_factory=_now_utc)
+    timestamp: datetime = Field(
+        default_factory=_now_utc,
+        sa_column=Column(TZDateTime()),
+    )
     user: Optional[User] = Relationship(back_populates="picks")
     contest: Optional[Contest] = Relationship(back_populates="picks")
     match: Optional[Match] = Relationship(back_populates="picks")
