@@ -101,7 +101,7 @@ def test_match_crud_and_queries(session: Session):
     contest = _mk_contest(session)
 
     # Create matches across different times
-    day = datetime(2025, 5, 10)
+    day = datetime(2025, 5, 10, tzinfo=timezone.utc)
     m1 = crud.create_match(session, contest.id, "A", "B", scheduled_time=day)
     m2 = crud.create_match(
         session,

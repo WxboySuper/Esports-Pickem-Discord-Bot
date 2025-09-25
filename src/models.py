@@ -26,8 +26,10 @@ class TZDateTime(TypeDecorator):
         if value.tzinfo is None:
             # Treat naive as UTC for consistency
             value = value.replace(tzinfo=timezone.utc)
-        # Ensure offset present; avoid 'Z' for Python <3.11 compatibility
-        return value.astimezone(timezone.utc).isoformat()
+            # Serialize as UTC ISO string
+            return value.isoformat()
+        # For aware datetimes, preserve original offset
+        return value.isoformat()
 
     def process_result_value(self, value, dialect):
         if value is None:
