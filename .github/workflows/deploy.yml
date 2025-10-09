@@ -69,6 +69,15 @@ jobs:
             src/ deployment-package/src/
           cp requirements.txt deployment-package/ || true
 
+          # Ship alembic configuration + migrations so deploys can run schema updates
+          if [ -f alembic.ini ]; then
+            cp alembic.ini deployment-package/
+          fi
+
+          if [ -d alembic ]; then
+            rsync -av --delete alembic/ deployment-package/alembic/
+          fi
+
           # Build deployment-package/.env either from a single PROD_DOTENV secret or by composing from individual secrets
           if [ -n "${PROD_DOTENV:-}" ]; then
             printf '%s\n' "${PROD_DOTENV}" > deployment-package/.env
@@ -158,6 +167,7 @@ jobs:
 
           # Reload and restart service and print status (so Actions logs show if restart succeeded)
           systemctl daemon-reload || true
+          echo "Restarting esports-bot service to apply new release"
           systemctl restart esports-bot || true
           echo "SYSTEMD_STATUS:"
           systemctl status esports-bot --no-pager || true
