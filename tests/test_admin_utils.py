@@ -1,5 +1,3 @@
-import pytest
-import os
 from unittest.mock import patch
 
 from src.admin_utils import is_admin

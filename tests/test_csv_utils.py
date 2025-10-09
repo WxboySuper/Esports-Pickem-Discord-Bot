@@ -1,4 +1,3 @@
-import pytest
 from datetime import datetime, timezone
 
 from src.csv_utils import parse_match_csv
@@ -116,7 +115,7 @@ def test_parse_match_csv_only_header():
 def test_parse_match_csv_whitespace_handling():
     """Test that whitespace is properly trimmed."""
     csv_content = """scheduled_time,team1,team2
- 2025-01-15T14:00:00Z , Team A , Team B 
+ 2025-01-15T14:00:00Z , Team A , Team B
 """
     valid_rows, errors = parse_match_csv(csv_content)
 

@@ -124,12 +124,19 @@ mypy .
 
 Once the bot is running in your Discord server:
 
+### User Commands
 - `/ping` - Test if the bot is responsive
-- `/pick <match_id> <prediction>` - Submit a pick for a match (users)
-- `/picks` - View your current picks (users)
-- `/leaderboard` - View contest leaderboard (users)
-- `/upload_matches` - Upload match schedule via CSV (admins only)
-- `/enter_result <match_id> <result>` - Enter match result (admins only)
+- `/info` - Display bot information and available commands
+- `/pick <match_id> <prediction>` - Submit a pick for a match
+- `/picks` - View your current picks
+- `/leaderboard` - View contest leaderboard
+
+### Admin Commands
+- `/create_contest` - Create a new pick'em contest
+- `/upload_matches` - Upload match schedule via CSV file
+- `/enter_result <match_id> <result>` - Enter match result (coming soon)
+
+For detailed admin command usage, see the [Admin Guide](./docs/ADMIN_GUIDE.md).
 
 ## Project Structure
 
