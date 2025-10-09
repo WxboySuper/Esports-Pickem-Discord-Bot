@@ -71,6 +71,8 @@ class Pick(SQLModel, table=True):
     contest_id: int = Field(foreign_key="contest.id", index=True)
     match_id: int = Field(foreign_key="match.id", index=True)
     chosen_team: str
+    status: Optional[str] = Field(default="pending", index=True)
+    score: Optional[int] = Field(default=0)
     timestamp: datetime = Field(
         default_factory=_now_utc,
         sa_column=Column(TZDateTime()),

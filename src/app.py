@@ -81,7 +81,17 @@ class EsportsBot(commands.Bot):
                 commands_pkg = None
 
         if commands_pkg is not None:
-            COMMAND_MODULES = ["ping", "info", "contest", "match"]
+            COMMAND_MODULES = [
+                "ping",
+                "info",
+                "contest",
+                "matches",
+                "pick",
+                "picks",
+                "stats",
+                "leaderboard",
+                "result",
+            ]
             for name in COMMAND_MODULES:
                 full_name = f"{commands_pkg.__name__}.{name}"
                 try:

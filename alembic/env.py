@@ -1,7 +1,16 @@
+import os
+import sys
 from logging.config import fileConfig
+
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
+
 from alembic import context
+
+# Add project root to the Python path
+# This is necessary for alembic to find the models in the src directory
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 # importlib is used to import the models module so model classes are registered
 # without using a wildcard import or leaving an unused import name.
