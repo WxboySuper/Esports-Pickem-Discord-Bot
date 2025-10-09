@@ -1,0 +1,112 @@
+# src/commands/result.py
+
+import logging
+from typing import List
+
+import discord
+from discord import app_commands
+from sqlmodel import Session
+
+from src.db import get_session
+from src import crud
+from src.app import ADMIN_IDS
+from src.models import Match
+
+logger = logging.getLogger("esports-bot.commands.result")
+
+
+async def winner_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> List[app_commands.Choice[str]]:
+    """Autocompletes the winner argument with the teams from the specified match."""
+    match_id_str = interaction.namespace.match_id
+    if not match_id_str:
+        return []
+
+    try:
+        match_id = int(match_id_str)
+    except ValueError:
+        return []
+
+    session: Session = next(get_session())
+    match = crud.get_match_by_id(session, match_id)
+
+    if not match:
+        return []
+
+    choices = [
+        app_commands.Choice(name=match.team1, value=match.team1),
+        app_commands.Choice(name=match.team2, value=match.team2),
+    ]
+
+    # Filter choices based on what the user has already typed
+    return [choice for choice in choices if current.lower() in choice.name.lower()]
+
+
+@app_commands.command(name="enter-result", description="Enter the result of a match (Admin only).")
+@app_commands.describe(match_id="The ID of the match to enter a result for.", winner="The winning team.")
+@app_commands.autocomplete(winner=winner_autocomplete)
+async def enter_result(interaction: discord.Interaction, match_id: int, winner: str):
+    """Admin command to enter a match result and score all related picks."""
+    if interaction.user.id not in ADMIN_IDS:
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
+
+    logger.info(f"Admin '{interaction.user.name}' is entering a result for match {match_id}.")
+    await interaction.response.defer(ephemeral=True)
+
+    session: Session = next(get_session())
+
+    # --- Validation ---
+    match = crud.get_match_by_id(session, match_id)
+    if not match:
+        await interaction.followup.send(f"Match with ID {match_id} not found.", ephemeral=True)
+        return
+
+    if winner not in [match.team1, match.team2]:
+        await interaction.followup.send(f"Invalid winner. Please choose either '{match.team1}' or '{match.team2}'.", ephemeral=True)
+        return
+
+    if crud.get_result_for_match(session, match_id):
+        await interaction.followup.send(f"A result for match {match_id} has already been entered.", ephemeral=True)
+        return
+
+    # --- Process Result and Score Picks ---
+    try:
+        # 1. Create the result
+        crud.create_result(session, match_id=match_id, winner=winner)
+
+        # 2. Get all picks for the match
+        picks = crud.list_picks_for_match(session, match_id)
+
+        updated_picks_count = 0
+        for pick in picks:
+            if pick.chosen_team == winner:
+                pick.status = "correct"
+                pick.score = 10  # Award 10 points for a correct pick
+            else:
+                pick.status = "incorrect"
+                pick.score = 0
+
+            session.add(pick)
+            updated_picks_count += 1
+
+        session.commit()
+
+        await interaction.followup.send(
+            f"Result for match **{match.team1} vs {match.team2}** has been entered as **{winner}**.\n"
+            f"Processed and scored {updated_picks_count} user picks.",
+            ephemeral=True
+        )
+
+    except Exception as e:
+        logger.exception(f"Error entering result for match {match_id}")
+        session.rollback()
+        await interaction.followup.send(f"An unexpected error occurred: {e}", ephemeral=True)
+    finally:
+        session.close()
+
+
+async def setup(bot):
+    bot.tree.add_command(enter_result)
