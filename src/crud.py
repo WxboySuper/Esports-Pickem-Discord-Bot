@@ -121,6 +121,16 @@ def create_match(
     return match
 
 
+def bulk_create_matches(session: Session, matches_data: List[dict]) -> List[Match]:
+    """Bulk creates matches from a list of dicts."""
+    matches = [Match(**data) for data in matches_data]
+    session.add_all(matches)
+    session.commit()
+    for match in matches:
+        session.refresh(match)
+    return matches
+
+
 def get_matches_by_date(session: Session, date: datetime) -> List[Match]:
     # Assumes 'date' is the day, returns matches scheduled on that date
     start = datetime(date.year, date.month, date.day, tzinfo=timezone.utc)
@@ -139,6 +149,10 @@ def list_matches_for_contest(session: Session, contest_id: int) -> List[Match]:
     # to keep line length < 79 chars
     stmt = select(Match).where(Match.contest_id == contest_id)
     return list(session.exec(stmt))
+
+
+def get_match_by_id(session: Session, match_id: int) -> Optional[Match]:
+    return session.get(Match, match_id)
 
 
 def update_match(
@@ -195,6 +209,20 @@ def create_pick(
     session.commit()
     session.refresh(pick)
     return pick
+
+
+def get_pick_by_id(session: Session, pick_id: int) -> Optional[Pick]:
+    return session.get(Pick, pick_id)
+
+
+def list_picks_for_user(session: Session, user_id: int) -> List[Pick]:
+    statement = select(Pick).where(Pick.user_id == user_id)
+    return list(session.exec(statement))
+
+
+def list_picks_for_match(session: Session, match_id: int) -> List[Pick]:
+    statement = select(Pick).where(Pick.match_id == match_id)
+    return list(session.exec(statement))
 
 
 def update_pick(

@@ -144,6 +144,31 @@ def test_match_update_delete_missing(session: Session):
     assert crud.delete_match(session, 5555) is False
 
 
+def test_bulk_create_matches(session: Session):
+    contest = _mk_contest(session)
+    matches_data = [
+        {
+            "contest_id": contest.id,
+            "team1": "T1",
+            "team2": "T2",
+            "scheduled_time": datetime(2025, 5, 15, 12, 0, 0),
+        },
+        {
+            "contest_id": contest.id,
+            "team1": "T3",
+            "team2": "T4",
+            "scheduled_time": datetime(2025, 5, 16, 12, 0, 0),
+        },
+    ]
+
+    created_matches = crud.bulk_create_matches(session, matches_data)
+    assert len(created_matches) == 2
+
+    db_matches = crud.list_matches_for_contest(session, contest.id)
+    assert len(db_matches) == 2
+    assert {m.team1 for m in db_matches} == {"T1", "T3"}
+
+
 # ---- PICK ----
 def _mk_user_contest_match(session: Session):
     user = crud.create_user(session, discord_id="u1", username="u1")
