@@ -29,7 +29,7 @@ class ContestModal(discord.ui.Modal, title="Create New Contest"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        session = get_session()
+        session = next(get_session())
         from datetime import datetime
 
         try:
