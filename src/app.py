@@ -81,10 +81,8 @@ class EsportsBot(commands.Bot):
                 commands_pkg = None
 
         if commands_pkg is not None:
-            for module_info in pkgutil.iter_modules(commands_pkg.__path__):
-                name = module_info.name
-                if name.startswith("_"):
-                    continue  # skip private/dunder modules
+            COMMAND_MODULES = ["ping", "info", "contest", "match"]
+            for name in COMMAND_MODULES:
                 full_name = f"{commands_pkg.__name__}.{name}"
                 try:
                     mod = importlib.import_module(full_name)
