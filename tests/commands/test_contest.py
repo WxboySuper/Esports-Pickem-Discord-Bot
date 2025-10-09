@@ -47,7 +47,8 @@ async def test_contest_modal_on_submit_success(mock_get_session, mock_create_con
     modal.end_date = MagicMock()
     modal.end_date.value = "2025-01-31"
 
-    mock_session = mock_get_session.return_value.__next__.return_value
+    mock_session = MagicMock()
+    mock_get_session.return_value = iter([mock_session])
     created_contest = ContestModel(id=1, name="Test Contest")
     mock_create_contest.return_value = created_contest
 
