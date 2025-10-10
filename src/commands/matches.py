@@ -27,20 +27,56 @@ async def contest_autocompletion(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[int]]:
-    """autocompletion for contest"""
+    """Autocomplete for contests, showing active and upcoming contests."""
     with next(get_session()) as session:
-        contests = crud.list_contests(session)
+        all_contests = crud.list_contests(session)
+        now = datetime.now(timezone.utc)
 
-        # Sort contests by creation date, newest first
-        contests.sort(key=lambda c: c.id, reverse=True)
+        active_contests = []
+        upcoming_contests = []
+
+        for contest in all_contests:
+            # Make naive datetimes timezone-aware (assume UTC)
+            start_date = (
+                contest.start_date.replace(tzinfo=timezone.utc)
+                if contest.start_date.tzinfo is None
+                else contest.start_date
+            )
+            end_date = (
+                contest.end_date.replace(tzinfo=timezone.utc)
+                if contest.end_date.tzinfo is None
+                else contest.end_date
+            )
+
+            if end_date > now:  # Not ended
+                if start_date <= now:
+                    active_contests.append(contest)
+                else:
+                    upcoming_contests.append(contest)
+
+        # Sort active and upcoming contests by start date (earliest first)
+        active_contests.sort(key=lambda c: c.start_date)
+        upcoming_contests.sort(key=lambda c: c.start_date)
+
+        # Combine lists, active first, and get the top 25
+        sorted_contests = (active_contests + upcoming_contests)[:25]
 
         choices = []
-        for contest in contests:
+        # Now, filter these 25 based on the user's input
+        for contest in sorted_contests:
             if current.lower() in contest.name.lower():
-                choices.append(app_commands.Choice(name=contest.name, value=contest.id))
+                choice_name = f"{contest.name} (ID: {contest.id})"
+                # Discord has a 100-char limit for choice names
+                if len(choice_name) > 100:
+                    choice_name = f"{contest.name[:80]}... (ID: {contest.id})"
+                choices.append(
+                    app_commands.Choice(
+                        name=choice_name,
+                        value=contest.id,
+                    )
+                )
 
-    # Return the first 25 choices, as Discord has a limit
-    return choices[:25]
+    return choices
 
 
 async def create_matches_embed(
