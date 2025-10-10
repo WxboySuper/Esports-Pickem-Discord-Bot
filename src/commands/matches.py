@@ -23,6 +23,26 @@ matches_group = app_commands.Group(
 # --- Helper Functions and Classes ---
 
 
+async def contest_autocompletion(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[int]]:
+    """autocompletion for contest"""
+    session: Session = next(get_session())
+    contests = crud.list_contests(session)
+
+    # Sort contests by creation date, newest first
+    contests.sort(key=lambda c: c.id, reverse=True)
+
+    choices = []
+    for contest in contests:
+        if current.lower() in contest.name.lower():
+            choices.append(app_commands.Choice(name=contest.name, value=contest.id))
+
+    # Return the first 25 choices, as Discord has a limit
+    return choices[:25]
+
+
 async def create_matches_embed(
     title: str, matches: list[Match], interaction: discord.Interaction
 ) -> discord.Embed:
@@ -161,6 +181,7 @@ async def view_by_tournament(interaction: discord.Interaction):
 @matches_group.command(
     name="upload", description="Upload a match schedule via CSV (Admin only)."
 )
+@app_commands.autocomplete(contest_id=contest_autocompletion)
 @app_commands.describe(
     contest_id="The ID of the contest to add matches to.",
     attachment="The CSV file with the match schedule.",
