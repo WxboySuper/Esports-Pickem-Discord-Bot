@@ -13,10 +13,14 @@ VALID_CSV = (
 )
 
 # CSV with a missing column
-INVALID_CSV_MISSING_COLUMN = "team1,scheduled_time\n" "Team A,2025-01-01T12:00:00\n"
+INVALID_CSV_MISSING_COLUMN = (
+    "team1,scheduled_time\n" "Team A,2025-01-01T12:00:00\n"
+)
 
 # CSV with an invalid date format
-INVALID_CSV_BAD_DATE = "team1,team2,scheduled_time\n" "Team A,Team B,2025/01/01 12:00\n"
+INVALID_CSV_BAD_DATE = (
+    "team1,team2,scheduled_time\n" "Team A,Team B,2025/01/01 12:00\n"
+)
 
 
 @pytest.fixture
@@ -35,7 +39,9 @@ def mock_interaction():
 @patch("src.commands.matches.get_session")
 @patch("src.commands.matches.crud")
 @patch("src.commands.matches.ADMIN_IDS", [12345])
-async def test_upload_command_valid_csv(mock_crud, mock_get_session, mock_interaction):
+async def test_upload_command_valid_csv(
+    mock_crud, mock_get_session, mock_interaction
+):
     # Arrange
     attachment = AsyncMock(spec=discord.Attachment)
     attachment.read.return_value = VALID_CSV.encode("utf-8")
@@ -46,7 +52,9 @@ async def test_upload_command_valid_csv(mock_crud, mock_get_session, mock_intera
     mock_session = mock_get_session.return_value.__next__.return_value
 
     # Act
-    await upload.callback(mock_interaction, contest_id=1, attachment=attachment)
+    await upload.callback(
+        mock_interaction, contest_id=1, attachment=attachment
+    )
 
     # Assert
     mock_interaction.response.defer.assert_called_once_with(ephemeral=True)
@@ -95,7 +103,9 @@ async def test_upload_command_invalid_csv(
     mock_crud.get_contest_by_id.return_value = mock_contest
 
     # Act
-    await upload.callback(mock_interaction, contest_id=1, attachment=attachment)
+    await upload.callback(
+        mock_interaction, contest_id=1, attachment=attachment
+    )
 
     # Assert
     mock_interaction.followup.send.assert_called_once()

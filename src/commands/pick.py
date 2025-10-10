@@ -23,9 +23,8 @@ class MatchSelect(discord.ui.Select):
             # Indicate if the user has already picked this match
             picked_indicator = " (✓ Picked)" if match.id in user_picks else ""
             label = f"{match.team1} vs {match.team2}{picked_indicator}"
-            description = (
-                f"Scheduled: {match.scheduled_time.strftime('%Y-%m-%d %H:%M UTC')}"
-            )
+            time_str = match.scheduled_time.strftime("%Y-%m-%d %H:%M UTC")
+            description = f"Scheduled: {time_str}"
             options.append(
                 discord.SelectOption(
                     label=label, value=str(match.id), description=description
