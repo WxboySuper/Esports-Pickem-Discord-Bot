@@ -2,10 +2,11 @@
 
 import logging
 from datetime import datetime, timezone, timedelta
+from typing import List, Union
 
 import discord
 from discord import app_commands
-from sqlalchemy import func
+from sqlalchemy import func, case, Float
 from sqlmodel import Session, select
 
 from src.db import get_session
@@ -15,7 +16,16 @@ from src import crud
 logger = logging.getLogger("esports-bot.commands.leaderboard")
 
 
+MIN_PICKS_FOR_ACCURACY_LEADERBOARD = 5
+
+
 # --- Helper Functions ---
+
+
+LeaderboardData = Union[
+    List[tuple[User, float, int]],  # Accuracy, Total Correct
+    List[tuple[User, int]],  # Total Correct
+]
 
 
 async def get_leaderboard_data(
@@ -23,38 +33,76 @@ async def get_leaderboard_data(
     days: int = None,
     guild_id: int = None,
     contest_id: int = None,
-) -> list[tuple[User, int]]:
-    """Fetches and calculates leaderboard data based on the given criteria."""
-    query = select(User, func.sum(Pick.score).label("total_score")).join(Pick)
+) -> LeaderboardData:
+    """
+    Fetches and calculates leaderboard data based on the given criteria.
 
-    if days:
-        start_date = datetime.now(timezone.utc) - timedelta(days=days)
-        query = query.where(Pick.timestamp >= start_date)
+    - If 'days' or 'contest_id' is provided, it's a count-based leaderboard
+      (total correct picks).
+    - Otherwise, it's an accuracy-based leaderboard (Global/Server).
+    """
+    is_accuracy_based = not days and not contest_id
 
-    if contest_id:
-        query = query.where(Pick.contest_id == contest_id)
+    if is_accuracy_based:
+        # --- Accuracy-Based Leaderboard (Global/Server) ---
+        total_correct = func.sum(case((Pick.status == "correct", 1), else_=0))
+        total_resolved = func.sum(
+            case((Pick.status.in_(["correct", "incorrect"]), 1), else_=0)
+        )
 
-    # Guild filtering would require storing guild_id on User or Pick.
-    # For now, we'll simulate it by fetching all and then filtering.
-    # This is not efficient for large datasets.
+        accuracy = case(
+            (
+                total_resolved > 0,
+                (func.cast(total_correct, Float) / func.cast(total_resolved, Float))
+                * 100,
+            ),
+            else_=0.0,
+        ).label("accuracy")
 
-    query = query.group_by(User.id).order_by(func.sum(Pick.score).desc())
+        query = (
+            select(User, accuracy, total_correct.label("total_correct"))
+            .join(Pick)
+            .where(Pick.status.in_(["correct", "incorrect"]))
+            .group_by(User.id)
+            .having(total_resolved >= MIN_PICKS_FOR_ACCURACY_LEADERBOARD)
+            .order_by(accuracy.desc(), total_correct.label("total_correct").desc())
+        )
+    else:
+        # --- Count-Based Leaderboard (Daily/Weekly/Contest) ---
+        total_correct = func.count(Pick.id).label("total_correct")
+        query = select(User, total_correct).join(Pick).where(Pick.status == "correct")
+
+        if days:
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
+            query = query.where(Pick.timestamp >= start_date)
+
+        if contest_id:
+            query = query.where(Pick.contest_id == contest_id)
+
+        query = query.group_by(User.id).order_by(total_correct.desc())
 
     results = session.exec(query).all()
 
-    # In a real-world scenario with sharding or many guilds,
-    # you would need to store guild information in the database.
-    # For this example, we assume the bot is in a manageable number of guilds
-    # and can fetch members.
+    # Guild filtering logic. This is inefficient for large bots but matches
+    # the existing implementation's approach.
     if guild_id:
         try:
+            # The 'bot' global is initialized in the setup function.
             guild = await bot.fetch_guild(guild_id)
             guild_member_ids = {str(m.id) for m in guild.members}
-            results = [
-                (user, score)
-                for user, score in results
-                if user.discord_id in guild_member_ids
-            ]
+
+            if is_accuracy_based:
+                results = [
+                    (user, acc, total)
+                    for user, acc, total in results
+                    if user.discord_id in guild_member_ids
+                ]
+            else:
+                results = [
+                    (user, score)
+                    for user, score in results
+                    if user.discord_id in guild_member_ids
+                ]
         except (discord.NotFound, discord.Forbidden):
             logger.warning(f"Could not fetch members for guild {guild_id}")
 
@@ -62,7 +110,9 @@ async def get_leaderboard_data(
 
 
 async def create_leaderboard_embed(
-    title: str, leaderboard_data: list, interaction: discord.Interaction
+    title: str,
+    leaderboard_data: LeaderboardData,
+    interaction: discord.Interaction,
 ) -> discord.Embed:
     """Creates a standardized embed for leaderboards."""
     embed = discord.Embed(
@@ -70,20 +120,37 @@ async def create_leaderboard_embed(
         color=discord.Color.dark_gold(),
         timestamp=datetime.now(timezone.utc),
     )
-    embed.set_author(
-        name=interaction.user.display_name,
-        icon_url=(interaction.user.avatar.url if interaction.user.avatar else None),
-    )
+    icon_url = interaction.user.avatar.url if interaction.user.avatar else None
+    embed.set_author(name=interaction.user.display_name, icon_url=icon_url)
 
     if not leaderboard_data:
         embed.description = "The leaderboard is empty."
-    else:
-        lines = []
-        for i, (user, score) in enumerate(leaderboard_data[:20], 1):  # Show top 20
-            username = user.username or f"User ID: {user.discord_id}"
-            lines.append(f"**{i}.** {username} - `{score or 0}` points")
-        embed.description = "\n".join(lines)
+        return embed
 
+    lines = []
+    # Check the type of the first element to determine the leaderboard type
+    is_accuracy_based = (
+        isinstance(
+            leaderboard_data[0],
+            tuple,
+        )
+        and len(leaderboard_data[0]) == 3
+    )
+
+    for i, entry in enumerate(leaderboard_data[:20], 1):  # Show top 20
+        username = entry[0].username or f"User ID: {entry[0].discord_id}"
+        if is_accuracy_based:
+            # entry is (User, accuracy, total_correct)
+            accuracy = entry[1]
+            lines.append(f"**{i}.** {username} - `{accuracy:.2f}%` accuracy")
+        else:
+            # entry is (User, total_correct)
+            total_correct = entry[1]
+            plural = "s" if total_correct != 1 else ""
+            line = f"**{i}.** {username} - `{total_correct}` correct pick{plural}"
+            lines.append(line)
+
+    embed.description = "\n".join(lines)
     return embed
 
 
@@ -120,7 +187,11 @@ class LeaderboardView(discord.ui.View):
             guild_id=guild_id,
         )
         title = f"{period} Leaderboard"
-        embed = await create_leaderboard_embed(title, data, self.interaction)
+        embed = await create_leaderboard_embed(
+            title,
+            data,
+            self.interaction,
+        )
         await interaction.edit_original_response(embed=embed, view=self)
 
     @discord.ui.button(label="Global", style=discord.ButtonStyle.primary)
@@ -165,7 +236,11 @@ class ContestSelectForLeaderboard(discord.ui.Select):
         contest = crud.get_contest_by_id(session, contest_id)
         data = await get_leaderboard_data(session, contest_id=contest_id)
         title = f"Leaderboard for {contest.name}"
-        embed = await create_leaderboard_embed(title, data, interaction)
+        embed = await create_leaderboard_embed(
+            title,
+            data,
+            interaction,
+        )
         await interaction.edit_original_response(embed=embed, view=None)
 
 

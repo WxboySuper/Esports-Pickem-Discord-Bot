@@ -19,13 +19,16 @@ picks_group = app_commands.Group(
 
 
 @picks_group.command(
-    name="view-active", description="View your active picks for upcoming matches."
+    name="view-active",
+    description="View your active picks for upcoming matches.",
 )
 async def view_active(interaction: discord.Interaction):
     """Shows a user their own upcoming/active picks."""
-    logger.info(
-        f"'{interaction.user.name}' ({interaction.user.id}) requested their active picks."
+    log_msg = (
+        f"'{interaction.user.name}' ({interaction.user.id}) requested "
+        "their active picks."
     )
+    logger.info(log_msg)
     session: Session = next(get_session())
 
     db_user = crud.get_user_by_discord_id(session, str(interaction.user.id))
@@ -57,10 +60,8 @@ async def view_active(interaction: discord.Interaction):
         color=discord.Color.blue(),
         timestamp=datetime.now(timezone.utc),
     )
-    embed.set_author(
-        name=interaction.user.display_name,
-        icon_url=interaction.user.avatar.url if interaction.user.avatar else None,
-    )
+    icon_url = interaction.user.avatar.url if interaction.user.avatar else None
+    embed.set_author(name=interaction.user.display_name, icon_url=icon_url)
 
     for pick in active_picks:
         match_info = f"{pick.match.team1} vs {pick.match.team2}"
@@ -82,12 +83,18 @@ class MatchSelectForPicks(discord.ui.Select):
             discord.SelectOption(
                 label=f"{match.team1} vs {match.team2}",
                 value=str(match.id),
-                description=f"Scheduled: {match.scheduled_time.strftime('%Y-%m-%d %H:%M UTC')}",
+                description=(
+                    "Scheduled: "
+                    f"{match.scheduled_time.strftime('%Y-%m-%d %H:%M UTC')}"
+                ),
             )
             for match in matches
         ]
         super().__init__(
-            placeholder="Choose a match...", min_values=1, max_values=1, options=options
+            placeholder="Choose a match...",
+            min_values=1,
+            max_values=1,
+            options=options,
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -142,9 +149,11 @@ class MatchSelectForPicks(discord.ui.Select):
 )
 async def view_match(interaction: discord.Interaction):
     """Shows all picks for a selected match."""
-    logger.info(
-        f"'{interaction.user.name}' ({interaction.user.id}) requested to view match picks."
+    log_msg = (
+        f"'{interaction.user.name}' ({interaction.user.id}) requested to "
+        "view match picks."
     )
+    logger.info(log_msg)
     session: Session = next(get_session())
 
     matches = session.exec(select(Match).order_by(Match.scheduled_time)).all()
