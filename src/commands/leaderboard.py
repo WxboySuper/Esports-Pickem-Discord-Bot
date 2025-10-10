@@ -87,6 +87,16 @@ class LeaderboardView(discord.ui.View):
         session: Session = next(get_session())
         guild_id = interaction.guild.id if period == "Server" else None
 
+        # Update button styles
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                if item.label == period:
+                    item.style = discord.ButtonStyle.primary
+                    item.disabled = True
+                else:
+                    item.style = discord.ButtonStyle.secondary
+                    item.disabled = False
+
         data = await get_leaderboard_data(session, days=days, guild_id=guild_id)
         title = f"{period} Leaderboard"
         embed = await create_leaderboard_embed(title, data, self.interaction)
