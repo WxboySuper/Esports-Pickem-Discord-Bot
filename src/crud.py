@@ -155,6 +155,11 @@ def get_match_by_id(session: Session, match_id: int) -> Optional[Match]:
     return session.get(Match, match_id)
 
 
+def list_all_matches(session: Session) -> List[Match]:
+    """Returns all matches, sorted by most recent first."""
+    return list(session.exec(select(Match).order_by(Match.scheduled_time.desc())))
+
+
 def update_match(
     session: Session,
     match_id: int,

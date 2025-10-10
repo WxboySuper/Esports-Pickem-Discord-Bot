@@ -44,6 +44,49 @@ async def winner_autocomplete(
     return [choice for choice in choices if current.lower() in choice.name.lower()]
 
 
+async def match_autocompletion(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[int]]:
+    """Autocomplete for matches, prioritizing those without results."""
+    with next(get_session()) as session:
+        all_matches = crud.list_all_matches(session)
+
+        matches_with_results = []
+        matches_without_results = []
+
+        for match in all_matches:
+            if crud.get_result_for_match(session, match.id):
+                matches_with_results.append(match)
+            else:
+                matches_without_results.append(match)
+
+        # Prioritize matches without results, then show matches with results
+        sorted_matches = matches_without_results + matches_with_results
+
+        choices = []
+        for match in sorted_matches:
+            has_result = match in matches_with_results
+            prefix = "[HAS RESULT] " if has_result else ""
+            choice_name = f"{prefix}{match.team1} vs {match.team2} (ID: {match.id})"
+
+            # Truncate if necessary
+            if len(choice_name) > 100:
+                suffix = f"... (ID: {match.id})"
+                max_len = 100 - len(suffix)
+                choice_name = f"{choice_name[:max_len]}{suffix}"
+
+            # Only add to choices if it matches the user's input
+            if current.lower() in choice_name.lower():
+                choices.append(app_commands.Choice(name=choice_name, value=match.id))
+
+            # Respect Discord's 25-choice limit
+            if len(choices) >= 25:
+                break
+
+    return choices
+
+
 @app_commands.command(
     name="enter-result",
     description="Enter the result of a match (Admin only).",
@@ -52,7 +95,7 @@ async def winner_autocomplete(
     match_id="The ID of the match to enter a result for.",
     winner="The winning team.",
 )
-@app_commands.autocomplete(winner=winner_autocomplete)
+@app_commands.autocomplete(match_id=match_autocompletion, winner=winner_autocomplete)
 async def enter_result(
     interaction: discord.Interaction,
     match_id: int,
