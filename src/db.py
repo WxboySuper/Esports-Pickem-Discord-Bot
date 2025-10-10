@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel, create_engine, Session
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///esports_pickem.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////opt/esports-bot/data/esports_pickem.db")
 
 # compute the SQL echo flag on its own line to avoid overly long lines
 _sql_echo = os.getenv("SQL_ECHO", "False").lower() in ("true", "1", "t")
