@@ -68,7 +68,9 @@ async def contest_autocompletion(
                 choice_name = f"{contest.name} (ID: {contest.id})"
                 # Discord has a 100-char limit for choice names
                 if len(choice_name) > 100:
-                    choice_name = f"{contest.name[:80]}... (ID: {contest.id})"
+                    suffix = f"... (ID: {contest.id})"
+                    max_name_length = 100 - len(suffix)
+                    choice_name = f"{contest.name[:max_name_length]}{suffix}"
                 choices.append(
                     app_commands.Choice(
                         name=choice_name,
