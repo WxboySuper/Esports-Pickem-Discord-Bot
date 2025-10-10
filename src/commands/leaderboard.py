@@ -53,7 +53,10 @@ async def get_leaderboard_data(
         accuracy = case(
             (
                 total_resolved > 0,
-                (func.cast(total_correct, Float) / func.cast(total_resolved, Float))
+                (
+                    func.cast(total_correct, Float)
+                    / func.cast(total_resolved, Float)
+                )
                 * 100,
             ),
             else_=0.0,
@@ -65,7 +68,9 @@ async def get_leaderboard_data(
             .where(Pick.status.in_(["correct", "incorrect"]))
             .group_by(User.id)
             .having(total_resolved >= MIN_PICKS_FOR_ACCURACY_LEADERBOARD)
-            .order_by(accuracy.desc(), total_correct.label("total_correct").desc())
+            .order_by(
+                accuracy.desc(), total_correct.label("total_correct").desc()
+            )
         )
     else:
         # --- Count-Based Leaderboard (Daily/Weekly/Contest) ---
@@ -114,7 +119,9 @@ async def get_leaderboard_data(
 
 
 async def create_leaderboard_embed(
-    title: str, leaderboard_data: LeaderboardData, interaction: discord.Interaction
+    title: str,
+    leaderboard_data: LeaderboardData,
+    interaction: discord.Interaction,
 ) -> discord.Embed:
     """Creates a standardized embed for leaderboards."""
     embed = discord.Embed(
@@ -122,10 +129,8 @@ async def create_leaderboard_embed(
         color=discord.Color.dark_gold(),
         timestamp=datetime.now(timezone.utc),
     )
-    embed.set_author(
-        name=interaction.user.display_name,
-        icon_url=(interaction.user.avatar.url if interaction.user.avatar else None),
-    )
+    icon_url = interaction.user.avatar.url if interaction.user.avatar else None
+    embed.set_author(name=interaction.user.display_name, icon_url=icon_url)
 
     if not leaderboard_data:
         embed.description = "The leaderboard is empty."
@@ -133,9 +138,13 @@ async def create_leaderboard_embed(
 
     lines = []
     # Check the type of the first element to determine the leaderboard type
-    is_accuracy_based = isinstance(leaderboard_data[0], tuple) and len(
-        leaderboard_data[0]
-    ) == 3
+    is_accuracy_based = (
+        isinstance(
+            leaderboard_data[0],
+            tuple,
+        )
+        and len(leaderboard_data[0]) == 3
+    )
 
     for i, entry in enumerate(leaderboard_data[:20], 1):  # Show top 20
         username = entry[0].username or f"User ID: {entry[0].discord_id}"
@@ -147,9 +156,10 @@ async def create_leaderboard_embed(
             # entry is (User, total_correct)
             total_correct = entry[1]
             plural = "s" if total_correct != 1 else ""
-            lines.append(
+            line = (
                 f"**{i}.** {username} - `{total_correct}` correct pick{plural}"
             )
+            lines.append(line)
 
     embed.description = "\n".join(lines)
     return embed
@@ -188,7 +198,11 @@ class LeaderboardView(discord.ui.View):
             guild_id=guild_id,
         )
         title = f"{period} Leaderboard"
-        embed = await create_leaderboard_embed(title, data, self.interaction)
+        embed = await create_leaderboard_embed(
+            title,
+            data,
+            self.interaction,
+        )
         await interaction.edit_original_response(embed=embed, view=self)
 
     @discord.ui.button(label="Global", style=discord.ButtonStyle.primary)
@@ -221,7 +235,8 @@ class ContestSelectForLeaderboard(discord.ui.Select):
 
     def __init__(self, contests: list[Contest]):
         options = [
-            discord.SelectOption(label=c.name, value=str(c.id)) for c in contests
+            discord.SelectOption(label=c.name, value=str(c.id))
+            for c in contests
         ]
         super().__init__(placeholder="Choose a contest...", options=options)
 
@@ -233,7 +248,11 @@ class ContestSelectForLeaderboard(discord.ui.Select):
         contest = crud.get_contest_by_id(session, contest_id)
         data = await get_leaderboard_data(session, contest_id=contest_id)
         title = f"Leaderboard for {contest.name}"
-        embed = await create_leaderboard_embed(title, data, interaction)
+        embed = await create_leaderboard_embed(
+            title,
+            data,
+            interaction,
+        )
         await interaction.edit_original_response(embed=embed, view=None)
 
 
