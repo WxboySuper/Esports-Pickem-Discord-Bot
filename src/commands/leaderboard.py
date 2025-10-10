@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime, timezone, timedelta
-from collections import defaultdict
 
 import discord
 from discord import app_commands
@@ -18,7 +17,13 @@ logger = logging.getLogger("esports-bot.commands.leaderboard")
 
 # --- Helper Functions ---
 
-async def get_leaderboard_data(session: Session, days: int = None, guild_id: int = None, contest_id: int = None) -> list[tuple[User, int]]:
+
+async def get_leaderboard_data(
+    session: Session,
+    days: int = None,
+    guild_id: int = None,
+    contest_id: int = None,
+) -> list[tuple[User, int]]:
     """Fetches and calculates leaderboard data based on the given criteria."""
     query = select(User, func.sum(Pick.score).label("total_score")).join(Pick)
 
@@ -45,27 +50,36 @@ async def get_leaderboard_data(session: Session, days: int = None, guild_id: int
         try:
             guild = await bot.fetch_guild(guild_id)
             guild_member_ids = {str(m.id) for m in guild.members}
-            results = [(user, score) for user, score in results if user.discord_id in guild_member_ids]
+            results = [
+                (user, score)
+                for user, score in results
+                if user.discord_id in guild_member_ids
+            ]
         except (discord.NotFound, discord.Forbidden):
             logger.warning(f"Could not fetch members for guild {guild_id}")
 
     return results
 
 
-async def create_leaderboard_embed(title: str, leaderboard_data: list, interaction: discord.Interaction) -> discord.Embed:
+async def create_leaderboard_embed(
+    title: str, leaderboard_data: list, interaction: discord.Interaction
+) -> discord.Embed:
     """Creates a standardized embed for leaderboards."""
     embed = discord.Embed(
         title=title,
         color=discord.Color.dark_gold(),
-        timestamp=datetime.now(timezone.utc)
+        timestamp=datetime.now(timezone.utc),
     )
-    embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.avatar.url if interaction.user.avatar else None)
+    embed.set_author(
+        name=interaction.user.display_name,
+        icon_url=(interaction.user.avatar.url if interaction.user.avatar else None),
+    )
 
     if not leaderboard_data:
         embed.description = "The leaderboard is empty."
     else:
         lines = []
-        for i, (user, score) in enumerate(leaderboard_data[:20], 1): # Show top 20
+        for i, (user, score) in enumerate(leaderboard_data[:20], 1):  # Show top 20
             username = user.username or f"User ID: {user.discord_id}"
             lines.append(f"**{i}.** {username} - `{score or 0}` points")
         embed.description = "\n".join(lines)
@@ -75,6 +89,7 @@ async def create_leaderboard_embed(title: str, leaderboard_data: list, interacti
 
 # --- Views ---
 
+
 class LeaderboardView(discord.ui.View):
     """A view with buttons to switch between leaderboard types."""
 
@@ -82,7 +97,9 @@ class LeaderboardView(discord.ui.View):
         super().__init__(timeout=180)
         self.interaction = interaction
 
-    async def update_leaderboard(self, interaction: discord.Interaction, period: str, days: int = None):
+    async def update_leaderboard(
+        self, interaction: discord.Interaction, period: str, days: int = None
+    ):
         await interaction.response.defer()
         session: Session = next(get_session())
         guild_id = interaction.guild.id if period == "Server" else None
@@ -97,25 +114,37 @@ class LeaderboardView(discord.ui.View):
                     item.style = discord.ButtonStyle.secondary
                     item.disabled = False
 
-        data = await get_leaderboard_data(session, days=days, guild_id=guild_id)
+        data = await get_leaderboard_data(
+            session,
+            days=days,
+            guild_id=guild_id,
+        )
         title = f"{period} Leaderboard"
         embed = await create_leaderboard_embed(title, data, self.interaction)
         await interaction.edit_original_response(embed=embed, view=self)
 
     @discord.ui.button(label="Global", style=discord.ButtonStyle.primary)
-    async def global_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def global_leaderboard(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         await self.update_leaderboard(interaction, "Global")
 
     @discord.ui.button(label="Server", style=discord.ButtonStyle.secondary)
-    async def server_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def server_leaderboard(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         await self.update_leaderboard(interaction, "Server")
 
     @discord.ui.button(label="Weekly", style=discord.ButtonStyle.secondary)
-    async def weekly_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def weekly_leaderboard(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         await self.update_leaderboard(interaction, "Weekly", days=7)
 
     @discord.ui.button(label="Daily", style=discord.ButtonStyle.secondary)
-    async def daily_leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def daily_leaderboard(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         await self.update_leaderboard(interaction, "Daily", days=1)
 
 
@@ -123,7 +152,9 @@ class ContestSelectForLeaderboard(discord.ui.Select):
     """A dropdown to select a contest for the leaderboard."""
 
     def __init__(self, contests: list[Contest]):
-        options = [discord.SelectOption(label=c.name, value=str(c.id)) for c in contests]
+        options = [
+            discord.SelectOption(label=c.name, value=str(c.id)) for c in contests
+        ]
         super().__init__(placeholder="Choose a contest...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
@@ -140,7 +171,11 @@ class ContestSelectForLeaderboard(discord.ui.Select):
 
 # --- Commands ---
 
-@app_commands.command(name="leaderboard", description="Displays the main leaderboards.")
+
+@app_commands.command(
+    name="leaderboard",
+    description="Displays the main leaderboards.",
+)
 async def leaderboard(interaction: discord.Interaction):
     """Shows the main leaderboard with view options."""
     logger.info(f"'{interaction.user.name}' requested the main leaderboard.")
@@ -148,25 +183,41 @@ async def leaderboard(interaction: discord.Interaction):
 
     # Default to global view
     data = await get_leaderboard_data(session)
-    embed = await create_leaderboard_embed("Global Leaderboard", data, interaction)
+    embed = await create_leaderboard_embed(
+        "Global Leaderboard",
+        data,
+        interaction,
+    )
     view = LeaderboardView(interaction)
 
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    await interaction.response.send_message(
+        embed=embed,
+        view=view,
+        ephemeral=True,
+    )
 
 
-@app_commands.command(name="leaderboard-contest", description="Displays the leaderboard for a specific contest.")
+@app_commands.command(
+    name="leaderboard-contest",
+    description="Displays the leaderboard for a specific contest.",
+)
 async def leaderboard_contest(interaction: discord.Interaction):
     """Shows a dropdown to select a contest leaderboard."""
     logger.info(f"'{interaction.user.name}' requested a contest leaderboard.")
     session: Session = next(get_session())
     contests = crud.list_contests(session)
     if not contests:
-        await interaction.response.send_message("No contests found.", ephemeral=True)
+        await interaction.response.send_message(
+            "No contests found.",
+            ephemeral=True,
+        )
         return
 
     view = discord.ui.View(timeout=180)
     view.add_item(ContestSelectForLeaderboard(contests=contests[:25]))
-    await interaction.response.send_message("Please select a contest:", view=view, ephemeral=True)
+    await interaction.response.send_message(
+        "Please select a contest:", view=view, ephemeral=True
+    )
 
 
 async def setup(bot_instance):

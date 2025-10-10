@@ -38,8 +38,12 @@ async def test_leaderboard_command_initial_call(
     await leaderboard.callback(mock_interaction)
 
     # Assert
-    mock_get_data.assert_called_once_with(mock_get_session.return_value.__next__.return_value)
-    mock_create_embed.assert_called_once_with("Global Leaderboard", [("user1", 100)], mock_interaction)
+    mock_get_data.assert_called_once_with(
+        mock_get_session.return_value.__next__.return_value
+    )
+    mock_create_embed.assert_called_once_with(
+        "Global Leaderboard", [("user1", 100)], mock_interaction
+    )
     mock_interaction.response.send_message.assert_called_once()
 
     args, kwargs = mock_interaction.response.send_message.call_args
@@ -61,7 +65,8 @@ async def test_leaderboard_view_button_click(
 
     # Simulate clicking the "Server" button
     button_to_click = next(
-        item for item in view.children
+        item
+        for item in view.children
         if isinstance(item, discord.ui.Button) and item.label == "Server"
     )
     assert button_to_click.label == "Server"
@@ -91,7 +96,9 @@ async def test_leaderboard_view_button_click(
         days=None,
         guild_id=mock_interaction.guild.id,
     )
-    mock_create_embed.assert_called_with("Server Leaderboard", [("user2", 200)], mock_interaction)
+    mock_create_embed.assert_called_with(
+        "Server Leaderboard", [("user2", 200)], mock_interaction
+    )
     mock_interaction.edit_original_response.assert_called_once()
 
     args, kwargs = mock_interaction.edit_original_response.call_args

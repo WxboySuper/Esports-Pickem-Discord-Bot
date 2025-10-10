@@ -2,7 +2,6 @@
 import logging
 import discord
 from discord import app_commands
-from discord.ext import commands
 
 from src.app import ADMIN_IDS
 from src.crud import create_contest
@@ -33,8 +32,14 @@ class ContestModal(discord.ui.Modal, title="Create New Contest"):
         from datetime import datetime
 
         try:
-            start_date_val = datetime.strptime(self.start_date.value, "%Y-%m-%d")
-            end_date_val = datetime.strptime(self.end_date.value, "%Y-%m-%d")
+            start_date_val = datetime.strptime(
+                self.start_date.value,
+                "%Y-%m-%d",
+            )
+            end_date_val = datetime.strptime(
+                self.end_date.value,
+                "%Y-%m-%d",
+            )
 
             contest = create_contest(
                 session,
@@ -65,7 +70,8 @@ class Contest(app_commands.Group, name="contest", description="Manage contests")
     async def create(self, interaction: discord.Interaction):
         if interaction.user.id not in ADMIN_IDS:
             await interaction.response.send_message(
-                "You do not have permission to use this command.", ephemeral=True
+                "You do not have permission to use this command.",
+                ephemeral=True,
             )
             return
         await interaction.response.send_modal(ContestModal())

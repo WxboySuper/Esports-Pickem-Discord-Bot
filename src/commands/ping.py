@@ -14,6 +14,5 @@ async def setup(bot):
         # Use bot.latency for websocket heartbeat latency and report ms
         latency_ms = int(bot.latency * 1000) if bot.latency else "unknown"
         await interaction.response.send_message(
-            f"Pong! websocket latency: {latency_ms} ms",
-            ephemeral=True
-            )
+            f"Pong! websocket latency: {latency_ms} ms", ephemeral=True
+        )

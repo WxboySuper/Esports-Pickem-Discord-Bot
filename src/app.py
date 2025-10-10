@@ -11,7 +11,6 @@ import os
 import logging
 import sys
 import importlib
-import pkgutil
 import inspect
 
 import discord
@@ -50,70 +49,71 @@ intents = discord.Intents.default()
 
 
 class EsportsBot(commands.Bot):
+    COMMAND_MODULES = [
+        "ping",
+        "info",
+        "contest",
+        "matches",
+        "pick",
+        "picks",
+        "stats",
+        "leaderboard",
+        "result",
+    ]
+
     def __init__(self):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Dynamically discover and load all commands in the commands directory.
-        commands_pkg = None
+        commands_pkg = self._resolve_commands_package()
+        if commands_pkg is not None:
+            await self._load_command_modules(commands_pkg)
+        await self._sync_global_commands()
 
-        # Prefer importing the commands package relative to this module's
-        # package.
+    def _resolve_commands_package(self):
         if __package__:
             pkg_name = f"{__package__}.commands"
             try:
-                commands_pkg = importlib.import_module(pkg_name)
+                return importlib.import_module(pkg_name)
             except ImportError:
-                logger.debug("Package %s not found: %s",
-                             pkg_name, sys.path[:6])
-
-        # Fallback: try importing top-level 'commands' package
-        if commands_pkg is None:
-            try:
-                commands_pkg = importlib.import_module("commands")
-            except ImportError:
-                logger.error(
-                    "Could not import 'commands' package; no commands loaded. "
-                    "Ensure either: (1) you run the app as a module "
-                    "or (2) /path/to/src is on PYTHONPATH, or change imports "
-                    "to be relative."
+                logger.debug(
+                    "Package %s not found: %s",
+                    pkg_name,
+                    sys.path[:6],
                 )
-                commands_pkg = None
 
-        if commands_pkg is not None:
-            COMMAND_MODULES = [
-                "ping",
-                "info",
-                "contest",
-                "matches",
-                "pick",
-                "picks",
-                "stats",
-                "leaderboard",
-                "result",
-            ]
-            for name in COMMAND_MODULES:
-                full_name = f"{commands_pkg.__name__}.{name}"
-                try:
-                    mod = importlib.import_module(full_name)
-                    setup_fn = getattr(mod, "setup", None)
-                    if setup_fn is None:
-                        logger.debug(
-                            "Module %s has no setup(bot); skipping", full_name
-                        )
-                        continue
-                    if inspect.iscoroutinefunction(setup_fn):
-                        await setup_fn(self)
-                    else:
-                        setup_fn(self)
-                    logger.info("Loaded command module: %s", full_name)
-                except Exception:
-                    logger.exception(
-                        "Failed loading command module %s",
+        try:
+            return importlib.import_module("commands")
+        except ImportError:
+            logger.error(
+                "Could not import 'commands' package; no commands loaded. "
+                "Ensure either: (1) you run the app as a module "
+                "or (2) /path/to/src is on PYTHONPATH, or change imports "
+                "to be relative."
+            )
+            return None
+
+    async def _load_command_modules(self, commands_pkg):
+        for name in self.COMMAND_MODULES:
+            full_name = f"{commands_pkg.__name__}.{name}"
+            try:
+                mod = importlib.import_module(full_name)
+                setup_fn = getattr(mod, "setup", None)
+                if setup_fn is None:
+                    logger.debug(
+                        "Module %s has no setup(bot); skipping",
                         full_name,
                     )
+                    continue
+                if inspect.iscoroutinefunction(setup_fn):
+                    await setup_fn(self)
+                else:
+                    setup_fn(self)
+                logger.info("Loaded command module: %s", full_name)
+            except Exception:
+                logger.exception("Failed loading command module %s", full_name)
 
-        # Global sync
+    async def _sync_global_commands(self):
         try:
             logger.info("Starting Global Sync...")
             await self.tree.sync()
