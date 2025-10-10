@@ -1,14 +1,11 @@
 import pytest
-from unittest.mock import Mock, MagicMock, AsyncMock
-from datetime import datetime, timezone, timedelta
-import discord
+from unittest.mock import MagicMock
 
 from src.commands.leaderboard import (
     get_leaderboard_data,
     create_leaderboard_embed,
-    MIN_PICKS_FOR_ACCURACY_LEADERBOARD,
 )
-from src.models import User, Pick
+from src.models import User
 
 
 @pytest.fixture
@@ -26,7 +23,9 @@ def mock_interaction():
 
 
 def create_mock_user(discord_id, username):
-    user = User(id=int(discord_id), discord_id=str(discord_id), username=username)
+    user = User(
+        id=int(discord_id), discord_id=str(discord_id), username=username
+    )
     return user
 
 
@@ -35,7 +34,6 @@ async def test_get_leaderboard_data_accuracy(mock_session):
     # --- Test Data ---
     user1 = create_mock_user(1, "UserOne")
     user2 = create_mock_user(2, "UserTwo")
-    user3 = create_mock_user(3, "UserThree")  # Not enough picks
     user4 = create_mock_user(4, "UserFour")  # Perfect accuracy
 
     mock_session.exec.return_value.all.return_value = [
@@ -115,4 +113,6 @@ async def test_create_leaderboard_embed_count_based(mock_interaction):
     assert "Weekly Winners" in embed.title
     assert "**1.** UserOne - `10` correct picks" in embed.description
     assert "**2.** UserTwo - `5` correct picks" in embed.description
-    assert "**3.** UserThree - `1` correct pick" in embed.description  # Singular
+    assert (
+        "**3.** UserThree - `1` correct pick" in embed.description
+    )  # Singular
