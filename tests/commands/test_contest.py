@@ -19,9 +19,7 @@ def mock_interaction():
 @pytest.mark.asyncio
 @patch("src.commands.contest.ContestModal", autospec=True)
 @patch("src.commands.contest.ADMIN_IDS", [12345])
-async def test_contest_create_command_sends_modal(
-    mock_contest_modal, mock_interaction
-):
+async def test_contest_create_command_sends_modal(mock_contest_modal, mock_interaction):
     """Test that the /contest create command sends the ContestModal."""
     # Arrange
     contest_command = Contest()

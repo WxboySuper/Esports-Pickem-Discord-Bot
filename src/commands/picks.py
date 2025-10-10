@@ -116,16 +116,12 @@ class MatchSelectForPicks(discord.ui.Select):
         )
 
         if not picks:
-            embed.description = (
-                "No picks have been submitted for this match yet."
-            )
+            embed.description = "No picks have been submitted for this match yet."
         else:
             team1_picks = []
             team2_picks = []
             for pick in picks:
-                user_name = (
-                    pick.user.username or f"User ID: {pick.user.discord_id}"
-                )
+                user_name = pick.user.username or f"User ID: {pick.user.discord_id}"
                 if pick.chosen_team == match.team1:
                     team1_picks.append(user_name)
                 else:

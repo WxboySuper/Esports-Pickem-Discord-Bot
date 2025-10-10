@@ -18,15 +18,11 @@ logger = logging.getLogger("esports-bot.commands.stats")
 @app_commands.command(
     name="stats", description="View your or another user's pick statistics."
 )
-@app_commands.describe(
-    user="The user to view stats for (defaults to yourself)."
-)
+@app_commands.describe(user="The user to view stats for (defaults to yourself).")
 async def stats(interaction: discord.Interaction, user: discord.Member = None):
     """Displays statistics for a user."""
     target_user = user or interaction.user
-    logger.info(
-        f"'{interaction.user.name}' requested stats for '{target_user.name}'."
-    )
+    logger.info(f"'{interaction.user.name}' requested stats for '{target_user.name}'.")
 
     session: Session = next(get_session())
     db_user = crud.get_user_by_discord_id(session, str(target_user.id))
@@ -68,15 +64,9 @@ async def stats(interaction: discord.Interaction, user: discord.Member = None):
         color=discord.Color.gold(),
         timestamp=datetime.now(timezone.utc),
     )
-    embed.set_thumbnail(
-        url=target_user.avatar.url if target_user.avatar else None
-    )
-    embed.add_field(
-        name="Total Picks Made", value=str(total_picks), inline=True
-    )
-    embed.add_field(
-        name="Correct Picks", value=str(correct_picks), inline=True
-    )
+    embed.set_thumbnail(url=target_user.avatar.url if target_user.avatar else None)
+    embed.add_field(name="Total Picks Made", value=str(total_picks), inline=True)
+    embed.add_field(name="Correct Picks", value=str(correct_picks), inline=True)
     embed.add_field(name="Win Rate", value=f"{win_rate:.2f}%", inline=True)
     embed.add_field(name="Global Rank", value=f"#{global_rank}", inline=True)
 

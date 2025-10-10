@@ -41,9 +41,7 @@ async def winner_autocomplete(
     ]
 
     # Filter choices based on what the user has already typed
-    return [
-        choice for choice in choices if current.lower() in choice.name.lower()
-    ]
+    return [choice for choice in choices if current.lower() in choice.name.lower()]
 
 
 async def match_autocompletion(
@@ -70,9 +68,7 @@ async def match_autocompletion(
         for match in sorted_matches:
             has_result = match in matches_with_results
             prefix = "[HAS RESULT] " if has_result else ""
-            choice_name = (
-                f"{prefix}{match.team1} vs {match.team2} (ID: {match.id})"
-            )
+            choice_name = f"{prefix}{match.team1} vs {match.team2} (ID: {match.id})"
 
             # Truncate if necessary
             if len(choice_name) > 100:
@@ -82,9 +78,7 @@ async def match_autocompletion(
 
             # Only add to choices if it matches the user's input
             if current.lower() in choice_name.lower():
-                choices.append(
-                    app_commands.Choice(name=choice_name, value=match.id)
-                )
+                choices.append(app_commands.Choice(name=choice_name, value=match.id))
 
             # Respect Discord's 25-choice limit
             if len(choices) >= 25:
@@ -101,9 +95,7 @@ async def match_autocompletion(
     match_id="The ID of the match to enter a result for.",
     winner="The winning team.",
 )
-@app_commands.autocomplete(
-    match_id=match_autocompletion, winner=winner_autocomplete
-)
+@app_commands.autocomplete(match_id=match_autocompletion, winner=winner_autocomplete)
 async def enter_result(
     interaction: discord.Interaction,
     match_id: int,

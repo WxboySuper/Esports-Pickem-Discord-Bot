@@ -206,12 +206,8 @@ def test_pick_crud_and_queries_timestamp_default(session: Session):
     assert got is not None and got.chosen_team == "A"
 
     # list for user/match
-    assert [p.id for p in crud.list_picks_for_user(session, user.id)] == [
-        pick.id
-    ]
-    assert [p.id for p in crud.list_picks_for_match(session, match.id)] == [
-        pick.id
-    ]
+    assert [p.id for p in crud.list_picks_for_user(session, user.id)] == [pick.id]
+    assert [p.id for p in crud.list_picks_for_match(session, match.id)] == [pick.id]
 
     # update
     upd = crud.update_pick(session, pick.id, chosen_team="B")

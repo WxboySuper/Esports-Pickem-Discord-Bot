@@ -68,9 +68,7 @@ async def test_picks_view_active_no_picks(
     """Test /picks view-active when the user has no picks."""
     mock_get_session.return_value = iter([mock_session])
     # Simulate user not found or has no picks
-    with patch(
-        "src.commands.picks.crud.get_user_by_discord_id"
-    ) as mock_get_user:
+    with patch("src.commands.picks.crud.get_user_by_discord_id") as mock_get_user:
         mock_get_user.return_value = None
         await picks.view_active.callback(mock_interaction)
         mock_interaction.response.send_message.assert_called_with(
@@ -87,9 +85,7 @@ async def test_stats_command_new_user(
 ):
     """Test /stats command for a user with no picks."""
     mock_get_session.return_value = iter([mock_session])
-    with patch(
-        "src.commands.stats.crud.get_user_by_discord_id"
-    ) as mock_get_user:
+    with patch("src.commands.stats.crud.get_user_by_discord_id") as mock_get_user:
         mock_get_user.return_value = None
         await stats.stats.callback(mock_interaction, user=None)
         mock_interaction.response.send_message.assert_called_with(
@@ -104,9 +100,7 @@ async def test_matches_view_by_day_no_matches(
 ):
     """Test /matches view-by-day when no matches are scheduled."""
     mock_get_session.return_value = iter([mock_session])
-    with patch(
-        "src.commands.matches.crud.get_matches_by_date"
-    ) as mock_get_matches:
+    with patch("src.commands.matches.crud.get_matches_by_date") as mock_get_matches:
         mock_get_matches.return_value = []
         await matches.view_by_day.callback(mock_interaction)
 
@@ -122,9 +116,7 @@ async def test_leaderboard_command_empty(
 ):
     """Test /leaderboard command when the leaderboard is empty."""
     mock_get_session.return_value = iter([mock_session])
-    with patch(
-        "src.commands.leaderboard.get_leaderboard_data"
-    ) as mock_get_data:
+    with patch("src.commands.leaderboard.get_leaderboard_data") as mock_get_data:
         mock_get_data.return_value = []
         await leaderboard.leaderboard.callback(mock_interaction)
 

@@ -121,9 +121,7 @@ def create_match(
     return match
 
 
-def bulk_create_matches(
-    session: Session, matches_data: List[dict]
-) -> List[Match]:
+def bulk_create_matches(session: Session, matches_data: List[dict]) -> List[Match]:
     """Bulk creates matches from a list of dicts."""
     matches = [Match(**data) for data in matches_data]
     session.add_all(matches)
@@ -136,9 +134,7 @@ def bulk_create_matches(
 def get_matches_by_date(session: Session, date: datetime) -> List[Match]:
     # Assumes 'date' is the day, returns matches scheduled on that date
     start = datetime(date.year, date.month, date.day, tzinfo=timezone.utc)
-    end = datetime(
-        date.year, date.month, date.day, 23, 59, 59, tzinfo=timezone.utc
-    )
+    end = datetime(date.year, date.month, date.day, 23, 59, 59, tzinfo=timezone.utc)
     return list(
         session.exec(
             select(Match).where(
@@ -161,9 +157,7 @@ def get_match_by_id(session: Session, match_id: int) -> Optional[Match]:
 
 def list_all_matches(session: Session) -> List[Match]:
     """Returns all matches, sorted by most recent first."""
-    return list(
-        session.exec(select(Match).order_by(Match.scheduled_time.desc()))
-    )
+    return list(session.exec(select(Match).order_by(Match.scheduled_time.desc())))
 
 
 def update_match(
