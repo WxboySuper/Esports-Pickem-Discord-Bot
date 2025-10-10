@@ -15,7 +15,10 @@ def session(tmp_path):
     engine = create_engine(f"sqlite:///{db_path}", echo=False)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as s:
-        yield s
+        try:
+            yield s
+        finally:
+            engine.dispose()
 
 
 # ---- USER ----

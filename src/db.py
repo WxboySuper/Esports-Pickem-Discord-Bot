@@ -1,5 +1,6 @@
-from sqlmodel import SQLModel, create_engine, Session
+import atexit
 import os
+from sqlmodel import SQLModel, create_engine, Session
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "sqlite:////opt/esports-bot/data/esports_pickem.db"
@@ -12,6 +13,11 @@ engine = create_engine(
     DATABASE_URL,
     echo=_sql_echo,
 )
+
+
+@atexit.register
+def _dispose_engine():
+    engine.dispose()
 
 
 def init_db():
