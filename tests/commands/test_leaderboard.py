@@ -60,7 +60,10 @@ async def test_leaderboard_view_button_click(
     view = LeaderboardView(mock_interaction)
 
     # Simulate clicking the "Server" button
-    button_to_click = view.children[1] # 0=Global, 1=Server
+    button_to_click = next(
+        item for item in view.children
+        if isinstance(item, discord.ui.Button) and item.label == "Server"
+    )
     assert button_to_click.label == "Server"
 
     # Mock the return values for the update
