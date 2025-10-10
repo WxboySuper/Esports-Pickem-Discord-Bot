@@ -10,7 +10,6 @@ from sqlmodel import Session
 from src.db import get_session
 from src import crud
 from src.app import ADMIN_IDS
-from src.models import Match
 
 logger = logging.getLogger("esports-bot.commands.result")
 
@@ -19,7 +18,8 @@ async def winner_autocomplete(
     interaction: discord.Interaction,
     current: str,
 ) -> List[app_commands.Choice[str]]:
-    """Autocompletes the winner argument with the teams from the specified match."""
+    """Autocompletes the winner argument with the teams from the specified
+    match."""
     match_id_str = interaction.namespace.match_id
     if not match_id_str:
         return []
@@ -44,16 +44,32 @@ async def winner_autocomplete(
     return [choice for choice in choices if current.lower() in choice.name.lower()]
 
 
-@app_commands.command(name="enter-result", description="Enter the result of a match (Admin only).")
-@app_commands.describe(match_id="The ID of the match to enter a result for.", winner="The winning team.")
+@app_commands.command(
+    name="enter-result",
+    description="Enter the result of a match (Admin only).",
+)
+@app_commands.describe(
+    match_id="The ID of the match to enter a result for.",
+    winner="The winning team.",
+)
 @app_commands.autocomplete(winner=winner_autocomplete)
-async def enter_result(interaction: discord.Interaction, match_id: int, winner: str):
+async def enter_result(
+    interaction: discord.Interaction,
+    match_id: int,
+    winner: str,
+):
     """Admin command to enter a match result and score all related picks."""
     if interaction.user.id not in ADMIN_IDS:
-        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        await interaction.response.send_message(
+            "You do not have permission to use this command.", ephemeral=True
+        )
         return
 
-    logger.info(f"Admin '{interaction.user.name}' is entering a result for match {match_id}.")
+    logger.info(
+        "Admin '%s' is entering a result for match %s.",
+        interaction.user.name,
+        match_id,
+    )
     await interaction.response.defer(ephemeral=True)
 
     session: Session = next(get_session())
@@ -61,15 +77,24 @@ async def enter_result(interaction: discord.Interaction, match_id: int, winner: 
     # --- Validation ---
     match = crud.get_match_by_id(session, match_id)
     if not match:
-        await interaction.followup.send(f"Match with ID {match_id} not found.", ephemeral=True)
+        await interaction.followup.send(
+            f"Match with ID {match_id} not found.", ephemeral=True
+        )
         return
 
     if winner not in [match.team1, match.team2]:
-        await interaction.followup.send(f"Invalid winner. Please choose either '{match.team1}' or '{match.team2}'.", ephemeral=True)
+        await interaction.followup.send(
+            f"Invalid winner. Please choose either '{match.team1}' or "
+            f"'{match.team2}'.",
+            ephemeral=True,
+        )
         return
 
     if crud.get_result_for_match(session, match_id):
-        await interaction.followup.send(f"A result for match {match_id} has already been entered.", ephemeral=True)
+        await interaction.followup.send(
+            f"A result for match {match_id} has already been entered.",
+            ephemeral=True,
+        )
         return
 
     # --- Process Result and Score Picks ---
@@ -95,15 +120,21 @@ async def enter_result(interaction: discord.Interaction, match_id: int, winner: 
         session.commit()
 
         await interaction.followup.send(
-            f"Result for match **{match.team1} vs {match.team2}** has been entered as **{winner}**.\n"
-            f"Processed and scored {updated_picks_count} user picks.",
-            ephemeral=True
+            (
+                "Result for match "
+                f"**{match.team1} vs {match.team2}** has been entered as "
+                f"**{winner}**.\nProcessed and scored "
+                f"{updated_picks_count} user picks."
+            ),
+            ephemeral=True,
         )
 
     except Exception as e:
         logger.exception(f"Error entering result for match {match_id}")
         session.rollback()
-        await interaction.followup.send(f"An unexpected error occurred: {e}", ephemeral=True)
+        await interaction.followup.send(
+            f"An unexpected error occurred: {e}", ephemeral=True
+        )
     finally:
         session.close()
 

@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch, ANY
 from src.commands.contest import Contest
 from src.models import Contest as ContestModel
 
+
 @pytest.fixture
 def mock_interaction():
     """Fixture for a mock discord.Interaction."""
@@ -13,6 +14,7 @@ def mock_interaction():
     interaction.user = MagicMock()
     interaction.user.id = 12345
     return interaction
+
 
 @pytest.mark.asyncio
 @patch("src.commands.contest.ContestModal", autospec=True)
@@ -31,14 +33,18 @@ async def test_contest_create_command_sends_modal(mock_contest_modal, mock_inter
         mock_contest_modal.return_value
     )
 
+
 @pytest.mark.asyncio
 @patch("src.commands.contest.create_contest")
 @patch("src.commands.contest.get_session")
 @patch("src.commands.contest.ADMIN_IDS", [12345])
-async def test_contest_modal_on_submit_success(mock_get_session, mock_create_contest, mock_interaction):
+async def test_contest_modal_on_submit_success(
+    mock_get_session, mock_create_contest, mock_interaction
+):
     """Test the ContestModal's on_submit method successfully creates a contest."""
     # Arrange
     from src.commands.contest import ContestModal
+
     modal = ContestModal()
     modal.name = MagicMock()
     modal.name.value = "Test Contest"
@@ -57,10 +63,7 @@ async def test_contest_modal_on_submit_success(mock_get_session, mock_create_con
 
     # Assert
     mock_create_contest.assert_called_once_with(
-        mock_session,
-        name="Test Contest",
-        start_date=ANY,
-        end_date=ANY
+        mock_session, name="Test Contest", start_date=ANY, end_date=ANY
     )
     mock_interaction.response.send_message.assert_called_once_with(
         "Contest 'Test Contest' created with ID 1",

@@ -7,12 +7,14 @@ import inspect
 def test_commands_package_importable():
     """The src.commands package should be importable and have a __path__."""
     import src.commands as commands_pkg
+
     assert hasattr(commands_pkg, "__path__")
 
 
 def test_each_command_module_has_setup():
     """Each command module in src.commands should define a setup() function."""
     import src.commands as commands_pkg
+
     failures = []
     for module_info in pkgutil.iter_modules(commands_pkg.__path__):
         name = module_info.name
@@ -34,6 +36,7 @@ def test_bot_can_instantiate(monkeypatch):
     # Patch env so DISCORD_TOKEN is present
     monkeypatch.setenv("DISCORD_TOKEN", "dummy")
     from src.app import EsportsBot
+
     bot = EsportsBot()
     assert bot is not None
 
@@ -46,6 +49,7 @@ async def test_ping_command_loads(monkeypatch):
     """
     monkeypatch.setenv("DISCORD_TOKEN", "dummy")
     from src.app import EsportsBot
+
     bot = EsportsBot()
     import src.commands.ping as ping_mod
 

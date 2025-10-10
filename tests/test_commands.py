@@ -13,16 +13,11 @@ VALID_CSV = (
 )
 
 # CSV with a missing column
-INVALID_CSV_MISSING_COLUMN = (
-    "team1,scheduled_time\n"
-    "Team A,2025-01-01T12:00:00\n"
-)
+INVALID_CSV_MISSING_COLUMN = "team1,scheduled_time\n" "Team A,2025-01-01T12:00:00\n"
 
 # CSV with an invalid date format
-INVALID_CSV_BAD_DATE = (
-    "team1,team2,scheduled_time\n"
-    "Team A,Team B,2025/01/01 12:00\n"
-)
+INVALID_CSV_BAD_DATE = "team1,team2,scheduled_time\n" "Team A,Team B,2025/01/01 12:00\n"
+
 
 @pytest.fixture
 def mock_interaction():
@@ -63,7 +58,9 @@ async def test_upload_command_valid_csv(mock_crud, mock_get_session, mock_intera
 
     assert len(matches_data) == 2
     assert matches_data[0]["team1"] == "Team A"
-    assert matches_data[0]["scheduled_time"] == datetime.fromisoformat("2025-01-01T12:00:00")
+    assert matches_data[0]["scheduled_time"] == datetime.fromisoformat(
+        "2025-01-01T12:00:00"
+    )
 
     mock_interaction.followup.send.assert_called_once_with(
         "Successfully uploaded 2 matches for 'Test Contest'.",

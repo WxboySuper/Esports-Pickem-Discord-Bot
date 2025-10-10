@@ -15,7 +15,9 @@ from src import crud
 logger = logging.getLogger("esports-bot.commands.stats")
 
 
-@app_commands.command(name="stats", description="View your or another user's pick statistics.")
+@app_commands.command(
+    name="stats", description="View your or another user's pick statistics."
+)
 @app_commands.describe(user="The user to view stats for (defaults to yourself).")
 async def stats(interaction: discord.Interaction, user: discord.Member = None):
     """Displays statistics for a user."""
@@ -26,14 +28,18 @@ async def stats(interaction: discord.Interaction, user: discord.Member = None):
     db_user = crud.get_user_by_discord_id(session, str(target_user.id))
 
     if not db_user:
-        message = "You have not made any picks yet." if not user else f"{target_user.display_name} has not made any picks yet."
+        message = (
+            "You have not made any picks yet."
+            if not user
+            else f"{target_user.display_name} has not made any picks yet."
+        )
         await interaction.response.send_message(message, ephemeral=True)
         return
 
     # Calculate basic stats
     picks = crud.list_picks_for_user(session, db_user.id)
     total_picks = len(picks)
-    correct_picks = len([p for p in picks if p.status == 'correct'])
+    correct_picks = len([p for p in picks if p.status == "correct"])
     win_rate = (correct_picks / total_picks) * 100 if total_picks > 0 else 0
 
     # Calculate global rank
@@ -56,7 +62,7 @@ async def stats(interaction: discord.Interaction, user: discord.Member = None):
     embed = discord.Embed(
         title=f"Statistics for {target_user.display_name}",
         color=discord.Color.gold(),
-        timestamp=datetime.now(timezone.utc)
+        timestamp=datetime.now(timezone.utc),
     )
     embed.set_thumbnail(url=target_user.avatar.url if target_user.avatar else None)
     embed.add_field(name="Total Picks Made", value=str(total_picks), inline=True)

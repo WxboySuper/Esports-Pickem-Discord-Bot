@@ -25,9 +25,9 @@ def get_user_by_discord_id(
     return session.exec(statement).first()
 
 
-def update_user(session: Session,
-                user_id: int,
-                username: Optional[str] = None) -> Optional[User]:
+def update_user(
+    session: Session, user_id: int, username: Optional[str] = None
+) -> Optional[User]:
     user = session.get(User, user_id)
     if not user:
         return None
@@ -134,14 +134,14 @@ def bulk_create_matches(session: Session, matches_data: List[dict]) -> List[Matc
 def get_matches_by_date(session: Session, date: datetime) -> List[Match]:
     # Assumes 'date' is the day, returns matches scheduled on that date
     start = datetime(date.year, date.month, date.day, tzinfo=timezone.utc)
-    end = datetime(date.year,
-                   date.month,
-                   date.day, 23, 59, 59, tzinfo=timezone.utc)
-    return list(session.exec(
-        select(Match).where(
-            (Match.scheduled_time >= start) & (Match.scheduled_time <= end)
+    end = datetime(date.year, date.month, date.day, 23, 59, 59, tzinfo=timezone.utc)
+    return list(
+        session.exec(
+            select(Match).where(
+                (Match.scheduled_time >= start) & (Match.scheduled_time <= end)
+            )
         )
-    ))
+    )
 
 
 def list_matches_for_contest(session: Session, contest_id: int) -> List[Match]:
