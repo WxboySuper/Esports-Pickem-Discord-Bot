@@ -53,6 +53,7 @@ jobs:
       - name: Package backend and build .env
         env:
           # optional: full dotenv content; if set it will be used instead of individual keys
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
           DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
@@ -82,10 +83,10 @@ jobs:
           if [ -n "${PROD_DOTENV:-}" ]; then
             printf '%s\n' "${PROD_DOTENV}" > deployment-package/.env
           else
-            # Default to a persistent SQLite DB path if DATABASE_URL is not provided in secrets
-            DATABASE_URL="sqlite:///${PROD_DEPLOY_PATH}/data/prod.db"
+            # Use DATABASE_URL from secrets, or default to a persistent path if not set.
+            # The env var is populated from secrets in the `env:` block above.
             cat > deployment-package/.env <<EOF
-          DATABASE_URL=${DATABASE_URL}
+          DATABASE_URL=${DATABASE_URL:-"sqlite:///${PROD_DEPLOY_PATH}/data/prod.db"}
           DISCORD_TOKEN=${DISCORD_TOKEN:-}
           DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
           DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}
