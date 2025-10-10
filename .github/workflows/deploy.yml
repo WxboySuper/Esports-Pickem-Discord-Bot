@@ -82,7 +82,10 @@ jobs:
           if [ -n "${PROD_DOTENV:-}" ]; then
             printf '%s\n' "${PROD_DOTENV}" > deployment-package/.env
           else
+            # Default to a persistent SQLite DB path if DATABASE_URL is not provided in secrets
+            DATABASE_URL="sqlite:///${PROD_DEPLOY_PATH}/data/prod.db"
             cat > deployment-package/.env <<EOF
+          DATABASE_URL=${DATABASE_URL:-}
           DISCORD_TOKEN=${DISCORD_TOKEN:-}
           DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
           DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}
@@ -134,11 +137,32 @@ jobs:
           # Use the REMOTE_DIR passed from the runner (do NOT recompute TIMESTAMP/REMOTE_DIR here)
           echo "Using REMOTE_DIR: ${REMOTE_DIR}"
 
+          # Create persistent data directory if it doesn't exist
+          DATA_DIR="${PROD_DEPLOY_PATH}/data"
+          if [ ! -d "${DATA_DIR}" ]; then
+            echo "Creating persistent data directory: ${DATA_DIR}"
+            mkdir -p "${DATA_DIR}"
+            chown ${PROD_DEPLOY_USER}:${PROD_DEPLOY_USER} "${DATA_DIR}"
+          fi
+
           # Create venv and install requirements inside the uploaded release
           python3 -m venv "${REMOTE_DIR}/venv"
           "${REMOTE_DIR}/venv/bin/pip" install --upgrade pip setuptools wheel || true
           if [ -f "${REMOTE_DIR}/requirements.txt" ]; then
             "${REMOTE_DIR}/venv/bin/pip" install -r "${REMOTE_DIR}/requirements.txt" || true
+          fi
+
+          # Run database migrations
+          if [ -f "${REMOTE_DIR}/alembic.ini" ]; then
+            echo "Running database migrations"
+            # Load environment variables from .env file for the migration command
+            if [ -f "${REMOTE_DIR}/.env" ]; then
+              set -o allexport
+              source "${REMOTE_DIR}/.env"
+              set +o allexport
+            fi
+            # Run migrations from within the release directory
+            (cd "${REMOTE_DIR}" && venv/bin/alembic upgrade head)
           fi
 
           # Secure the uploaded .env
