@@ -28,16 +28,16 @@ async def contest_autocompletion(
     current: str,
 ) -> list[app_commands.Choice[int]]:
     """autocompletion for contest"""
-    session: Session = next(get_session())
-    contests = crud.list_contests(session)
+    with next(get_session()) as session:
+        contests = crud.list_contests(session)
 
-    # Sort contests by creation date, newest first
-    contests.sort(key=lambda c: c.id, reverse=True)
+        # Sort contests by creation date, newest first
+        contests.sort(key=lambda c: c.id, reverse=True)
 
-    choices = []
-    for contest in contests:
-        if current.lower() in contest.name.lower():
-            choices.append(app_commands.Choice(name=contest.name, value=contest.id))
+        choices = []
+        for contest in contests:
+            if current.lower() in contest.name.lower():
+                choices.append(app_commands.Choice(name=contest.name, value=contest.id))
 
     # Return the first 25 choices, as Discord has a limit
     return choices[:25]
