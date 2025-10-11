@@ -116,7 +116,8 @@ async def send_result_notification(
             color=discord.Color.green(),
         )
         winner_picks_str = (
-            f"{correct_percentage:.2f}% of users correctly picked the winner."
+            f"{correct_percentage:.2f}% of users "
+            "correctly picked the winner."
         )
         embed.add_field(
             name="Picks",
@@ -134,7 +135,10 @@ def start_scheduler():
             args=[ANNOUNCEMENT_GUILD_ID],
         )
         scheduler.add_job(
-            poll_for_results, "interval", minutes=5, args=[ANNOUNCEMENT_GUILD_ID]
+            poll_for_results,
+            "interval",
+            minutes=5,
+            args=[ANNOUNCEMENT_GUILD_ID],
         )
         scheduler.start()
         logger.info("Scheduler started.")

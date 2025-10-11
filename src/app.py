@@ -127,11 +127,16 @@ async def on_ready():
     if guild:
         try:
             await guild.leave()
-            logger.info(f"Successfully left guild: {guild.name} (ID: {guild.id})")
+            logger.info(
+                f"Successfully left guild: {guild.name} (ID: {guild.id})"
+            )
         except discord.HTTPException as e:
             logger.error(f"Failed to leave guild {guild_to_leave_id}: {e}")
     else:
-        logger.info(f"Guild with ID {guild_to_leave_id} not found, skipping leave operation.")
+        logger.info(
+            f"Guild with ID {guild_to_leave_id} not found, "
+            "skipping leave operation."
+        )
 
 
 @bot.event
