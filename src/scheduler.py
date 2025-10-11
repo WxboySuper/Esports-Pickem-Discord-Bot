@@ -19,7 +19,7 @@ scheduler = AsyncIOScheduler(jobstores=jobstores)
 
 async def schedule_reminders(bot, guild: discord.Guild):
     async with get_session() as session:
-        result = await session.exec(Match)
+        result = await session.exec(select(Match))
         matches = result.all()
         for match in matches:
             now = datetime.now(timezone.utc)
