@@ -12,10 +12,11 @@ import logging
 import sys
 import importlib
 import inspect
-
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv, find_dotenv
+from src.scheduler import start_scheduler
+import aiohttp
 
 load_dotenv(find_dotenv())
 
@@ -43,12 +44,16 @@ class EsportsBot(commands.Bot):
         "leaderboard",
         "result",
         "announce",
+        "wipe",
     ]
 
     def __init__(self):
         super().__init__(command_prefix="!", intents=intents)
+        self.session = None
 
     async def setup_hook(self):
+        self.session = aiohttp.ClientSession()
+        start_scheduler(self)
         commands_pkg = self._resolve_commands_package()
         if commands_pkg is not None:
             await self._load_command_modules(commands_pkg)
