@@ -2,3 +2,5 @@ discord.py==2.6.3
 python-dotenv==1.1.1  # optional for local dev if you want to load .env
 sqlmodel==0.0.25
 alembic==1.16.5
+apscheduler
+aiohttp
