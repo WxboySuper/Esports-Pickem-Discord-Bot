@@ -35,7 +35,7 @@ def mock_interaction():
 
 @patch("src.commands.announce.ADMIN_IDS", [12345])
 def test_is_admin_predicate():
-    """Test the _is_admin_predicate allows authorized users and denies others."""
+    """Test the admin check allows authorized users and denies others."""
     # Test with an authorized user
     authorized_interaction = MagicMock(spec=discord.Interaction)
     authorized_interaction.user.id = 12345
