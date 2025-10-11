@@ -10,6 +10,7 @@ from src.leaguepedia import get_match_results
 from src.announcements import send_announcement
 from src.config import ANNOUNCEMENT_GUILD_ID
 from src.db import DATABASE_URL
+from src.bot_instance import get_bot_instance
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ jobstores = {"default": SQLAlchemyJobStore(url=DATABASE_URL)}
 scheduler = AsyncIOScheduler(jobstores=jobstores)
 
 
-async def schedule_reminders(bot, guild: discord.Guild):
+async def schedule_reminders(guild_id: int):
     async with get_session() as session:
         result = await session.exec(select(Match))
         matches = result.all()
@@ -35,7 +36,7 @@ async def schedule_reminders(bot, guild: discord.Guild):
                         "date",
                         id=job_id,
                         run_date=five_minutes_before,
-                        args=[guild, match.id, 5],
+                        args=[guild_id, match.id, 5],
                     )
             if now < thirty_minutes_before:
                 job_id = f"reminder_30_{match.id}"
@@ -45,11 +46,12 @@ async def schedule_reminders(bot, guild: discord.Guild):
                         "date",
                         id=job_id,
                         run_date=thirty_minutes_before,
-                        args=[guild, match.id, 30],
+                        args=[guild_id, match.id, 30],
                     )
 
 
-async def poll_for_results(bot, guild: discord.Guild):
+async def poll_for_results(guild_id: int):
+    bot = get_bot_instance()
     async with get_session() as session:
         result = await session.exec(select(Match))
         matches = result.all()
@@ -64,10 +66,15 @@ async def poll_for_results(bot, guild: discord.Guild):
                     )
                     session.add(result)
                     await session.commit()
-                    await send_result_notification(guild, match, result)
+                    await send_result_notification(guild_id, match, result)
 
 
-async def send_reminder(guild: discord.Guild, match_id: int, minutes: int):
+async def send_reminder(guild_id: int, match_id: int, minutes: int):
+    bot = get_bot_instance()
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        logger.error(f"Guild {guild_id} not found.")
+        return
     async with get_session() as session:
         match = await session.get(Match, match_id)
         embed = discord.Embed(
@@ -82,12 +89,17 @@ async def send_reminder(guild: discord.Guild, match_id: int, minutes: int):
 
 
 async def send_result_notification(
-    guild: discord.Guild, match: Match, result: Result
+    guild_id: int, match: Match, result: Result
 ):
+    bot = get_bot_instance()
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        logger.error(f"Guild {guild_id} not found.")
+        return
     async with get_session() as session:
         statement = select(Pick).where(Pick.match_id == match.id)
-        result = await session.exec(statement)
-        picks = result.all()
+        db_result = await session.exec(statement)
+        picks = db_result.all()
         total_picks = len(picks)
         correct_picks = len(
             [p for p in picks if p.chosen_team == result.winner]
@@ -113,14 +125,16 @@ async def send_result_notification(
         await send_announcement(guild, embed)
 
 
-def start_scheduler(bot):
+def start_scheduler():
     if not scheduler.running:
-        guild = bot.get_guild(ANNOUNCEMENT_GUILD_ID)
         scheduler.add_job(
-            schedule_reminders, "interval", minutes=15, args=[bot, guild]
+            schedule_reminders,
+            "interval",
+            minutes=15,
+            args=[ANNOUNCEMENT_GUILD_ID],
         )
         scheduler.add_job(
-            poll_for_results, "interval", minutes=5, args=[bot, guild]
+            poll_for_results, "interval", minutes=5, args=[ANNOUNCEMENT_GUILD_ID]
         )
         scheduler.start()
         logger.info("Scheduler started.")

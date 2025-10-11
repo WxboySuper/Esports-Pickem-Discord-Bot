@@ -16,6 +16,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv, find_dotenv
 from src.scheduler import start_scheduler
+from src.bot_instance import set_bot_instance
 import aiohttp
 
 load_dotenv(find_dotenv())
@@ -53,7 +54,8 @@ class EsportsBot(commands.Bot):
 
     async def setup_hook(self):
         self.session = aiohttp.ClientSession()
-        start_scheduler(self)
+        set_bot_instance(self)
+        start_scheduler()
         commands_pkg = self._resolve_commands_package()
         if commands_pkg is not None:
             await self._load_command_modules(commands_pkg)
@@ -117,6 +119,19 @@ bot = EsportsBot()
 @bot.event
 async def on_ready():
     logger.info("Logged in as %s (id=%s)", bot.user, bot.user.id)
+
+    # Temporary code to leave a specific server.
+    # TODO: Remove this after it has run once in production.
+    guild_to_leave_id = 1306318188081844335
+    guild = bot.get_guild(guild_to_leave_id)
+    if guild:
+        try:
+            await guild.leave()
+            logger.info(f"Successfully left guild: {guild.name} (ID: {guild.id})")
+        except discord.HTTPException as e:
+            logger.error(f"Failed to leave guild {guild_to_leave_id}: {e}")
+    else:
+        logger.info(f"Guild with ID {guild_to_leave_id} not found, skipping leave operation.")
 
 
 @bot.event
