@@ -45,7 +45,7 @@ async def test_send_announcement(mock_guild):
 
 
 @pytest.mark.asyncio
-async def test_schedule_reminders(mock_bot, mock_guild):
+async def test_schedule_reminders(mock_guild):
     with patch("src.scheduler.get_session") as mock_get_session, patch(
         "src.scheduler.scheduler.add_job"
     ) as mock_add_job, patch(
@@ -62,7 +62,7 @@ async def test_schedule_reminders(mock_bot, mock_guild):
         mock_result.all = MagicMock(return_value=[mock_match])
         mock_session.exec.return_value = mock_result
         mock_get_job.return_value = None
-        await schedule_reminders(mock_bot, mock_guild)
+        await schedule_reminders(mock_guild.id)
         assert mock_add_job.call_count == 2
 
 
@@ -72,7 +72,10 @@ async def test_poll_for_results(mock_bot, mock_guild):
         "src.scheduler.get_match_results"
     ) as mock_get_results, patch(
         "src.scheduler.send_result_notification"
-    ) as mock_send_notification:
+    ) as mock_send_notification, patch(
+        "src.scheduler.get_bot_instance"
+    ) as mock_get_bot_instance:
+        mock_get_bot_instance.return_value = mock_bot
         mock_session = AsyncMock()
         mock_get_session.return_value.__aenter__.return_value = mock_session
         mock_match = MagicMock()
@@ -85,7 +88,7 @@ async def test_poll_for_results(mock_bot, mock_guild):
         mock_result.all = MagicMock(return_value=[mock_match])
         mock_session.exec.return_value = mock_result
         mock_get_results.return_value = [{"winner": "C9"}]
-        await poll_for_results(mock_bot, mock_guild)
+        await poll_for_results(mock_guild.id)
         mock_send_notification.assert_called_once()
 
 
