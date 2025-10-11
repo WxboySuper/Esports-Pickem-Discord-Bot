@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from src.scheduler import (
     schedule_reminders,
     poll_for_results,
@@ -44,8 +44,6 @@ async def test_send_announcement(mock_guild):
         mock_channel.send.assert_called_once_with(embed=embed)
 
 
-from datetime import timezone
-
 @pytest.mark.asyncio
 async def test_schedule_reminders(mock_bot, mock_guild):
     with patch("src.scheduler.get_session") as mock_get_session, patch(
@@ -57,7 +55,9 @@ async def test_schedule_reminders(mock_bot, mock_guild):
         mock_get_session.return_value.__aenter__.return_value = mock_session
         mock_match = MagicMock()
         mock_match.id = 1
-        mock_match.scheduled_time = datetime.now(timezone.utc) + timedelta(hours=1)
+        mock_match.scheduled_time = datetime.now(timezone.utc) + timedelta(
+            hours=1
+        )
         mock_result = MagicMock()
         mock_result.all = MagicMock(return_value=[mock_match])
         mock_session.exec.return_value = mock_result

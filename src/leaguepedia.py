@@ -38,7 +38,9 @@ async def get_match_results(session, tournament_name, team1, team2):
         "action": "query",
         "format": "json",
         "list": "matchschedule",
-        "matchschedule_where": "MS.Tournament = ? AND MS.Team1 = ? AND MS.Team2 = ?",
+        "matchschedule_where": (
+            "MS.Tournament = ? AND MS.Team1 = ? AND MS.Team2 = ?"
+        ),
         "matchschedule_params": f"{tournament_name},{team1},{team2}",
     }
     return await make_request(session, params)

@@ -9,6 +9,7 @@ from src.config import ADMIN_IDS
 def is_admin():
     def predicate(interaction: discord.Interaction) -> bool:
         return interaction.user.id in ADMIN_IDS
+
     return app_commands.check(predicate)
 
 

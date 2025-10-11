@@ -103,8 +103,9 @@ async def send_result_notification(
             ),
             color=discord.Color.green(),
         )
-        winner_picks_str = f"{correct_percentage:.2f}% of users "
-        winner_picks_str += "correctly picked the winner."
+        winner_picks_str = (
+            f"{correct_percentage:.2f}% of users correctly picked the winner."
+        )
         embed.add_field(
             name="Picks",
             value=winner_picks_str,
