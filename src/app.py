@@ -26,24 +26,9 @@ logger = logging.getLogger("esports-bot")
 logger.info("Startup cwd=%s", os.getcwd())
 logger.debug("Startup sys.path (first entries)=%s", sys.path[:6])
 
+from src.config import ADMIN_IDS
+
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-_raw_admin_ids = os.getenv("ADMIN_IDS", "")
-ADMIN_IDS: list[int] = []
-if _raw_admin_ids.strip():
-    for part in _raw_admin_ids.split(","):
-        token = part.strip()
-        if not token:
-            continue
-        if token.isdigit():
-            try:
-                ADMIN_IDS.append(int(token))
-            except ValueError:
-                logger.warning(
-                    "ADMIN_IDS entry could not be converted to int: %r",
-                    token,
-                )
-        else:
-            logger.warning("Ignoring non-numeric ADMIN_IDS entry: %r", token)
 
 intents = discord.Intents.default()
 
@@ -59,6 +44,7 @@ class EsportsBot(commands.Bot):
         "stats",
         "leaderboard",
         "result",
+        "announce",
     ]
 
     def __init__(self):
