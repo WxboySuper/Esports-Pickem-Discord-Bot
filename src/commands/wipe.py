@@ -24,10 +24,10 @@ class Wipe(commands.Cog):
     @is_admin()
     async def wipe_data(self, interaction: discord.Interaction):
         async with get_session() as session:
-            await session.exec(Result).delete()
-            await session.exec(Pick).delete()
-            await session.exec(Match).delete()
-            await session.exec(Contest).delete()
+            await session.exec(delete(Result))
+            await session.exec(delete(Pick))
+            await session.exec(delete(Match))
+            await session.exec(delete(Contest))
             await session.commit()
         await interaction.response.send_message(
             "All contest data has been wiped.", ephemeral=True
