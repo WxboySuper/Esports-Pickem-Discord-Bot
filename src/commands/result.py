@@ -9,7 +9,7 @@ from sqlmodel import Session
 
 from src.db import get_session
 from src import crud
-from src.config import ADMIN_IDS
+from src.auth import is_admin
 
 logger = logging.getLogger("esports-bot.commands.result")
 
@@ -104,17 +104,13 @@ async def match_autocompletion(
 @app_commands.autocomplete(
     match_id=match_autocompletion, winner=winner_autocomplete
 )
+@is_admin()
 async def enter_result(
     interaction: discord.Interaction,
     match_id: int,
     winner: str,
 ):
     """Admin command to enter a match result and score all related picks."""
-    if interaction.user.id not in ADMIN_IDS:
-        await interaction.response.send_message(
-            "You do not have permission to use this command.", ephemeral=True
-        )
-        return
 
     logger.info(
         "Admin '%s' is entering a result for match %s.",

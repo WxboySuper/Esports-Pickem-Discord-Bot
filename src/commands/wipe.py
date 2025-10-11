@@ -4,14 +4,9 @@ from discord.ext import commands
 from sqlalchemy import delete
 from src.db import get_session
 from src.models import Contest, Match, Pick, Result
-from src.config import ADMIN_IDS
+from src.auth import is_admin
 
 
-def is_admin():
-    def predicate(interaction: discord.Interaction) -> bool:
-        return interaction.user.id in ADMIN_IDS
-
-    return app_commands.check(predicate)
 
 
 class Wipe(commands.Cog):

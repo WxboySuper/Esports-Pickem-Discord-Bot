@@ -12,7 +12,7 @@ from sqlmodel import Session
 from src.db import get_session
 from src.models import Contest, Match
 from src import crud
-from src.config import ADMIN_IDS
+from src.auth import is_admin
 
 logger = logging.getLogger("esports-bot.commands.matches")
 
@@ -227,17 +227,13 @@ async def view_by_tournament(interaction: discord.Interaction):
     contest_id="The ID of the contest to add matches to.",
     attachment="The CSV file with the match schedule.",
 )
+@is_admin()
 async def upload(
     interaction: discord.Interaction,
     contest_id: int,
     attachment: discord.Attachment,
 ):
     """Handles CSV upload for match schedules."""
-    if interaction.user.id not in ADMIN_IDS:
-        await interaction.response.send_message(
-            "You do not have permission to use this command.", ephemeral=True
-        )
-        return
 
     logger.info(
         f"Admin '{interaction.user.name}' is uploading matches for contest "

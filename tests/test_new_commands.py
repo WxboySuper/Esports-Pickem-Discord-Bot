@@ -132,31 +132,24 @@ async def test_leaderboard_command_empty(
         assert "The leaderboard is empty" in kwargs["embed"].description
 
 
-@pytest.mark.asyncio
-@patch("src.commands.result.get_session")
-@patch("src.commands.result.ADMIN_IDS", [999])  # Non-admin user
-async def test_enter_result_not_admin(
-    mock_get_session,
-    mock_interaction,
-    mock_session,
-):
-    """Test that a non-admin cannot use /enter_result."""
-    mock_get_session.return_value = iter([mock_session])
+@patch("src.auth.get_admin_ids")
+def test_enter_result_admin_check(mock_get_admin_ids, mock_interaction):
+    """Tests the predicate of the is_admin check on the enter_result command."""
+    # The predicate is the first (and only) check on the command
+    predicate = result.enter_result.checks[0]
 
-    await result.enter_result.callback(
-        mock_interaction,
-        match_id=1,
-        winner="Team A",
-    )
+    # Test with admin user
+    mock_interaction.user.id = 123
+    mock_get_admin_ids.return_value = [123, 456]
+    assert predicate(mock_interaction) is True
 
-    mock_interaction.response.send_message.assert_called_once_with(
-        "You do not have permission to use this command.", ephemeral=True
-    )
+    # Test with non-admin user
+    mock_interaction.user.id = 789
+    assert predicate(mock_interaction) is False
 
 
 @pytest.mark.asyncio
 @patch("src.commands.result.get_session")
-@patch("src.commands.result.ADMIN_IDS", [123])  # Admin user
 async def test_enter_result_success(
     mock_get_session,
     mock_interaction,

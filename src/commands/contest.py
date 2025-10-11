@@ -3,7 +3,7 @@ import logging
 import discord
 from discord import app_commands
 
-from src.config import ADMIN_IDS
+from src.auth import is_admin
 from src.crud import create_contest
 from src.db import get_session
 
@@ -69,13 +69,8 @@ class Contest(
     app_commands.Group, name="contest", description="Manage contests"
 ):
     @app_commands.command(name="create", description="Create a new contest")
+    @is_admin()
     async def create(self, interaction: discord.Interaction):
-        if interaction.user.id not in ADMIN_IDS:
-            await interaction.response.send_message(
-                "You do not have permission to use this command.",
-                ephemeral=True,
-            )
-            return
         await interaction.response.send_modal(ContestModal())
 
 

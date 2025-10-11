@@ -3,17 +3,7 @@ from discord import app_commands, ui, Color, SelectOption
 from discord.ext import commands
 from discord.utils import get
 
-from src.config import ADMIN_IDS
-
-
-def _is_admin_predicate(interaction: discord.Interaction) -> bool:
-    """Predicate to check if the user is in the ADMIN_IDS list."""
-    return interaction.user.id in ADMIN_IDS
-
-
-def is_admin():
-    """Custom check to see if the user is in the ADMIN_IDS list."""
-    return app_commands.check(_is_admin_predicate)
+from src.auth import is_admin
 
 
 CATEGORY_NAME = "esports-pickem"
