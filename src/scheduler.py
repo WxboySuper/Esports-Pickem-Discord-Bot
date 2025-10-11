@@ -101,18 +101,18 @@ async def send_result_notification(
         db_result = await session.exec(statement)
         picks = db_result.all()
         total_picks = len(picks)
-        correct_picks = len(
-            [p for p in picks if p.chosen_team == result.winner]
-        )
+        correct_picks = len([
+            p for p in picks if p.chosen_team == result.winner
+        ])
         correct_percentage = (
             (correct_picks / total_picks) * 100 if total_picks > 0 else 0
         )
+        opponent = (
+            match.team2 if result.winner == match.team1 else match.team1
+        )
         embed = discord.Embed(
             title="Match Result",
-            description=(
-                f"{result.winner} won against "
-                f"{match.team1 if result.winner == match.team2 else match.team2}!"
-            ),
+            description=f"{result.winner} won against {opponent}!",
             color=discord.Color.green(),
         )
         winner_picks_str = (

@@ -7,8 +7,6 @@ from src.models import Contest, Match, Pick, Result
 from src.auth import is_admin
 
 
-
-
 class Wipe(commands.Cog):
     def __init__(self, bot):
         self.bot = bot

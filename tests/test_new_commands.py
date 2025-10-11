@@ -134,7 +134,8 @@ async def test_leaderboard_command_empty(
 
 @patch("src.auth.get_admin_ids")
 def test_enter_result_admin_check(mock_get_admin_ids, mock_interaction):
-    """Tests the predicate of the is_admin check on the enter_result command."""
+    """Tests the predicate of the is_admin check on the enter_result
+    command."""
     # The predicate is the first (and only) check on the command
     predicate = result.enter_result.checks[0]
 
