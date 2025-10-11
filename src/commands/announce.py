@@ -6,11 +6,14 @@ from discord.utils import get
 from src.config import ADMIN_IDS
 
 
+def _is_admin_predicate(interaction: discord.Interaction) -> bool:
+    """Predicate to check if the user is in the ADMIN_IDS list."""
+    return interaction.user.id in ADMIN_IDS
+
+
 def is_admin():
     """Custom check to see if the user is in the ADMIN_IDS list."""
-    def predicate(interaction: discord.Interaction) -> bool:
-        return interaction.user.id in ADMIN_IDS
-    return app_commands.check(predicate)
+    return app_commands.check(_is_admin_predicate)
 
 
 CATEGORY_NAME = "esports-pickem"
@@ -18,16 +21,36 @@ CHANNEL_NAME = "pickem-announcements"
 
 ANNOUNCEMENT_TYPES = {
     "bug": {"label": "Bug Notification", "emoji": "🐛", "color": Color.red()},
-    "update": {"label": "Update Notification", "emoji": "✨", "color": Color.green()},
-    "reminder": {"label": "Match Reminder", "emoji": "🗓️", "color": Color.blue()},
-    "result": {"label": "Result Notification", "emoji": "🏆", "color": Color.purple()},
+    "update": {
+        "label": "Update Notification",
+        "emoji": "✨",
+        "color": Color.green(),
+    },
+    "reminder": {
+        "label": "Match Reminder",
+        "emoji": "🗓️",
+        "color": Color.blue(),
+    },
+    "result": {
+        "label": "Result Notification",
+        "emoji": "🏆",
+        "color": Color.purple(),
+    },
     "status": {"label": "Bot Status", "emoji": "🤖", "color": Color.gold()},
-    "general": {"label": "General Announcement", "emoji": "📣", "color": Color.default()},
+    "general": {
+        "label": "General Announcement",
+        "emoji": "📣",
+        "color": Color.default(),
+    },
 }
 
 
 class AnnouncementModal(ui.Modal, title="Create Announcement"):
-    title_input = ui.TextInput(label="Title", placeholder="Enter the title of the announcement", max_length=100)
+    title_input = ui.TextInput(
+        label="Title",
+        placeholder="Enter the title of the announcement",
+        max_length=100,
+    )
     message_input = ui.TextInput(
         label="Message",
         placeholder="Enter the announcement message",
@@ -45,7 +68,9 @@ class AnnouncementModal(ui.Modal, title="Create Announcement"):
 
         guild = interaction.guild
         if not guild:
-            await interaction.followup.send("This command can only be used in a server.", ephemeral=True)
+            await interaction.followup.send(
+                "This command can only be used in a server.", ephemeral=True
+            )
             return
 
         # Find or create the category
@@ -66,7 +91,9 @@ class AnnouncementModal(ui.Modal, title="Create Announcement"):
         # Find or create the channel
         channel = get(category.text_channels, name=CHANNEL_NAME)
         if channel is None:
-            channel = await category.create_text_channel(CHANNEL_NAME, overwrites=overwrites)
+            channel = await category.create_text_channel(
+                CHANNEL_NAME, overwrites=overwrites
+            )
 
         # Get announcement details
         announcement_details = ANNOUNCEMENT_TYPES[self.announcement_type]
@@ -80,14 +107,20 @@ class AnnouncementModal(ui.Modal, title="Create Announcement"):
             description=embed_message,
             color=embed_color,
         )
-        embed.set_author(name=f"Announcement from {interaction.user.display_name}", icon_url=interaction.user.avatar.url)
+        embed.set_author(
+            name=f"Announcement from {interaction.user.display_name}",
+            icon_url=interaction.user.avatar.url,
+        )
         embed.set_footer(text=announcement_details["label"])
 
         # Send the announcement
         await channel.send(embed=embed)
 
         # Send confirmation
-        await interaction.followup.send(f"Announcement successfully sent to #{channel.name}!", ephemeral=True)
+        await interaction.followup.send(
+            f"Announcement successfully sent to #{channel.name}!",
+            ephemeral=True,
+        )
 
 
 class AnnouncementTypeSelect(ui.Select):
@@ -101,7 +134,12 @@ class AnnouncementTypeSelect(ui.Select):
             )
             for type_key, details in ANNOUNCEMENT_TYPES.items()
         ]
-        super().__init__(placeholder="Select an announcement type...", min_values=1, max_values=1, options=options)
+        super().__init__(
+            placeholder="Select an announcement type...",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
 
     async def callback(self, interaction: discord.Interaction):
         modal = AnnouncementModal(self.bot, self.values[0])
@@ -119,12 +157,16 @@ class Announce(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="announce", description="Create and send an announcement.")
+    @app_commands.command(
+        name="announce", description="Create and send an announcement."
+    )
     @is_admin()
     async def announce(self, interaction: discord.Interaction):
         """Creates a modal for sending an announcement."""
         view = AnnounceView(self.bot)
-        await interaction.response.send_message("Please select an announcement type:", view=view, ephemeral=True)
+        await interaction.response.send_message(
+            "Please select an announcement type:", view=view, ephemeral=True
+        )
 
 
 async def setup(bot: commands.Bot):

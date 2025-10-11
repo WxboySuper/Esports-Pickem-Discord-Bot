@@ -26,8 +26,6 @@ logger = logging.getLogger("esports-bot")
 logger.info("Startup cwd=%s", os.getcwd())
 logger.debug("Startup sys.path (first entries)=%s", sys.path[:6])
 
-from src.config import ADMIN_IDS
-
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()

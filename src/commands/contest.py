@@ -3,7 +3,7 @@ import logging
 import discord
 from discord import app_commands
 
-from src.app import ADMIN_IDS
+from src.config import ADMIN_IDS
 from src.crud import create_contest
 from src.db import get_session
 
@@ -65,7 +65,9 @@ class ContestModal(discord.ui.Modal, title="Create New Contest"):
             session.close()
 
 
-class Contest(app_commands.Group, name="contest", description="Manage contests"):
+class Contest(
+    app_commands.Group, name="contest", description="Manage contests"
+):
     @app_commands.command(name="create", description="Create a new contest")
     async def create(self, interaction: discord.Interaction):
         if interaction.user.id not in ADMIN_IDS:

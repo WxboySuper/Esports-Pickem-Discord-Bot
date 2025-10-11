@@ -2,3 +2,6 @@
 pythonpath = ["."]
 testpaths = ["tests"]
 # (optional) add other pytest options if desired
+
+[tool.black]
+line-length = 79

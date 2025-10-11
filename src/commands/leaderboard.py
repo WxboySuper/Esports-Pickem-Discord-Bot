@@ -53,7 +53,10 @@ async def get_leaderboard_data(
         accuracy = case(
             (
                 total_resolved > 0,
-                (func.cast(total_correct, Float) / func.cast(total_resolved, Float))
+                (
+                    func.cast(total_correct, Float)
+                    / func.cast(total_resolved, Float)
+                )
                 * 100,
             ),
             else_=0.0,
@@ -65,12 +68,18 @@ async def get_leaderboard_data(
             .where(Pick.status.in_(["correct", "incorrect"]))
             .group_by(User.id)
             .having(total_resolved >= MIN_PICKS_FOR_ACCURACY_LEADERBOARD)
-            .order_by(accuracy.desc(), total_correct.label("total_correct").desc())
+            .order_by(
+                accuracy.desc(), total_correct.label("total_correct").desc()
+            )
         )
     else:
         # --- Count-Based Leaderboard (Daily/Weekly/Contest) ---
         total_correct = func.count(Pick.id).label("total_correct")
-        query = select(User, total_correct).join(Pick).where(Pick.status == "correct")
+        query = (
+            select(User, total_correct)
+            .join(Pick)
+            .where(Pick.status == "correct")
+        )
 
         if days:
             start_date = datetime.now(timezone.utc) - timedelta(days=days)
@@ -147,7 +156,9 @@ async def create_leaderboard_embed(
             # entry is (User, total_correct)
             total_correct = entry[1]
             plural = "s" if total_correct != 1 else ""
-            line = f"**{i}.** {username} - `{total_correct}` correct pick{plural}"
+            line = (
+                f"**{i}.** {username} - `{total_correct}` correct pick{plural}"
+            )
             lines.append(line)
 
     embed.description = "\n".join(lines)
@@ -224,7 +235,8 @@ class ContestSelectForLeaderboard(discord.ui.Select):
 
     def __init__(self, contests: list[Contest]):
         options = [
-            discord.SelectOption(label=c.name, value=str(c.id)) for c in contests
+            discord.SelectOption(label=c.name, value=str(c.id))
+            for c in contests
         ]
         super().__init__(placeholder="Choose a contest...", options=options)
 
