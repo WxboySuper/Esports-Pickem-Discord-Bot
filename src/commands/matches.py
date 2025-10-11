@@ -12,7 +12,7 @@ from sqlmodel import Session
 from src.db import get_session
 from src.models import Contest, Match
 from src import crud
-from src.app import ADMIN_IDS
+from src.config import ADMIN_IDS
 
 logger = logging.getLogger("esports-bot.commands.matches")
 
@@ -92,7 +92,9 @@ async def create_matches_embed(
     )
     embed.set_author(
         name=interaction.user.display_name,
-        icon_url=(interaction.user.avatar.url if interaction.user.avatar else None),
+        icon_url=(
+            interaction.user.avatar.url if interaction.user.avatar else None
+        ),
     )
 
     if not matches:
@@ -155,7 +157,8 @@ class TournamentSelect(discord.ui.Select):
 
     def __init__(self, contests: list[Contest]):
         options = [
-            discord.SelectOption(label=c.name, value=str(c.id)) for c in contests
+            discord.SelectOption(label=c.name, value=str(c.id))
+            for c in contests
         ]
         super().__init__(placeholder="Choose a tournament...", options=options)
 
@@ -264,7 +267,9 @@ async def upload(
                         "contest_id": contest_id,
                         "team1": row["team1"],
                         "team2": row["team2"],
-                        "scheduled_time": datetime.fromisoformat(row["scheduled_time"]),
+                        "scheduled_time": datetime.fromisoformat(
+                            row["scheduled_time"]
+                        ),
                     }
                 )
             except (KeyError, ValueError) as e:

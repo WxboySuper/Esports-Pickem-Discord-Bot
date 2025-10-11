@@ -23,7 +23,9 @@ def mock_interaction():
 
 
 def create_mock_user(discord_id, username):
-    user = User(id=int(discord_id), discord_id=str(discord_id), username=username)
+    user = User(
+        id=int(discord_id), discord_id=str(discord_id), username=username
+    )
     return user
 
 
@@ -111,4 +113,6 @@ async def test_create_leaderboard_embed_count_based(mock_interaction):
     assert "Weekly Winners" in embed.title
     assert "**1.** UserOne - `10` correct picks" in embed.description
     assert "**2.** UserTwo - `5` correct picks" in embed.description
-    assert "**3.** UserThree - `1` correct pick" in embed.description  # Singular
+    assert (
+        "**3.** UserThree - `1` correct pick" in embed.description
+    )  # Singular
