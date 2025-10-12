@@ -9,7 +9,7 @@ from discord import app_commands
 from sqlalchemy import func, case, Float
 from sqlmodel import Session, select
 
-from src.db import get_session
+from src.db import get_async_session
 from src.models import Contest, Pick, User
 from src import crud
 
@@ -90,7 +90,8 @@ async def get_leaderboard_data(
 
         query = query.group_by(User.id).order_by(total_correct.desc())
 
-    results = session.exec(query).all()
+    results = await session.exec(query)
+    results = results.all()
 
     # Guild filtering logic. This is inefficient for large bots but matches
     # the existing implementation's approach.
@@ -179,7 +180,6 @@ class LeaderboardView(discord.ui.View):
         self, interaction: discord.Interaction, period: str, days: int = None
     ):
         await interaction.response.defer()
-        session: Session = next(get_session())
         guild_id = interaction.guild.id if period == "Server" else None
 
         # Update button styles
@@ -192,11 +192,12 @@ class LeaderboardView(discord.ui.View):
                     item.style = discord.ButtonStyle.secondary
                     item.disabled = False
 
-        data = await get_leaderboard_data(
-            session,
-            days=days,
-            guild_id=guild_id,
-        )
+        async with get_async_session() as session:
+            data = await get_leaderboard_data(
+                session,
+                days=days,
+                guild_id=guild_id,
+            )
         title = f"{period} Leaderboard"
         embed = await create_leaderboard_embed(
             title,
@@ -243,17 +244,16 @@ class ContestSelectForLeaderboard(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
         contest_id = int(self.values[0])
-        session: Session = next(get_session())
-
-        contest = crud.get_contest_by_id(session, contest_id)
-        data = await get_leaderboard_data(session, contest_id=contest_id)
-        title = f"Leaderboard for {contest.name}"
-        embed = await create_leaderboard_embed(
-            title,
-            data,
-            interaction,
-        )
-        await interaction.edit_original_response(embed=embed, view=None)
+        async with get_async_session() as session:
+            contest = await crud.get_contest_by_id(session, contest_id)
+            data = await get_leaderboard_data(session, contest_id=contest_id)
+            title = f"Leaderboard for {contest.name}"
+            embed = await create_leaderboard_embed(
+                title,
+                data,
+                interaction,
+            )
+            await interaction.edit_original_response(embed=embed, view=None)
 
 
 # --- Commands ---
@@ -266,22 +266,21 @@ class ContestSelectForLeaderboard(discord.ui.Select):
 async def leaderboard(interaction: discord.Interaction):
     """Shows the main leaderboard with view options."""
     logger.info(f"'{interaction.user.name}' requested the main leaderboard.")
-    session: Session = next(get_session())
+    async with get_async_session() as session:
+        # Default to global view
+        data = await get_leaderboard_data(session)
+        embed = await create_leaderboard_embed(
+            "Global Leaderboard",
+            data,
+            interaction,
+        )
+        view = LeaderboardView(interaction)
 
-    # Default to global view
-    data = await get_leaderboard_data(session)
-    embed = await create_leaderboard_embed(
-        "Global Leaderboard",
-        data,
-        interaction,
-    )
-    view = LeaderboardView(interaction)
-
-    await interaction.response.send_message(
-        embed=embed,
-        view=view,
-        ephemeral=True,
-    )
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True,
+        )
 
 
 @app_commands.command(
@@ -291,20 +290,20 @@ async def leaderboard(interaction: discord.Interaction):
 async def leaderboard_contest(interaction: discord.Interaction):
     """Shows a dropdown to select a contest leaderboard."""
     logger.info(f"'{interaction.user.name}' requested a contest leaderboard.")
-    session: Session = next(get_session())
-    contests = crud.list_contests(session)
-    if not contests:
-        await interaction.response.send_message(
-            "No contests found.",
-            ephemeral=True,
-        )
-        return
+    async with get_async_session() as session:
+        contests = await crud.list_contests(session)
+        if not contests:
+            await interaction.response.send_message(
+                "No contests found.",
+                ephemeral=True,
+            )
+            return
 
-    view = discord.ui.View(timeout=180)
-    view.add_item(ContestSelectForLeaderboard(contests=contests[:25]))
-    await interaction.response.send_message(
-        "Please select a contest:", view=view, ephemeral=True
-    )
+        view = discord.ui.View(timeout=180)
+        view.add_item(ContestSelectForLeaderboard(contests=contests[:25]))
+        await interaction.response.send_message(
+            "Please select a contest:", view=view, ephemeral=True
+        )
 
 
 async def setup(bot_instance):

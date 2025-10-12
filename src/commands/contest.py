@@ -5,7 +5,7 @@ from discord import app_commands
 
 from src.auth import is_admin
 from src.crud import create_contest
-from src.db import get_session
+from src.db import get_async_session
 
 logger = logging.getLogger("esports-bot.commands.contest")
 
@@ -28,7 +28,6 @@ class ContestModal(discord.ui.Modal, title="Create New Contest"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        session = next(get_session())
         from datetime import datetime
 
         try:
@@ -41,16 +40,17 @@ class ContestModal(discord.ui.Modal, title="Create New Contest"):
                 "%Y-%m-%d",
             )
 
-            contest = create_contest(
-                session,
-                name=self.name.value,
-                start_date=start_date_val,
-                end_date=end_date_val,
-            )
-            await interaction.response.send_message(
-                f"Contest '{contest.name}' created with ID {contest.id}",
-                ephemeral=True,
-            )
+            async with get_async_session() as session:
+                contest = await create_contest(
+                    session,
+                    name=self.name.value,
+                    start_date=start_date_val,
+                    end_date=end_date_val,
+                )
+                await interaction.response.send_message(
+                    f"Contest '{contest.name}' created with ID {contest.id}",
+                    ephemeral=True,
+                )
         except ValueError:
             logger.exception("Invalid date format for contest creation")
             await interaction.response.send_message(
@@ -61,8 +61,6 @@ class ContestModal(discord.ui.Modal, title="Create New Contest"):
             await interaction.response.send_message(
                 f"Failed to create contest. Error: {e}", ephemeral=True
             )
-        finally:
-            session.close()
 
 
 class Contest(

@@ -1,29 +1,45 @@
-import atexit
 import os
-from sqlmodel import SQLModel, create_engine, Session
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel, Session, create_engine
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "sqlite:////opt/esports-bot/data/esports_pickem.db"
+# --- Async Setup ---
+ASYNC_DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "sqlite+aiosqlite:////opt/esports-bot/data/esports_pickem.db",
 )
+if ASYNC_DATABASE_URL.startswith("sqlite:///"):
+    ASYNC_DATABASE_URL = ASYNC_DATABASE_URL.replace(
+        "sqlite:///", "sqlite+aiosqlite:///"
+    )
 
-# compute the SQL echo flag on its own line to avoid overly long lines
 _sql_echo = os.getenv("SQL_ECHO", "False").lower() in ("true", "1", "t")
 
-engine = create_engine(
-    DATABASE_URL,
-    echo=_sql_echo,
+async_engine = create_async_engine(ASYNC_DATABASE_URL, echo=_sql_echo)
+AsyncSessionLocal = sessionmaker(
+    async_engine, class_=AsyncSession, expire_on_commit=False
 )
 
 
-@atexit.register
-def _dispose_engine():
-    engine.dispose()
+async def get_async_session() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
+        yield session
 
 
-def init_db():
-    SQLModel.metadata.create_all(engine)
+async def init_db():
+    async with async_engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+
+
+async def close_engine():
+    await async_engine.dispose()
+
+
+# --- Sync Setup (for tests and commands that have not been migrated) ---
+SYNC_DATABASE_URL = ASYNC_DATABASE_URL.replace("+aiosqlite", "")
+sync_engine = create_engine(SYNC_DATABASE_URL, echo=_sql_echo)
 
 
 def get_session():
-    with Session(engine) as session:
+    with Session(sync_engine) as session:
         yield session

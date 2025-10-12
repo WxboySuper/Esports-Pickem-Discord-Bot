@@ -4,3 +4,4 @@ sqlmodel==0.0.25
 alembic==1.16.5
 apscheduler
 aiohttp
+aiosqlite

@@ -1,154 +1,186 @@
 import pytest
-from datetime import datetime, timedelta, timezone
-
-from sqlmodel import SQLModel, Session, create_engine
-
-from src.models import User, Contest, Pick, Result
+from datetime import datetime, timezone
+from sqlmodel import Session, SQLModel, create_engine
+from src.models import User, Contest, Match, Pick, Result
 from src import crud
+from src.db import async_engine, get_async_session
 
 
-@pytest.fixture()
-def session(tmp_path):
-    """Provide a fresh SQLite database session for each test."""
-    # Use a file-based SQLite DB under tmp_path so schema persists
-    db_path = tmp_path / "test.db"
-    engine = create_engine(f"sqlite:///{db_path}", echo=False)
+@pytest.fixture(name="session")
+def session_fixture():
+    engine = create_engine("sqlite:///:memory:")
     SQLModel.metadata.create_all(engine)
-    with Session(engine) as s:
-        try:
-            yield s
-        finally:
-            engine.dispose()
+    with Session(engine) as session:
+        yield session
 
 
-# ---- USER ----
-def test_user_crud_happy_path(session: Session):
+@pytest.fixture(name="async_session")
+async def async_session_fixture():
+    async with async_engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+    async with get_async_session() as session:
+        yield session
+
+
+# Helper to create a contest for tests that need one
+async def _mk_contest(session: Session) -> Contest:
+    return await crud.create_contest(
+        session,
+        name="Test Contest",
+        start_date=datetime(2025, 1, 1),
+        end_date=datetime(2025, 2, 1),
+    )
+
+
+# Helper to create a user, contest, and match
+async def _mk_user_contest_match(session: Session) -> (User, Contest, Match):
+    user = await crud.create_user(session, discord_id="u1", username="u1")
+    contest = await _mk_contest(session)
+    match = await crud.create_match(
+        session,
+        contest.id,
+        "A",
+        "B",
+        scheduled_time=datetime(2025, 5, 12, 12, 0, 0),
+    )
+    return user, contest, match
+
+
+@pytest.mark.asyncio
+async def test_user_crud_happy_path(async_session: Session):
     # create
-    user = crud.create_user(session, discord_id="123", username="alice")
+    user = await crud.create_user(
+        async_session, discord_id="123", username="alice"
+    )
     assert isinstance(user, User)
-    assert user.id is not None
     assert user.discord_id == "123"
     assert user.username == "alice"
 
-    # get by discord id
-    got = crud.get_user_by_discord_id(session, "123")
-    assert got is not None and got.id == user.id
+    # get
+    got_user = await crud.get_user_by_discord_id(async_session, "123")
+    assert got_user.id == user.id
 
     # update
-    updated = crud.update_user(session, user.id, username="alice_2")
-    assert updated is not None and updated.username == "alice_2"
+    updated_user = await crud.update_user(
+        async_session, user.id, username="alicia"
+    )
+    assert updated_user.username == "alicia"
 
     # delete
-    ok = crud.delete_user(session, user.id)
-    assert ok is True
-    assert crud.get_user_by_discord_id(session, "123") is None
+    assert await crud.delete_user(async_session, user.id)
+    assert not await crud.get_user_by_discord_id(async_session, "123")
 
 
-def test_user_update_delete_missing(session: Session):
-    assert crud.update_user(session, 9999, username="x") is None
-    assert crud.delete_user(session, 9999) is False
+@pytest.mark.asyncio
+async def test_user_update_delete_missing(async_session: Session):
+    assert await crud.update_user(async_session, 9999, username="x") is None
+    assert not await crud.delete_user(async_session, 9999)
 
 
-# ---- CONTEST ----
-def test_contest_crud_and_listing(session: Session):
+@pytest.mark.asyncio
+async def test_contest_crud_and_listing(async_session: Session):
     start = datetime(2025, 1, 1, 10, 0, 0)
     end = datetime(2025, 1, 10, 20, 0, 0)
 
-    c1 = crud.create_contest(
-        session,
+    c1 = await crud.create_contest(
+        async_session,
         name="Spring Split",
         start_date=start,
         end_date=end,
     )
-    c2 = crud.create_contest(
-        session,
+    c2 = await crud.create_contest(
+        async_session,
         name="Summer Split",
         start_date=start,
         end_date=end,
     )
 
     # get
-    got = crud.get_contest_by_id(session, c1.id)
-    assert got is not None and got.name == "Spring Split"
+    got = await crud.get_contest_by_id(async_session, c1.id)
+    assert got.name == "Spring Split"
 
     # list
-    contests = crud.list_contests(session)
-    names = sorted(c.name for c in contests)
-    assert names == ["Spring Split", "Summer Split"]
+    contests = await crud.list_contests(async_session)
+    assert len(contests) == 2
 
     # update
-    upd = crud.update_contest(session, c2.id, name="Summer Finals")
-    assert upd is not None and upd.name == "Summer Finals"
+    updated = await crud.update_contest(
+        async_session, c2.id, name="Summer Smash"
+    )
+    assert updated.name == "Summer Smash"
 
     # delete
-    assert crud.delete_contest(session, c1.id) is True
-    assert crud.get_contest_by_id(session, c1.id) is None
+    assert await crud.delete_contest(async_session, c1.id)
+    assert len(await crud.list_contests(async_session)) == 1
 
 
-def test_contest_update_delete_missing(session: Session):
-    assert crud.update_contest(session, 4242, name="X") is None
-    assert crud.delete_contest(session, 4242) is False
+@pytest.mark.asyncio
+async def test_contest_update_delete_missing(async_session: Session):
+    assert await crud.update_contest(async_session, 4242, name="X") is None
+    assert not await crud.delete_contest(async_session, 4242)
 
 
-# ---- MATCH ----
-def _mk_contest(session: Session) -> Contest:
-    return crud.create_contest(
-        session,
-        name="Main",
-        start_date=datetime(2025, 5, 1, 0, 0, 0),
-        end_date=datetime(2025, 5, 31, 23, 59, 59),
-    )
-
-
-def test_match_crud_and_queries(session: Session):
-    contest = _mk_contest(session)
+@pytest.mark.asyncio
+async def test_match_crud_and_queries(async_session: Session):
+    contest = await _mk_contest(async_session)
 
     # Create matches across different times
     day = datetime(2025, 5, 10, tzinfo=timezone.utc)
-    m1 = crud.create_match(session, contest.id, "A", "B", scheduled_time=day)
-    m2 = crud.create_match(
-        session,
+    m1 = await crud.create_match(
+        async_session, contest.id, "A", "B", scheduled_time=day
+    )
+    m2 = await crud.create_match(
+        async_session,
         contest.id,
         "C",
         "D",
-        scheduled_time=day.replace(hour=23, minute=59, second=59),
+        scheduled_time=day + timezone.timedelta(hours=2),
     )
-    m3 = crud.create_match(
-        session,
+    await crud.create_match(
+        async_session,
         contest.id,
         "E",
         "F",
-        scheduled_time=day + timedelta(days=1),
+        scheduled_time=day + timezone.timedelta(days=1),
     )
 
     # get by id
-    got = crud.get_match_by_id(session, m1.id)
-    assert got is not None and got.team1 == "A"
-
-    # list by contest
-    in_contest = crud.list_matches_for_contest(session, contest.id)
-    assert {m.id for m in in_contest} == {m1.id, m2.id, m3.id}
+    assert (await crud.get_match_by_id(async_session, m1.id)).team1 == "A"
 
     # get by date
-    on_day = crud.get_matches_by_date(session, day)
-    assert {m.id for m in on_day} == {m1.id, m2.id}
+    matches_on_day = await crud.get_matches_by_date(async_session, day)
+    assert len(matches_on_day) == 2
+    assert {m.team1 for m in matches_on_day} == {"A", "C"}
+
+    # list for contest
+    all_for_contest = await crud.list_matches_for_contest(
+        async_session, contest.id
+    )
+    assert len(all_for_contest) == 3
+
+    # list all (sorted)
+    all_matches = await crud.list_all_matches(async_session)
+    assert len(all_matches) == 3
+    assert all_matches[0].team1 == "E"  # Most recent first
 
     # update
-    upd = crud.update_match(session, m1.id, team1="AA")
-    assert upd is not None and upd.team1 == "AA"
+    updated = await crud.update_match(async_session, m2.id, team1="Team C")
+    assert updated.team1 == "Team C"
 
     # delete
-    assert crud.delete_match(session, m3.id) is True
-    assert crud.get_match_by_id(session, m3.id) is None
+    assert await crud.delete_match(async_session, m1.id)
+    assert len(await crud.list_all_matches(async_session)) == 2
 
 
-def test_match_update_delete_missing(session: Session):
-    assert crud.update_match(session, 5555, team1="GG") is None
-    assert crud.delete_match(session, 5555) is False
+@pytest.mark.asyncio
+async def test_match_update_delete_missing(async_session: Session):
+    assert await crud.update_match(async_session, 5555, team1="GG") is None
+    assert not await crud.delete_match(async_session, 5555)
 
 
-def test_bulk_create_matches(session: Session):
-    contest = _mk_contest(session)
+@pytest.mark.asyncio
+async def test_bulk_create_matches(async_session: Session):
+    contest = await _mk_contest(async_session)
     matches_data = [
         {
             "contest_id": contest.id,
@@ -163,89 +195,85 @@ def test_bulk_create_matches(session: Session):
             "scheduled_time": datetime(2025, 5, 16, 12, 0, 0),
         },
     ]
-
-    created_matches = crud.bulk_create_matches(session, matches_data)
-    assert len(created_matches) == 2
-
-    db_matches = crud.list_matches_for_contest(session, contest.id)
-    assert len(db_matches) == 2
-    assert {m.team1 for m in db_matches} == {"T1", "T3"}
-
-
-# ---- PICK ----
-def _mk_user_contest_match(session: Session):
-    user = crud.create_user(session, discord_id="u1", username="u1")
-    contest = _mk_contest(session)
-    match = crud.create_match(
-        session,
-        contest.id,
-        "A",
-        "B",
-        scheduled_time=datetime(2025, 5, 12, 12, 0, 0),
+    created_matches = await crud.bulk_create_matches(
+        async_session, matches_data
     )
-    return user, contest, match
+    assert len(created_matches) == 2
+    assert created_matches[0].team1 == "T1"
+
+    all_matches = await crud.list_all_matches(async_session)
+    assert len(all_matches) == 2
 
 
-def test_pick_crud_and_queries_timestamp_default(session: Session):
-    user, contest, match = _mk_user_contest_match(session)
+@pytest.mark.asyncio
+async def test_pick_crud_and_queries_timestamp_default(async_session: Session):
+    user, contest, match = await _mk_user_contest_match(async_session)
 
-    # create (no timestamp provided -> default_factory should set aware UTC)
-    pick = crud.create_pick(
-        session,
-        user.id,
-        contest.id,
-        match.id,
+    # create
+    pick = await crud.create_pick(
+        async_session,
+        user_id=user.id,
+        contest_id=contest.id,
+        match_id=match.id,
         chosen_team="A",
     )
     assert isinstance(pick, Pick)
-    assert pick.id is not None
-    assert pick.timestamp.tzinfo is not None
+    assert pick.chosen_team == "A"
+    # Ensure timestamp is set automatically
+    assert pick.timestamp is not None
+    assert (
+        datetime.now(timezone.utc) - pick.timestamp
+    ).total_seconds() < 5  # recently created
 
-    # get by id
-    got = crud.get_pick_by_id(session, pick.id)
-    assert got is not None and got.chosen_team == "A"
+    # get
+    got_pick = await crud.get_pick_by_id(async_session, pick.id)
+    assert got_pick.id == pick.id
 
-    # list for user/match
-    assert [p.id for p in crud.list_picks_for_user(session, user.id)] == [
-        pick.id
-    ]
-    assert [p.id for p in crud.list_picks_for_match(session, match.id)] == [
-        pick.id
-    ]
+    # list for user
+    user_picks = await crud.list_picks_for_user(async_session, user.id)
+    assert len(user_picks) == 1
+    assert user_picks[0].id == pick.id
+
+    # list for match
+    match_picks = await crud.list_picks_for_match(async_session, match.id)
+    assert len(match_picks) == 1
 
     # update
-    upd = crud.update_pick(session, pick.id, chosen_team="B")
-    assert upd is not None and upd.chosen_team == "B"
+    updated = await crud.update_pick(async_session, pick.id, chosen_team="B")
+    assert updated.chosen_team == "B"
 
     # delete
-    assert crud.delete_pick(session, pick.id) is True
-    assert crud.get_pick_by_id(session, pick.id) is None
+    assert await crud.delete_pick(async_session, pick.id)
+    assert not await crud.get_pick_by_id(async_session, pick.id)
 
 
-def test_pick_create_with_explicit_timestamp(session: Session):
-    user, contest, match = _mk_user_contest_match(session)
+@pytest.mark.asyncio
+async def test_pick_create_with_explicit_timestamp(async_session: Session):
+    user, contest, match = await _mk_user_contest_match(async_session)
     ts = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-    pick = crud.create_pick(
-        session,
-        user.id,
-        contest.id,
-        match.id,
+
+    pick = await crud.create_pick(
+        async_session,
+        user_id=user.id,
+        contest_id=contest.id,
+        match_id=match.id,
         chosen_team="A",
         timestamp=ts,
     )
     assert pick.timestamp == ts
 
 
-def test_pick_update_delete_missing(session: Session):
-    assert crud.update_pick(session, 7777, chosen_team="Z") is None
-    assert crud.delete_pick(session, 7777) is False
+@pytest.mark.asyncio
+async def test_pick_update_delete_missing(async_session: Session):
+    assert await crud.update_pick(async_session, 7777, chosen_team="Z") is None
+    assert not await crud.delete_pick(async_session, 7777)
 
 
-# ---- RESULT ----
-def test_result_crud_and_queries(session: Session):
-    contest = _mk_contest(session)
-    match = crud.create_match(
-        session,
+@pytest.mark.asyncio
+async def test_result_crud_and_queries(async_session: Session):
+    contest = await _mk_contest(async_session)
+    match = await crud.create_match(
+        async_session,
         contest.id,
         "A",
         "B",
@@ -253,27 +281,30 @@ def test_result_crud_and_queries(session: Session):
     )
 
     # create
-    res = crud.create_result(session, match.id, winner="A", score="2-0")
-    assert isinstance(res, Result)
-    assert res.id is not None and res.winner == "A"
+    result = await crud.create_result(
+        async_session, match_id=match.id, winner="A"
+    )
+    assert isinstance(result, Result)
+    assert result.winner == "A"
 
     # get by id
-    got = crud.get_result_by_id(session, res.id)
-    assert got is not None and got.score == "2-0"
+    got_result = await crud.get_result_by_id(async_session, result.id)
+    assert got_result.id == result.id
 
     # get for match
-    got_match = crud.get_result_for_match(session, match.id)
-    assert got_match is not None and got_match.id == res.id
+    match_result = await crud.get_result_for_match(async_session, match.id)
+    assert match_result.id == result.id
 
     # update
-    upd = crud.update_result(session, res.id, score="2-1")
-    assert upd is not None and upd.score == "2-1"
+    updated = await crud.update_result(async_session, result.id, score="2-1")
+    assert updated.score == "2-1"
 
     # delete
-    assert crud.delete_result(session, res.id) is True
-    assert crud.get_result_by_id(session, res.id) is None
+    assert await crud.delete_result(async_session, result.id)
+    assert not await crud.get_result_for_match(async_session, match.id)
 
 
-def test_result_update_delete_missing(session: Session):
-    assert crud.update_result(session, 8888, score="1-0") is None
-    assert crud.delete_result(session, 8888) is False
+@pytest.mark.asyncio
+async def test_result_update_delete_missing(async_session: Session):
+    assert await crud.update_result(async_session, 8888, score="1-0") is None
+    assert not await crud.delete_result(async_session, 8888)

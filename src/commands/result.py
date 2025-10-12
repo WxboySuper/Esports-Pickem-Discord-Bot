@@ -5,9 +5,8 @@ from typing import List
 
 import discord
 from discord import app_commands
-from sqlmodel import Session
 
-from src.db import get_session
+from src.db import get_async_session
 from src import crud
 from src.auth import is_admin
 
@@ -29,16 +28,16 @@ async def winner_autocomplete(
     except ValueError:
         return []
 
-    session: Session = next(get_session())
-    match = crud.get_match_by_id(session, match_id)
+    async with get_async_session() as session:
+        match = await crud.get_match_by_id(session, match_id)
 
-    if not match:
-        return []
+        if not match:
+            return []
 
-    choices = [
-        app_commands.Choice(name=match.team1, value=match.team1),
-        app_commands.Choice(name=match.team2, value=match.team2),
-    ]
+        choices = [
+            app_commands.Choice(name=match.team1, value=match.team1),
+            app_commands.Choice(name=match.team2, value=match.team2),
+        ]
 
     # Filter choices based on what the user has already typed
     return [
@@ -51,14 +50,14 @@ async def match_autocompletion(
     current: str,
 ) -> list[app_commands.Choice[int]]:
     """Autocomplete for matches, prioritizing those without results."""
-    with next(get_session()) as session:
-        all_matches = crud.list_all_matches(session)
+    async with get_async_session() as session:
+        all_matches = await crud.list_all_matches(session)
 
         matches_with_results = []
         matches_without_results = []
 
         for match in all_matches:
-            if crud.get_result_for_match(session, match.id):
+            if await crud.get_result_for_match(session, match.id):
                 matches_with_results.append(match)
             else:
                 matches_without_results.append(match)
@@ -119,71 +118,68 @@ async def enter_result(
     )
     await interaction.response.defer(ephemeral=True)
 
-    session: Session = next(get_session())
+    async with get_async_session() as session:
+        # --- Validation ---
+        match = await crud.get_match_by_id(session, match_id)
+        if not match:
+            await interaction.followup.send(
+                f"Match with ID {match_id} not found.", ephemeral=True
+            )
+            return
 
-    # --- Validation ---
-    match = crud.get_match_by_id(session, match_id)
-    if not match:
-        await interaction.followup.send(
-            f"Match with ID {match_id} not found.", ephemeral=True
-        )
-        return
+        if winner not in [match.team1, match.team2]:
+            await interaction.followup.send(
+                f"Invalid winner. Please choose either '{match.team1}' or "
+                f"'{match.team2}'.",
+                ephemeral=True,
+            )
+            return
 
-    if winner not in [match.team1, match.team2]:
-        await interaction.followup.send(
-            f"Invalid winner. Please choose either '{match.team1}' or "
-            f"'{match.team2}'.",
-            ephemeral=True,
-        )
-        return
+        if await crud.get_result_for_match(session, match_id):
+            await interaction.followup.send(
+                f"A result for match {match_id} has already been entered.",
+                ephemeral=True,
+            )
+            return
 
-    if crud.get_result_for_match(session, match_id):
-        await interaction.followup.send(
-            f"A result for match {match_id} has already been entered.",
-            ephemeral=True,
-        )
-        return
+        # --- Process Result and Score Picks ---
+        try:
+            # 1. Create the result
+            await crud.create_result(session, match_id=match_id, winner=winner)
 
-    # --- Process Result and Score Picks ---
-    try:
-        # 1. Create the result
-        crud.create_result(session, match_id=match_id, winner=winner)
+            # 2. Get all picks for the match
+            picks = await crud.list_picks_for_match(session, match_id)
 
-        # 2. Get all picks for the match
-        picks = crud.list_picks_for_match(session, match_id)
+            updated_picks_count = 0
+            for pick in picks:
+                if pick.chosen_team == winner:
+                    pick.status = "correct"
+                    pick.score = 10  # Award 10 points for a correct pick
+                else:
+                    pick.status = "incorrect"
+                    pick.score = 0
 
-        updated_picks_count = 0
-        for pick in picks:
-            if pick.chosen_team == winner:
-                pick.status = "correct"
-                pick.score = 10  # Award 10 points for a correct pick
-            else:
-                pick.status = "incorrect"
-                pick.score = 0
+                session.add(pick)
+                updated_picks_count += 1
 
-            session.add(pick)
-            updated_picks_count += 1
+            await session.commit()
 
-        session.commit()
+            await interaction.followup.send(
+                (
+                    "Result for match "
+                    f"**{match.team1} vs {match.team2}** has been entered as "
+                    f"**{winner}**.\nProcessed and scored "
+                    f"{updated_picks_count} user picks."
+                ),
+                ephemeral=True,
+            )
 
-        await interaction.followup.send(
-            (
-                "Result for match "
-                f"**{match.team1} vs {match.team2}** has been entered as "
-                f"**{winner}**.\nProcessed and scored "
-                f"{updated_picks_count} user picks."
-            ),
-            ephemeral=True,
-        )
-
-    except Exception as e:
-        logger.exception(f"Error entering result for match {match_id}")
-        session.rollback()
-        await interaction.followup.send(
-            f"An unexpected error occurred: {e}", ephemeral=True
-        )
-    finally:
-        session.close()
+        except Exception as e:
+            logger.exception(f"Error entering result for match {match_id}")
+            await session.rollback()
+            await interaction.followup.send(
+                f"An unexpected error occurred: {e}", ephemeral=True
+            )
 
 
 async def setup(bot):
