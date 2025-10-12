@@ -47,12 +47,12 @@ async def schedule_reminders(guild_id: int):
                 )
 
         # Schedule 5-minute reminders
-        five_minutes_from_now = now + timedelta(minutes=5)
         ten_minutes_from_now = now + timedelta(minutes=10)
+        fifteen_minutes_from_now = now + timedelta(minutes=15)
 
         statement = select(Match).where(
-            Match.scheduled_time > five_minutes_from_now,
-            Match.scheduled_time <= ten_minutes_from_now,
+            Match.scheduled_time > ten_minutes_from_now,
+            Match.scheduled_time <= fifteen_minutes_from_now,
         )
         result = await session.exec(statement)
         matches_5_min = result.all()
