@@ -38,7 +38,6 @@ def mock_interaction():
 @pytest.mark.asyncio
 @patch("src.commands.matches.get_session")
 @patch("src.commands.matches.crud")
-@patch("src.commands.matches.ADMIN_IDS", [12345])
 async def test_upload_command_valid_csv(
     mock_crud, mock_get_session, mock_interaction
 ):
@@ -86,7 +85,6 @@ async def test_upload_command_valid_csv(
 )
 @patch("src.commands.matches.get_session")
 @patch("src.commands.matches.crud")
-@patch("src.commands.matches.ADMIN_IDS", [12345])
 async def test_upload_command_invalid_csv(
     mock_crud,
     mock_get_session,

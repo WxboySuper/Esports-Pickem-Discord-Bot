@@ -4,15 +4,14 @@ from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 import discord
 from discord import ui
 
+from src.auth import is_admin_check
 from src.commands.announce import (
     Announce,
     AnnounceView,
     AnnouncementModal,
-    _is_admin_predicate,
     CATEGORY_NAME,
     CHANNEL_NAME,
 )
-from src.config import ADMIN_IDS
 
 
 @pytest.fixture
@@ -26,25 +25,25 @@ def mock_interaction():
     """Fixture for a mock interaction."""
     interaction = AsyncMock(spec=discord.Interaction)
     interaction.user = MagicMock(spec=discord.User)
-    interaction.user.id = ADMIN_IDS[0] if ADMIN_IDS else 12345
+    interaction.user.id = 12345  # A default admin ID for testing
     interaction.response = AsyncMock(spec=discord.InteractionResponse)
     interaction.followup = AsyncMock(spec=discord.Webhook)
     interaction.guild = AsyncMock(spec=discord.Guild)
     return interaction
 
 
-@patch("src.commands.announce.ADMIN_IDS", [12345])
-def test_is_admin_predicate():
+@patch("src.auth.get_admin_ids", return_value=[12345])
+def test_is_admin_check(mock_get_admins):
     """Test the admin check allows authorized users and denies others."""
     # Test with an authorized user
     authorized_interaction = MagicMock(spec=discord.Interaction)
     authorized_interaction.user.id = 12345
-    assert _is_admin_predicate(authorized_interaction) is True
+    assert is_admin_check(authorized_interaction) is True
 
     # Test with an unauthorized user
     unauthorized_interaction = MagicMock(spec=discord.Interaction)
     unauthorized_interaction.user.id = 54321
-    assert _is_admin_predicate(unauthorized_interaction) is False
+    assert is_admin_check(unauthorized_interaction) is False
 
 
 @pytest.mark.asyncio
