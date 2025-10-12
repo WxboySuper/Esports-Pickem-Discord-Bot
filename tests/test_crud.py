@@ -108,7 +108,9 @@ def test_match_crud_and_queries(session: Session):
 
     # Create matches across different times
     day = datetime(2025, 5, 10, tzinfo=timezone.utc)
-    m1 = crud.create_match(session, contest.id, "A", "B", scheduled_time=day, leaguepedia_id="m1")
+    m1 = crud.create_match(
+        session, contest.id, "A", "B", scheduled_time=day, leaguepedia_id="m1"
+    )
     m2 = crud.create_match(
         session,
         contest.id,

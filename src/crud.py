@@ -30,7 +30,9 @@ async def upsert_team(session: AsyncSession, team_data: dict) -> Team:
 async def upsert_contest(session: AsyncSession, contest_data: dict) -> Contest:
     """Creates or updates a contest based on leaguepedia_id."""
     existing_contest = await session.exec(
-        select(Contest).where(Contest.leaguepedia_id == contest_data["leaguepedia_id"])
+        select(Contest).where(
+            Contest.leaguepedia_id == contest_data["leaguepedia_id"]
+        )
     )
     contest = existing_contest.first()
 
@@ -48,7 +50,9 @@ async def upsert_contest(session: AsyncSession, contest_data: dict) -> Contest:
 async def upsert_match(session: AsyncSession, match_data: dict) -> Match:
     """Creates or updates a match based on leaguepedia_id."""
     existing_match = await session.exec(
-        select(Match).where(Match.leaguepedia_id == match_data["leaguepedia_id"])
+        select(Match).where(
+            Match.leaguepedia_id == match_data["leaguepedia_id"]
+        )
     )
     match = existing_match.first()
 

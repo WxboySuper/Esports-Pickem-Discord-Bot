@@ -8,6 +8,7 @@ from src.auth import is_admin
 
 CONFIG_PATH = Path("data/tournaments.json")
 
+
 class ConfigureSync(commands.Cog):
     """A cog for managing the tournament sync configuration."""
 
@@ -25,15 +26,20 @@ class ConfigureSync(commands.Cog):
         default_permissions=discord.Permissions(administrator=True),
     )
 
-    @configure_group.command(name="add", description="Add a tournament slug to the sync list.")
+    @configure_group.command(
+        name="add", description="Add a tournament slug to the sync list."
+    )
     @app_commands.check(is_admin)
-    async def add_tournament(self, interaction: discord.Interaction, slug: str):
+    async def add_tournament(
+        self, interaction: discord.Interaction, slug: str
+    ):
         """Adds a tournament slug to the configuration file."""
         with open(CONFIG_PATH, "r+") as f:
             tournaments = json.load(f)
             if slug in tournaments:
                 await interaction.response.send_message(
-                    f"Tournament slug `{slug}` is already in the sync list.", ephemeral=True
+                    f"Tournament slug `{slug}` is already in the sync list.",
+                    ephemeral=True,
                 )
                 return
             tournaments.append(slug)
@@ -45,15 +51,21 @@ class ConfigureSync(commands.Cog):
             f"Successfully added `{slug}` to the sync list.", ephemeral=True
         )
 
-    @configure_group.command(name="remove", description="Remove a tournament slug from the sync list.")
+    @configure_group.command(
+        name="remove",
+        description="Remove a tournament slug from the sync list.",
+    )
     @app_commands.check(is_admin)
-    async def remove_tournament(self, interaction: discord.Interaction, slug: str):
+    async def remove_tournament(
+        self, interaction: discord.Interaction, slug: str
+    ):
         """Removes a tournament slug from the configuration file."""
         with open(CONFIG_PATH, "r+") as f:
             tournaments = json.load(f)
             if slug not in tournaments:
                 await interaction.response.send_message(
-                    f"Tournament slug `{slug}` is not in the sync list.", ephemeral=True
+                    f"Tournament slug `{slug}` is not in the sync list.",
+                    ephemeral=True,
                 )
                 return
             tournaments.remove(slug)
@@ -62,10 +74,13 @@ class ConfigureSync(commands.Cog):
             f.truncate()
 
         await interaction.response.send_message(
-            f"Successfully removed `{slug}` from the sync list.", ephemeral=True
+            f"Successfully removed `{slug}` from the sync list.",
+            ephemeral=True,
         )
 
-    @configure_group.command(name="list", description="List all tournament slugs in the sync list.")
+    @configure_group.command(
+        name="list", description="List all tournament slugs in the sync list."
+    )
     @app_commands.check(is_admin)
     async def list_tournaments(self, interaction: discord.Interaction):
         """Lists all configured tournament slugs."""
@@ -73,14 +88,19 @@ class ConfigureSync(commands.Cog):
             tournaments = json.load(f)
 
         if not tournaments:
-            await interaction.response.send_message("The sync list is currently empty.", ephemeral=True)
+            await interaction.response.send_message(
+                "The sync list is currently empty.", ephemeral=True
+            )
             return
 
         formatted_list = "\n".join(f"- `{slug}`" for slug in tournaments)
         embed = discord.Embed(
             title="Tournament Sync List",
-            description=f"The following tournaments are configured for syncing:\n{formatted_list}",
-            color=discord.Color.blue()
+            description=(
+                "The following tournaments are configured for syncing:\n"
+                f"{formatted_list}"
+            ),
+            color=discord.Color.blue(),
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

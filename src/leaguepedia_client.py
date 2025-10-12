@@ -1,16 +1,21 @@
 import aiohttp
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+
 class LeaguepediaClient:
     """
     An asynchronous client for interacting with the Leaguepedia (Fandom) API.
     """
+
     BASE_URL = "https://lol.fandom.com/api.php"
 
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+    )
     async def _make_request(self, params: dict) -> dict:
         """Makes a request to the Leaguepedia API with retry logic."""
         # Default parameters for all requests
@@ -21,7 +26,9 @@ class LeaguepediaClient:
         }
         all_params = {**default_params, **params}
 
-        async with self.session.get(self.BASE_URL, params=all_params) as response:
+        async with self.session.get(
+            self.BASE_URL, params=all_params
+        ) as response:
             response.raise_for_status()
             return await response.json()
 
@@ -38,7 +45,9 @@ class LeaguepediaClient:
         items = response.get("cargoquery", [])
         return items[0]["title"] if items else {}
 
-    async def get_matches_for_tournament(self, tournament_slug: str) -> list[dict]:
+    async def get_matches_for_tournament(
+        self, tournament_slug: str
+    ) -> list[dict]:
         """Fetches all matches for a given tournament slug."""
         params = {
             "action": "cargoquery",

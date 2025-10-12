@@ -12,6 +12,7 @@ engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 ORIGINAL_DB_PATH = "esports_pickem.db"
 TEST_DB_PATH = "test.db"
 
+
 async def setup_test_db():
     """Sets up a clean test database."""
     if os.path.exists(TEST_DB_PATH):
@@ -20,10 +21,12 @@ async def setup_test_db():
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
 
+
 def teardown_test_db():
     """Removes the test database file."""
     if os.path.exists(TEST_DB_PATH):
         os.remove(TEST_DB_PATH)
+
 
 @asynccontextmanager
 async def get_test_async_session():
