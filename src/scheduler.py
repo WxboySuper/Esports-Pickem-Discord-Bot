@@ -64,9 +64,9 @@ async def poll_for_results(guild_id: int):
                 results = await get_match_results(
                     bot.session, match.contest.name, match.team1, match.team2
                 )
-                if results and results[0]["winner"]:
+                if results and results[0].get("winner"):
                     result = Result(
-                        match_id=match.id, winner=results[0]["winner"]
+                        match_id=match.id, winner=results[0].get("winner")
                     )
                     session.add(result)
                     await session.commit()
