@@ -48,8 +48,10 @@ class User(SQLModel, table=True):
 class Contest(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
-    start_date: datetime
-    end_date: datetime
+    start_date: datetime = Field(
+        sa_column=Column(TZDateTime(), nullable=False)
+    )
+    end_date: datetime = Field(sa_column=Column(TZDateTime(), nullable=False))
     matches: List["Match"] = Relationship(back_populates="contest")
     picks: List["Pick"] = Relationship(back_populates="contest")
 
@@ -59,7 +61,9 @@ class Match(SQLModel, table=True):
     contest_id: int = Field(foreign_key="contest.id", index=True)
     team1: str
     team2: str
-    scheduled_time: datetime = Field(index=True)
+    scheduled_time: datetime = Field(
+        sa_column=Column(TZDateTime(), nullable=False, index=True)
+    )
     contest: Optional[Contest] = Relationship(back_populates="matches")
     result: Optional["Result"] = Relationship(back_populates="match")
     picks: List["Pick"] = Relationship(back_populates="match")
@@ -75,7 +79,7 @@ class Pick(SQLModel, table=True):
     score: Optional[int] = Field(default=0)
     timestamp: datetime = Field(
         default_factory=_now_utc,
-        sa_column=Column(TZDateTime()),
+        sa_column=Column(TZDateTime(), nullable=False),
     )
     user: Optional[User] = Relationship(back_populates="picks")
     contest: Optional[Contest] = Relationship(back_populates="picks")
