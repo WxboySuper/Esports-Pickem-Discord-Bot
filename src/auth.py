@@ -8,7 +8,16 @@ def get_admin_ids() -> list[int]:
     raw_admin_ids = os.getenv("ADMIN_IDS", "")
     if not raw_admin_ids:
         return []
-    return [int(x) for x in raw_admin_ids.split(",") if x]
+    admin_ids = []
+    for x in raw_admin_ids.split(","):
+        x = x.strip()
+        if not x:
+            continue
+        try:
+            admin_ids.append(int(x))
+        except ValueError:
+            continue
+    return admin_ids
 
 
 def is_admin_check(interaction: discord.Interaction) -> bool:
