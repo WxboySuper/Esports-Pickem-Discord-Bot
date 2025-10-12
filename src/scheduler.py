@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from sqlmodel import select
+from sqlalchemy.orm import selectinload
 from src.db import get_async_session
 from src.models import Match, Result, Pick
 from src.leaguepedia import get_match_results
@@ -53,7 +54,10 @@ async def schedule_reminders(guild_id: int):
 async def poll_for_results(guild_id: int):
     bot = get_bot_instance()
     async with get_async_session() as session:
-        result = await session.exec(select(Match))
+        statement = select(Match).options(
+            selectinload(Match.result), selectinload(Match.contest)
+        )
+        result = await session.exec(statement)
         matches = result.all()
         for match in matches:
             if not match.result:
