@@ -46,10 +46,9 @@ async def get_match_results(session, tournament_name, team1, team2):
     response = await make_request(session, params)
     results = response.get("query", {}).get("matchschedule")
 
-    if not results:
-        return []
-
     if isinstance(results, list):
         return results
-
-    return [results]
+    elif results:
+        return [results]
+    else:
+        return []
