@@ -4,16 +4,17 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from sqlmodel import select
-from src.db import get_async_session, SYNC_DATABASE_URL
+from src.db import get_async_session
 from src.models import Match, Result, Pick
 from src.leaguepedia import get_match_results
 from src.announcements import send_announcement
 from src.config import ANNOUNCEMENT_GUILD_ID
+from src.db import DATABASE_URL
 from src.bot_instance import get_bot_instance
 
 logger = logging.getLogger(__name__)
 
-jobstores = {"default": SQLAlchemyJobStore(url=SYNC_DATABASE_URL)}
+jobstores = {"default": SQLAlchemyJobStore(url=DATABASE_URL)}
 scheduler = AsyncIOScheduler(jobstores=jobstores)
 
 

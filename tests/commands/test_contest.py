@@ -36,10 +36,10 @@ async def test_contest_create_command_sends_modal(
 
 
 @pytest.mark.asyncio
-@patch("src.commands.contest.create_contest", new_callable=AsyncMock)
-@patch("src.commands.contest.get_async_session")
+@patch("src.commands.contest.create_contest")
+@patch("src.commands.contest.get_session")
 async def test_contest_modal_on_submit(
-    mock_get_async_session,
+    mock_get_session,
     mock_create_contest,
     mock_interaction,
 ):
@@ -55,8 +55,8 @@ async def test_contest_modal_on_submit(
     modal.end_date = MagicMock()
     modal.end_date.value = "2025-01-31"
 
-    mock_session = AsyncMock()
-    mock_get_async_session.return_value.__aenter__.return_value = mock_session
+    mock_session = MagicMock()
+    mock_get_session.return_value = iter([mock_session])
     created_contest = ContestModel(id=1, name="Test Contest")
     mock_create_contest.return_value = created_contest
 
@@ -71,3 +71,4 @@ async def test_contest_modal_on_submit(
         "Contest 'Test Contest' created with ID 1",
         ephemeral=True,
     )
+    mock_session.close.assert_called_once()
