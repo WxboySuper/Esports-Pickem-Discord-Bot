@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 from sqlmodel import Session, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -5,66 +6,82 @@ from src.models import User, Contest, Match, Pick, Result, Team
 from datetime import datetime, timezone
 
 
-async def upsert_team(session: AsyncSession, team_data: dict) -> Team:
+async def upsert_team(
+    session: AsyncSession, team_data: dict
+) -> Optional[Team]:
     """Creates or updates a team based on leaguepedia_id."""
-    # Note: This is a simplified example. A real implementation would handle
-    # parsing the roster, validating the image URL, etc.
-    existing_team = await session.exec(
-        select(Team).where(Team.leaguepedia_id == team_data["leaguepedia_id"])
-    )
-    team = existing_team.first()
+    try:
+        existing_team = await session.exec(
+            select(Team).where(
+                Team.leaguepedia_id == team_data["leaguepedia_id"]
+            )
+        )
+        team = existing_team.first()
 
-    if team:
-        # Update existing team
-        team.name = team_data["name"]
-        team.image_url = team_data.get("image_url")
-        team.roster = team_data.get("roster")
-    else:
-        # Create new team
-        team = Team(**team_data)
+        if team:
+            team.name = team_data["name"]
+            team.image_url = team_data.get("image_url")
+            team.roster = team_data.get("roster")
+        else:
+            team = Team(**team_data)
 
-    session.add(team)
-    return team
+        session.add(team)
+        return team
+    except KeyError as e:
+        logging.error(f"Missing key in team_data: {e}")
+        return None
 
 
-async def upsert_contest(session: AsyncSession, contest_data: dict) -> Contest:
+async def upsert_contest(
+    session: AsyncSession, contest_data: dict
+) -> Optional[Contest]:
     """Creates or updates a contest based on leaguepedia_id."""
-    existing_contest = await session.exec(
-        select(Contest).where(
-            Contest.leaguepedia_id == contest_data["leaguepedia_id"]
+    try:
+        existing_contest = await session.exec(
+            select(Contest).where(
+                Contest.leaguepedia_id == contest_data["leaguepedia_id"]
+            )
         )
-    )
-    contest = existing_contest.first()
+        contest = existing_contest.first()
 
-    if contest:
-        contest.name = contest_data["name"]
-        contest.start_date = contest_data["start_date"]
-        contest.end_date = contest_data["end_date"]
-    else:
-        contest = Contest(**contest_data)
+        if contest:
+            contest.name = contest_data["name"]
+            contest.start_date = contest_data["start_date"]
+            contest.end_date = contest_data["end_date"]
+        else:
+            contest = Contest(**contest_data)
 
-    session.add(contest)
-    return contest
+        session.add(contest)
+        return contest
+    except KeyError as e:
+        logging.error(f"Missing key in contest_data: {e}")
+        return None
 
 
-async def upsert_match(session: AsyncSession, match_data: dict) -> Match:
+async def upsert_match(
+    session: AsyncSession, match_data: dict
+) -> Optional[Match]:
     """Creates or updates a match based on leaguepedia_id."""
-    existing_match = await session.exec(
-        select(Match).where(
-            Match.leaguepedia_id == match_data["leaguepedia_id"]
+    try:
+        existing_match = await session.exec(
+            select(Match).where(
+                Match.leaguepedia_id == match_data["leaguepedia_id"]
+            )
         )
-    )
-    match = existing_match.first()
+        match = existing_match.first()
 
-    if match:
-        match.team1 = match_data["team1"]
-        match.team2 = match_data["team2"]
-        match.scheduled_time = match_data["scheduled_time"]
-    else:
-        match = Match(**match_data)
+        if match:
+            match.team1 = match_data["team1"]
+            match.team2 = match_data["team2"]
+            match.scheduled_time = match_data["scheduled_time"]
+        else:
+            match = Match(**match_data)
 
-    session.add(match)
-    return match
+        session.add(match)
+        return match
+    except KeyError as e:
+        logging.error(f"Missing key in match_data: {e}")
+        return None
 
 
 # ---- USER ----

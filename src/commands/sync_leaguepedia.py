@@ -48,6 +48,9 @@ class SyncLeaguepedia(commands.Cog):
                 "end_date": self._parse_date(contest_data.get("DateEnd")),
             },
         )
+        if not contest:
+            return
+
         summary["contests"] += 1
         await db_session.flush()
 
