@@ -59,12 +59,14 @@ def test_contest_crud_and_listing(session: Session):
         name="Spring Split",
         start_date=start,
         end_date=end,
+        leaguepedia_id="s-split",
     )
     c2 = crud.create_contest(
         session,
         name="Summer Split",
         start_date=start,
         end_date=end,
+        leaguepedia_id="su-split",
     )
 
     # get
@@ -97,6 +99,7 @@ def _mk_contest(session: Session) -> Contest:
         name="Main",
         start_date=datetime(2025, 5, 1, 0, 0, 0),
         end_date=datetime(2025, 5, 31, 23, 59, 59),
+        leaguepedia_id="main-contest",
     )
 
 
@@ -105,13 +108,16 @@ def test_match_crud_and_queries(session: Session):
 
     # Create matches across different times
     day = datetime(2025, 5, 10, tzinfo=timezone.utc)
-    m1 = crud.create_match(session, contest.id, "A", "B", scheduled_time=day)
+    m1 = crud.create_match(
+        session, contest.id, "A", "B", scheduled_time=day, leaguepedia_id="m1"
+    )
     m2 = crud.create_match(
         session,
         contest.id,
         "C",
         "D",
         scheduled_time=day.replace(hour=23, minute=59, second=59),
+        leaguepedia_id="m2",
     )
     m3 = crud.create_match(
         session,
@@ -119,6 +125,7 @@ def test_match_crud_and_queries(session: Session):
         "E",
         "F",
         scheduled_time=day + timedelta(days=1),
+        leaguepedia_id="m3",
     )
 
     # get by id
@@ -155,12 +162,14 @@ def test_bulk_create_matches(session: Session):
             "team1": "T1",
             "team2": "T2",
             "scheduled_time": datetime(2025, 5, 15, 12, 0, 0),
+            "leaguepedia_id": "bm1",
         },
         {
             "contest_id": contest.id,
             "team1": "T3",
             "team2": "T4",
             "scheduled_time": datetime(2025, 5, 16, 12, 0, 0),
+            "leaguepedia_id": "bm2",
         },
     ]
 
@@ -182,6 +191,7 @@ def _mk_user_contest_match(session: Session):
         "A",
         "B",
         scheduled_time=datetime(2025, 5, 12, 12, 0, 0),
+        leaguepedia_id="m-h",
     )
     return user, contest, match
 
@@ -250,6 +260,7 @@ def test_result_crud_and_queries(session: Session):
         "A",
         "B",
         scheduled_time=datetime(2025, 5, 20, 10, 0, 0),
+        leaguepedia_id="m-r",
     )
 
     # create
