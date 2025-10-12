@@ -48,7 +48,9 @@ class User(SQLModel, table=True):
 class Contest(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
-    start_date: datetime = Field(sa_column=Column(TZDateTime(), nullable=False))
+    start_date: datetime = Field(
+        sa_column=Column(TZDateTime(), nullable=False)
+    )
     end_date: datetime = Field(sa_column=Column(TZDateTime(), nullable=False))
     matches: List["Match"] = Relationship(back_populates="contest")
     picks: List["Pick"] = Relationship(back_populates="contest")
