@@ -21,34 +21,53 @@ scheduler = AsyncIOScheduler(jobstores=jobstores)
 
 async def schedule_reminders(guild_id: int):
     async with get_async_session() as session:
-        result = await session.exec(select(Match))
-        matches = result.all()
-        for match in matches:
-            now = datetime.now(timezone.utc)
-            five_minutes_before = match.scheduled_time - timedelta(minutes=5)
-            thirty_minutes_before = match.scheduled_time - timedelta(
-                minutes=30
-            )
-            if now < five_minutes_before:
-                job_id = f"reminder_5_{match.id}"
-                if not scheduler.get_job(job_id):
-                    scheduler.add_job(
-                        send_reminder,
-                        "date",
-                        id=job_id,
-                        run_date=five_minutes_before,
-                        args=[guild_id, match.id, 5],
-                    )
-            if now < thirty_minutes_before:
-                job_id = f"reminder_30_{match.id}"
-                if not scheduler.get_job(job_id):
-                    scheduler.add_job(
-                        send_reminder,
-                        "date",
-                        id=job_id,
-                        run_date=thirty_minutes_before,
-                        args=[guild_id, match.id, 30],
-                    )
+        now = datetime.now(timezone.utc)
+
+        # Schedule 30-minute reminders
+        thirty_minutes_from_now = now + timedelta(minutes=30)
+        thirty_five_minutes_from_now = now + timedelta(minutes=35)
+
+        statement = select(Match).where(
+            Match.scheduled_time > thirty_minutes_from_now,
+            Match.scheduled_time <= thirty_five_minutes_from_now,
+        )
+        result = await session.exec(statement)
+        matches_30_min = result.all()
+
+        for match in matches_30_min:
+            job_id = f"reminder_30_{match.id}"
+            if not scheduler.get_job(job_id):
+                run_date = match.scheduled_time - timedelta(minutes=30)
+                scheduler.add_job(
+                    send_reminder,
+                    "date",
+                    id=job_id,
+                    run_date=run_date,
+                    args=[guild_id, match.id, 30],
+                )
+
+        # Schedule 5-minute reminders
+        five_minutes_from_now = now + timedelta(minutes=5)
+        ten_minutes_from_now = now + timedelta(minutes=10)
+
+        statement = select(Match).where(
+            Match.scheduled_time > five_minutes_from_now,
+            Match.scheduled_time <= ten_minutes_from_now,
+        )
+        result = await session.exec(statement)
+        matches_5_min = result.all()
+
+        for match in matches_5_min:
+            job_id = f"reminder_5_{match.id}"
+            if not scheduler.get_job(job_id):
+                run_date = match.scheduled_time - timedelta(minutes=5)
+                scheduler.add_job(
+                    send_reminder,
+                    "date",
+                    id=job_id,
+                    run_date=run_date,
+                    args=[guild_id, match.id, 5],
+                )
 
 
 async def poll_for_results(guild_id: int):
