@@ -1,14 +1,13 @@
 import os
-import urllib.parse
+from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session, SQLModel, create_engine
 
 # --- Sync Setup ---
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "sqlite:////opt/esports-bot/data/esports-pickem.db"
-)
+DB_PATH = os.path.join("/opt", "esports-bot", "data", "esports-pickem.db")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 # Workaround: Some deployments may set the database name as 'esports_pickem' instead of 'esports-pickem'.
 # To ensure consistency, we replace the database name only if necessary.
 if "esports_pickem" in DATABASE_URL:
@@ -37,6 +36,7 @@ AsyncSessionLocal = sessionmaker(
 )
 
 
+@asynccontextmanager
 async def get_async_session() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
