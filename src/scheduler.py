@@ -24,12 +24,12 @@ async def schedule_reminders(guild_id: int):
         now = datetime.now(timezone.utc)
 
         # Schedule 30-minute reminders
-        thirty_minutes_from_now = now + timedelta(minutes=30)
-        thirty_five_minutes_from_now = now + timedelta(minutes=35)
+        sixty_minutes_from_now = now + timedelta(minutes=60)
+        sixty_five_minutes_from_now = now + timedelta(minutes=65)
 
         statement = select(Match).where(
-            Match.scheduled_time > thirty_minutes_from_now,
-            Match.scheduled_time <= thirty_five_minutes_from_now,
+            Match.scheduled_time > sixty_minutes_from_now,
+            Match.scheduled_time <= sixty_five_minutes_from_now,
         )
         result = await session.exec(statement)
         matches_30_min = result.all()
