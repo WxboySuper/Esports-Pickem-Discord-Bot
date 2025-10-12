@@ -115,5 +115,16 @@ async def test_get_match_results(mock_bot):
     with patch(
         "src.leaguepedia.make_request", new_callable=AsyncMock
     ) as mock_request:
-        await get_match_results(mock_bot.session, "LCS", "C9", "TL")
+        mock_response = {
+            "query": {
+                "matchschedule": [
+                    {"team1": "C9", "team2": "TL", "winner": "C9"}
+                ]
+            }
+        }
+        mock_request.return_value = mock_response
+
+        results = await get_match_results(mock_bot.session, "LCS", "C9", "TL")
+
+        assert results == mock_response["query"]["matchschedule"]
         mock_request.assert_called_once()
