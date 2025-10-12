@@ -1,15 +1,17 @@
 import os
 from contextlib import asynccontextmanager
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 # --- Sync Setup ---
 DB_PATH = os.path.join("/opt", "esports-bot", "data", "esports-pickem.db")
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
-# Workaround: Some deployments may set the database name as 'esports_pickem' instead of 'esports-pickem'.
-# To ensure consistency, we replace the database name only if necessary.
+# Workaround: Some deployments may set the database name as 'esports_pickem'
+# instead of 'esports-pickem'. To ensure consistency, we replace the
+# database name only if necessary.
 if "esports_pickem" in DATABASE_URL:
     DATABASE_URL = DATABASE_URL.replace("esports_pickem", "esports-pickem")
 
