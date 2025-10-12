@@ -20,6 +20,68 @@ class SyncLeaguepedia(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    def _parse_date(self, date_str: str | None) -> datetime | None:
+        if not date_str:
+            return None
+        try:
+            dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except (ValueError, TypeError):
+            return None
+
+    async def _sync_single_tournament(
+        self, slug: str, client: LeaguepediaClient, db_session, summary: dict
+    ):
+        """Helper to sync data for a single tournament slug."""
+        contest_data = await client.get_tournament_by_slug(slug)
+        if not contest_data:
+            return
+
+        contest = await upsert_contest(
+            db_session,
+            {
+                "leaguepedia_id": slug,
+                "name": contest_data.get("Name"),
+                "start_date": self._parse_date(contest_data.get("DateStart")),
+                "end_date": self._parse_date(contest_data.get("DateEnd")),
+            },
+        )
+        summary["contests"] += 1
+        await db_session.flush()
+
+        matches_data = await client.get_matches_for_tournament(slug)
+        for match_data in matches_data:
+            for team_name_key in ["Team1", "Team2"]:
+                team_name = match_data.get(team_name_key)
+                if not team_name:
+                    continue
+                team_api_data = await client.get_team(team_name)
+                if team_api_data:
+                    team_data = {
+                        "leaguepedia_id": team_name,
+                        "name": team_api_data.get("Name"),
+                        "image_url": team_api_data.get("Image"),
+                        "roster": json.dumps(team_api_data.get("Roster")),
+                    }
+                    await upsert_team(db_session, team_data)
+                    summary["teams"] += 1
+
+            await upsert_match(
+                db_session,
+                {
+                    "leaguepedia_id": match_data.get("MatchId"),
+                    "contest_id": contest.id,
+                    "team1": match_data.get("Team1"),
+                    "team2": match_data.get("Team2"),
+                    "scheduled_time": self._parse_date(
+                        match_data.get("DateTime_UTC")
+                    ),
+                },
+            )
+            summary["matches"] += 1
+
     @app_commands.command(
         name="sync-leaguepedia",
         description="Syncs configured tournaments from Leaguepedia.",
@@ -32,15 +94,15 @@ class SyncLeaguepedia(commands.Cog):
         """
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        if not CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r") as f:
+                tournament_slugs = json.load(f)
+        except FileNotFoundError:
             await interaction.followup.send(
                 "Configuration file not found. "
                 "Please add tournaments first using `/configure-sync add`."
             )
             return
-
-        with open(CONFIG_PATH, "r") as f:
-            tournament_slugs = json.load(f)
 
         if not tournament_slugs:
             await interaction.followup.send(
@@ -50,86 +112,13 @@ class SyncLeaguepedia(commands.Cog):
             return
 
         summary = {"contests": 0, "matches": 0, "teams": 0}
-
         async with aiohttp.ClientSession() as http_session:
             client = LeaguepediaClient(http_session)
             async with get_async_session() as db_session:
                 for slug in tournament_slugs:
-                    # 1. Upsert Contest
-                    contest_data = await client.get_tournament_by_slug(slug)
-                    if not contest_data:
-                        await interaction.followup.send(
-                            f"Could not find tournament: `{slug}`. Skipping.",
-                            ephemeral=True,
-                        )
-                        continue
-
-                    def _parse_date(date_str: str | None) -> datetime | None:
-                        if not date_str:
-                            return None
-                        try:
-                            # Assumes UTC if no timezone info is present
-                            dt = datetime.fromisoformat(
-                                date_str.replace("Z", "+00:00")
-                            )
-                            if dt.tzinfo is None:
-                                dt = dt.replace(tzinfo=timezone.utc)
-                            return dt
-                        except (ValueError, TypeError):
-                            return None
-
-                    contest = await upsert_contest(
-                        db_session,
-                        {
-                            "leaguepedia_id": slug,
-                            "name": contest_data.get("Name"),
-                            "start_date": _parse_date(
-                                contest_data.get("DateStart")
-                            ),
-                            "end_date": _parse_date(
-                                contest_data.get("DateEnd")
-                            ),
-                        },
+                    await self._sync_single_tournament(
+                        slug, client, db_session, summary
                     )
-                    summary["contests"] += 1
-                    await db_session.flush()  # Flush to get the contest ID
-
-                    # 2. Fetch and Upsert Matches
-                    matches_data = await client.get_matches_for_tournament(
-                        slug
-                    )
-                    for match_data in matches_data:
-                        # 3. Upsert Teams for each match
-                        for team_name_key in ["Team1", "Team2"]:
-                            team_name = match_data.get(team_name_key)
-                            if not team_name:
-                                continue
-                            team_api_data = await client.get_team(team_name)
-                            if team_api_data:
-                                team_data = {
-                                    "leaguepedia_id": team_name,
-                                    "name": team_api_data.get("Name"),
-                                    "image_url": team_api_data.get("Image"),
-                                    "roster": json.dumps(
-                                        team_api_data.get("Roster")
-                                    ),
-                                }
-                                await upsert_team(db_session, team_data)
-                                summary["teams"] += 1
-
-                        await upsert_match(
-                            db_session,
-                            {
-                                "leaguepedia_id": match_data.get("MatchId"),
-                                "contest_id": contest.id,
-                                "team1": match_data.get("Team1"),
-                                "team2": match_data.get("Team2"),
-                                "scheduled_time": _parse_date(
-                                    match_data.get("DateTime_UTC")
-                                ),
-                            },
-                        )
-                        summary["matches"] += 1
                 await db_session.commit()
 
         summary_message = (
