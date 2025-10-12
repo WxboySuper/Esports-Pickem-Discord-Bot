@@ -1,0 +1,89 @@
+import json
+from pathlib import Path
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+from src.auth import is_admin
+
+CONFIG_PATH = Path("data/tournaments.json")
+
+class ConfigureSync(commands.Cog):
+    """A cog for managing the tournament sync configuration."""
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        # Ensure the data directory and config file exist
+        CONFIG_PATH.parent.mkdir(exist_ok=True)
+        if not CONFIG_PATH.exists():
+            with open(CONFIG_PATH, "w") as f:
+                json.dump([], f)
+
+    configure_group = app_commands.Group(
+        name="configure-sync",
+        description="Commands to configure the Leaguepedia sync.",
+        default_permissions=discord.Permissions(administrator=True),
+    )
+
+    @configure_group.command(name="add", description="Add a tournament slug to the sync list.")
+    @app_commands.check(is_admin)
+    async def add_tournament(self, interaction: discord.Interaction, slug: str):
+        """Adds a tournament slug to the configuration file."""
+        with open(CONFIG_PATH, "r+") as f:
+            tournaments = json.load(f)
+            if slug in tournaments:
+                await interaction.response.send_message(
+                    f"Tournament slug `{slug}` is already in the sync list.", ephemeral=True
+                )
+                return
+            tournaments.append(slug)
+            f.seek(0)
+            json.dump(tournaments, f, indent=4)
+            f.truncate()
+
+        await interaction.response.send_message(
+            f"Successfully added `{slug}` to the sync list.", ephemeral=True
+        )
+
+    @configure_group.command(name="remove", description="Remove a tournament slug from the sync list.")
+    @app_commands.check(is_admin)
+    async def remove_tournament(self, interaction: discord.Interaction, slug: str):
+        """Removes a tournament slug from the configuration file."""
+        with open(CONFIG_PATH, "r+") as f:
+            tournaments = json.load(f)
+            if slug not in tournaments:
+                await interaction.response.send_message(
+                    f"Tournament slug `{slug}` is not in the sync list.", ephemeral=True
+                )
+                return
+            tournaments.remove(slug)
+            f.seek(0)
+            json.dump(tournaments, f, indent=4)
+            f.truncate()
+
+        await interaction.response.send_message(
+            f"Successfully removed `{slug}` from the sync list.", ephemeral=True
+        )
+
+    @configure_group.command(name="list", description="List all tournament slugs in the sync list.")
+    @app_commands.check(is_admin)
+    async def list_tournaments(self, interaction: discord.Interaction):
+        """Lists all configured tournament slugs."""
+        with open(CONFIG_PATH, "r") as f:
+            tournaments = json.load(f)
+
+        if not tournaments:
+            await interaction.response.send_message("The sync list is currently empty.", ephemeral=True)
+            return
+
+        formatted_list = "\n".join(f"- `{slug}`" for slug in tournaments)
+        embed = discord.Embed(
+            title="Tournament Sync List",
+            description=f"The following tournaments are configured for syncing:\n{formatted_list}",
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(ConfigureSync(bot))

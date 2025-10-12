@@ -1,7 +1,66 @@
 from typing import List, Optional
 from sqlmodel import Session, select
-from src.models import User, Contest, Match, Pick, Result
+from sqlmodel.ext.asyncio.session import AsyncSession
+from src.models import User, Contest, Match, Pick, Result, Team
 from datetime import datetime, timezone
+
+
+async def upsert_team(session: AsyncSession, team_data: dict) -> Team:
+    """Creates or updates a team based on leaguepedia_id."""
+    # Note: This is a simplified example. A real implementation would handle
+    # parsing the roster, validating the image URL, etc.
+    existing_team = await session.exec(
+        select(Team).where(Team.leaguepedia_id == team_data["leaguepedia_id"])
+    )
+    team = existing_team.first()
+
+    if team:
+        # Update existing team
+        team.name = team_data["name"]
+        team.image_url = team_data.get("image_url")
+        team.roster = team_data.get("roster")
+    else:
+        # Create new team
+        team = Team(**team_data)
+
+    session.add(team)
+    return team
+
+
+async def upsert_contest(session: AsyncSession, contest_data: dict) -> Contest:
+    """Creates or updates a contest based on leaguepedia_id."""
+    existing_contest = await session.exec(
+        select(Contest).where(Contest.leaguepedia_id == contest_data["leaguepedia_id"])
+    )
+    contest = existing_contest.first()
+
+    if contest:
+        contest.name = contest_data["name"]
+        contest.start_date = contest_data["start_date"]
+        contest.end_date = contest_data["end_date"]
+    else:
+        contest = Contest(**contest_data)
+
+    session.add(contest)
+    return contest
+
+
+async def upsert_match(session: AsyncSession, match_data: dict) -> Match:
+    """Creates or updates a match based on leaguepedia_id."""
+    existing_match = await session.exec(
+        select(Match).where(Match.leaguepedia_id == match_data["leaguepedia_id"])
+    )
+    match = existing_match.first()
+
+    if match:
+        match.team1 = match_data["team1"]
+        match.team2 = match_data["team2"]
+        match.scheduled_time = match_data["scheduled_time"]
+    else:
+        match = Match(**match_data)
+
+    session.add(match)
+    return match
 
 
 # ---- USER ----
@@ -54,8 +113,14 @@ def create_contest(
     name: str,
     start_date: datetime,
     end_date: datetime,
+    leaguepedia_id: str,
 ) -> Contest:
-    contest = Contest(name=name, start_date=start_date, end_date=end_date)
+    contest = Contest(
+        name=name,
+        start_date=start_date,
+        end_date=end_date,
+        leaguepedia_id=leaguepedia_id,
+    )
     session.add(contest)
     session.commit()
     session.refresh(contest)
@@ -108,12 +173,14 @@ def create_match(
     team1: str,
     team2: str,
     scheduled_time: datetime,
+    leaguepedia_id: str,
 ) -> Match:
     match = Match(
         contest_id=contest_id,
         team1=team1,
         team2=team2,
         scheduled_time=scheduled_time,
+        leaguepedia_id=leaguepedia_id,
     )
     session.add(match)
     session.commit()

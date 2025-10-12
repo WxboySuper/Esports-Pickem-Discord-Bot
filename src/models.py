@@ -45,8 +45,17 @@ class User(SQLModel, table=True):
     picks: List["Pick"] = Relationship(back_populates="user")
 
 
+class Team(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    leaguepedia_id: str = Field(index=True, unique=True)
+    image_url: Optional[str] = None
+    roster: Optional[str] = None  # Storing as JSON string
+
+
 class Contest(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    leaguepedia_id: str = Field(index=True, unique=True)
     name: str = Field(index=True)
     start_date: datetime = Field(
         sa_column=Column(TZDateTime(), nullable=False)
@@ -58,6 +67,7 @@ class Contest(SQLModel, table=True):
 
 class Match(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    leaguepedia_id: str = Field(index=True, unique=True)
     contest_id: int = Field(foreign_key="contest.id", index=True)
     team1: str
     team2: str
