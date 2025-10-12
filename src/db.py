@@ -1,4 +1,5 @@
 import os
+import urllib.parse
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -10,14 +11,8 @@ DATABASE_URL = os.getenv(
 )
 # Workaround: Some deployments may set the database name as 'esports_pickem' instead of 'esports-pickem'.
 # To ensure consistency, we replace the database name only if necessary.
-import urllib.parse
-parsed_url = urllib.parse.urlparse(DATABASE_URL)
-db_path = parsed_url.path
-if db_path.endswith("esports_pickem.db"):
-    # Replace only the database filename, not other parts of the URL
-    new_db_path = db_path.replace("esports_pickem.db", "esports-pickem.db")
-    parsed_url = parsed_url._replace(path=new_db_path)
-    DATABASE_URL = urllib.parse.urlunparse(parsed_url)
+if "esports_pickem" in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("esports_pickem", "esports-pickem")
 
 _sql_echo = os.getenv("SQL_ECHO", "False").lower() in ("true", "1", "t")
 
