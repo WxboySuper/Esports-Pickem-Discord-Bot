@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from sqlmodel import select
-from src.db import get_session
+from src.db import get_async_session
 from src.models import Match, Result, Pick
 from src.leaguepedia import get_match_results
 from src.announcements import send_announcement
@@ -19,7 +19,7 @@ scheduler = AsyncIOScheduler(jobstores=jobstores)
 
 
 async def schedule_reminders(guild_id: int):
-    async with get_session() as session:
+    async with get_async_session() as session:
         result = await session.exec(select(Match))
         matches = result.all()
         for match in matches:
@@ -52,7 +52,7 @@ async def schedule_reminders(guild_id: int):
 
 async def poll_for_results(guild_id: int):
     bot = get_bot_instance()
-    async with get_session() as session:
+    async with get_async_session() as session:
         result = await session.exec(select(Match))
         matches = result.all()
         for match in matches:
@@ -75,7 +75,7 @@ async def send_reminder(guild_id: int, match_id: int, minutes: int):
     if not guild:
         logger.error(f"Guild {guild_id} not found.")
         return
-    async with get_session() as session:
+    async with get_async_session() as session:
         match = await session.get(Match, match_id)
         embed = discord.Embed(
             title="Match Reminder",
@@ -96,7 +96,7 @@ async def send_result_notification(
     if not guild:
         logger.error(f"Guild {guild_id} not found.")
         return
-    async with get_session() as session:
+    async with get_async_session() as session:
         statement = select(Pick).where(Pick.match_id == match.id)
         db_result = await session.exec(statement)
         picks = db_result.all()

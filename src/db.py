@@ -1,29 +1,46 @@
-import atexit
 import os
-from sqlmodel import SQLModel, create_engine, Session
+import urllib.parse
 
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlmodel import Session, SQLModel, create_engine
+
+# --- Sync Setup ---
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "sqlite:////opt/esports-bot/data/esports_pickem.db"
+    "DATABASE_URL", "sqlite:////opt/esports-bot/data/esports-pickem.db"
 )
+# Workaround: Some deployments may set the database name as 'esports_pickem' instead of 'esports-pickem'.
+# To ensure consistency, we replace the database name only if necessary.
+if "esports_pickem" in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("esports_pickem", "esports-pickem")
 
-# compute the SQL echo flag on its own line to avoid overly long lines
 _sql_echo = os.getenv("SQL_ECHO", "False").lower() in ("true", "1", "t")
 
-engine = create_engine(
-    DATABASE_URL,
-    echo=_sql_echo,
-)
+engine = create_engine(DATABASE_URL, echo=_sql_echo)
 
 
-@atexit.register
-def _dispose_engine():
-    engine.dispose()
+def get_session():
+    with Session(engine) as session:
+        yield session
 
 
 def init_db():
     SQLModel.metadata.create_all(engine)
 
 
-def get_session():
-    with Session(engine) as session:
+# --- Async Setup ---
+ASYNC_DATABASE_URL = DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///")
+
+async_engine = create_async_engine(ASYNC_DATABASE_URL, echo=_sql_echo)
+AsyncSessionLocal = sessionmaker(
+    async_engine, class_=AsyncSession, expire_on_commit=False
+)
+
+
+async def get_async_session() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
         yield session
+
+
+async def close_engine():
+    await async_engine.dispose()
