@@ -125,7 +125,7 @@ class LeaguepediaClient:
             "action": "cargoquery",
             "tables": "Tournaments",
             "fields": "Name, OverviewPage, DateStart",
-            "where": f"Tournaments.Name LIKE '%{name_query}%'",
+            "where": f"Tournaments.Name LIKE '%{quote(name_query)}%'",
             "limit": limit,
             "order_by": "DateStart DESC",
         }
