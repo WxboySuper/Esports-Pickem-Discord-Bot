@@ -44,7 +44,7 @@ async def test_get_tournament_by_slug(
     async_mock.__aenter__.return_value.raise_for_status = MagicMock()
     mock_aiohttp_session.get.return_value = async_mock
 
-    slug = "LCS 2024 Summer"
+    slug = "LCS/2024_Season/Summer_Season"
     result = await leaguepedia_client.get_tournament_by_slug(slug)
 
     assert result["Name"] == "LCS 2024 Summer"
@@ -81,7 +81,7 @@ async def test_get_matches_for_tournament(
     async_mock.__aenter__.return_value.raise_for_status = MagicMock()
     mock_aiohttp_session.get.return_value = async_mock
 
-    slug = "LCS 2024 Summer"
+    slug = "LCS/2024_Season/Summer_Season"
     result = await leaguepedia_client.get_matches_for_tournament(slug)
 
     assert len(result) == 2
