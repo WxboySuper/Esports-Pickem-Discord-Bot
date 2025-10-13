@@ -48,6 +48,7 @@ class EsportsBot(commands.Bot):
         "wipe",
         "configure_sync",
         "sync_leaguepedia",
+        "find_tournament",
     ]
 
     def __init__(self):
