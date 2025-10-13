@@ -29,7 +29,7 @@ class ConfigureSync(commands.Cog):
     @configure_group.command(
         name="add", description="Add a tournament slug to the sync list."
     )
-    @app_commands.check(is_admin)
+    @is_admin()
     async def add_tournament(
         self, interaction: discord.Interaction, slug: str
     ):
@@ -55,7 +55,7 @@ class ConfigureSync(commands.Cog):
         name="remove",
         description="Remove a tournament slug from the sync list.",
     )
-    @app_commands.check(is_admin)
+    @is_admin()
     async def remove_tournament(
         self, interaction: discord.Interaction, slug: str
     ):
@@ -81,7 +81,7 @@ class ConfigureSync(commands.Cog):
     @configure_group.command(
         name="list", description="List all tournament slugs in the sync list."
     )
-    @app_commands.check(is_admin)
+    @is_admin()
     async def list_tournaments(self, interaction: discord.Interaction):
         """Lists all configured tournament slugs."""
         with open(CONFIG_PATH, "r") as f:
