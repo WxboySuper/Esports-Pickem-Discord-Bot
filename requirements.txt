@@ -6,4 +6,4 @@ apscheduler
 aiohttp
 aiosqlite
 tenacity
-mwrogue
+mwrogue==0.1.5

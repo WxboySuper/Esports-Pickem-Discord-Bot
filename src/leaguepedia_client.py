@@ -1,8 +1,9 @@
 import logging
 import os
 
-import mwrogue
 from dotenv import load_dotenv
+from mwrogue.auth_credentials import AuthCredentials
+from mwrogue.esports_client import EsportsClient
 
 load_dotenv()
 
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class LeaguepediaClient:
     def __init__(self):
-        self.client = None
+        self.client: EsportsClient | None = None
 
     async def login(self):
         """Logs in to the Leaguepedia API and sets the client."""
@@ -26,20 +27,25 @@ class LeaguepediaClient:
                 "LEAGUEPEDIA_USER or LEAGUEPEDIA_PASS not set. "
                 "Proceeding with unauthenticated client."
             )
-            self.client = mwrogue.Lp(user_agent="EsportsPickemBot/1.0")
+            self.client = EsportsClient(
+                wiki="lol", user_agent="EsportsPickemBot/1.0"
+            )
             return
 
         try:
-            self.client = mwrogue.Lp(
+            credentials = AuthCredentials(username=username, password=password)
+            self.client = EsportsClient(
+                wiki="lol",
+                credentials=credentials,
                 user_agent="EsportsPickemBot/1.0",
-                username=username,
-                password=password,
             )
             logger.info("Successfully logged in to Leaguepedia.")
         except Exception as e:
             logger.error(f"Failed to log in to Leaguepedia: {e}")
             # Fallback to an unauthenticated client
-            self.client = mwrogue.Lp(user_agent="EsportsPickemBot/1.0")
+            self.client = EsportsClient(
+                wiki="lol", user_agent="EsportsPickemBot/1.0"
+            )
 
     async def fetch_upcoming_matches(self, tournament_name_like: str):
         """
