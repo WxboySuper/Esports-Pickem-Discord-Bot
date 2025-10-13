@@ -53,6 +53,23 @@ class LeaguepediaClient:
         items = response.get("cargoquery", [])
         return items[0]["title"] if items else {}
 
+    async def search_tournaments_by_name(
+        self, name_query: str, limit: int = 10
+    ) -> list[dict]:
+        """
+        Searches for tournaments using a name query (case-insensitive LIKE).
+        """
+        params = {
+            "action": "cargoquery",
+            "tables": "Tournaments",
+            "fields": "Name, OverviewPage, DateStart",
+            "where": f"Tournaments.Name LIKE '%{name_query}%'",
+            "limit": limit,
+            "order_by": "DateStart DESC",
+        }
+        response = await self._make_request(params)
+        return [item["title"] for item in response.get("cargoquery", [])]
+
     async def get_matches_for_tournament(
         self, tournament_slug: str
     ) -> list[dict]:
