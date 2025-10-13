@@ -7,7 +7,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.jobstores.base import JobLookupError
 from sqlmodel import select
 from src.db import get_async_session
-from src.models import Match, Result, Pick
+from src.models import Match, Result, Pick, Team
 from src.leaguepedia_client import LeaguepediaClient
 from src.announcements import send_announcement
 from src.config import ANNOUNCEMENT_GUILD_ID
@@ -21,55 +21,79 @@ jobstores = {"default": SQLAlchemyJobStore(url=DATABASE_URL)}
 scheduler = AsyncIOScheduler(jobstores=jobstores)
 
 
-async def schedule_reminders(guild_id: int):
-    async with get_async_session() as session:
-        now = datetime.now(timezone.utc)
+async def schedule_match_reminders(match: Match):
+    """
+    Schedules 30-minute and 5-minute reminders for a given match.
+    Cancels any existing reminders for the match before scheduling new ones.
+    """
+    logger.info(f"Scheduling reminders for match {match.id}")
+    now = datetime.now(timezone.utc)
+    guild_id = ANNOUNCEMENT_GUILD_ID
+    logger.info(f"Using guild_id: {guild_id}")
+    job_id_30 = f"reminder_30_{match.id}"
+    job_id_5 = f"reminder_5_{match.id}"
 
-        # Schedule 30-minute reminders
-        sixty_minutes_from_now = now + timedelta(minutes=60)
-        sixty_five_minutes_from_now = now + timedelta(minutes=65)
+    # Cancel existing jobs to prevent duplicates
+    try:
+        scheduler.remove_job(job_id_30)
+    except JobLookupError:
+        pass  # Job doesn't exist, no need to remove
+    try:
+        scheduler.remove_job(job_id_5)
+    except JobLookupError:
+        pass
 
-        statement = select(Match).where(
-            Match.scheduled_time > sixty_minutes_from_now,
-            Match.scheduled_time <= sixty_five_minutes_from_now,
+    # Calculate reminder times
+    reminder_time_30 = match.scheduled_time - timedelta(minutes=30)
+    reminder_time_5 = match.scheduled_time - timedelta(minutes=5)
+
+    # Schedule 5-minute reminder if it's not already past
+    if now < reminder_time_5:
+        logger.info(f"Scheduling 5-minute reminder for match {match.id}")
+        scheduler.add_job(
+            send_reminder,
+            "date",
+            id=job_id_5,
+            run_date=reminder_time_5,
+            args=[guild_id, match.id, 5],
         )
-        result = await session.exec(statement)
-        matches_30_min = result.all()
-
-        for match in matches_30_min:
-            job_id = f"reminder_30_{match.id}"
-            if not scheduler.get_job(job_id):
-                run_date = match.scheduled_time - timedelta(minutes=30)
-                scheduler.add_job(
-                    send_reminder,
-                    "date",
-                    id=job_id,
-                    run_date=run_date,
-                    args=[guild_id, match.id, 30],
-                )
-
-        # Schedule 5-minute reminders
-        ten_minutes_from_now = now + timedelta(minutes=10)
-        fifteen_minutes_from_now = now + timedelta(minutes=15)
-
-        statement = select(Match).where(
-            Match.scheduled_time > ten_minutes_from_now,
-            Match.scheduled_time <= fifteen_minutes_from_now,
+    # If 5-min reminder is late, but match hasn't started, send immediately
+    elif now < match.scheduled_time:
+        logger.info(
+            f"5-minute reminder time for match {match.id} is in the past. "
+            "Scheduling to run immediately."
         )
-        result = await session.exec(statement)
-        matches_5_min = result.all()
+        scheduler.add_job(
+            send_reminder,
+            "date",
+            id=job_id_5,
+            run_date=now,
+            args=[guild_id, match.id, 5],
+        )
 
-        for match in matches_5_min:
-            job_id = f"reminder_5_{match.id}"
-            if not scheduler.get_job(job_id):
-                run_date = match.scheduled_time - timedelta(minutes=5)
-                scheduler.add_job(
-                    send_reminder,
-                    "date",
-                    id=job_id,
-                    run_date=run_date,
-                    args=[guild_id, match.id, 5],
-                )
+    # Schedule 30-minute reminder ONLY IF the 5-minute one was not sent immediately
+    if now < reminder_time_30:
+        logger.info(f"Scheduling 30-minute reminder for match {match.id}")
+        scheduler.add_job(
+            send_reminder,
+            "date",
+            id=job_id_30,
+            run_date=reminder_time_30,
+            args=[guild_id, match.id, 30],
+        )
+    # If 30-min is late, but 5-min is still in the future, send 30-min now
+    elif now < reminder_time_5:
+        logger.info(
+            f"30-minute reminder time for match {match.id} is in the past. "
+            "Scheduling to run immediately."
+        )
+        scheduler.add_job(
+            send_reminder,
+            "date",
+            id=job_id_30,
+            run_date=now,
+            args=[guild_id, match.id, 30],
+        )
 
 
 async def poll_live_match_job(match_db_id: int, guild_id: int):
@@ -129,21 +153,61 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
 
 
 async def send_reminder(guild_id: int, match_id: int, minutes: int):
+    """Sends a rich, informative embed as a match reminder."""
     bot = get_bot_instance()
     guild = bot.get_guild(guild_id)
     if not guild:
         logger.error(f"Guild {guild_id} not found.")
         return
+
     async with get_async_session() as session:
         match = await session.get(Match, match_id)
+        if not match:
+            logger.error(f"Match {match_id} not found for reminder.")
+            return
+
+        # Fetch team data to get image URLs
+        team1_stmt = select(Team).where(Team.name == match.team1)
+        team2_stmt = select(Team).where(Team.name == match.team2)
+        team1 = (await session.exec(team1_stmt)).first()
+        team2 = (await session.exec(team2_stmt)).first()
+
+        scheduled_ts = int(match.scheduled_time.timestamp())
+
+        if minutes == 5:
+            title = "🔴 Match Starting Soon!"
+            description = (
+                f"**{match.team1}** vs **{match.team2}** is starting "
+                f"<t:{scheduled_ts}:R>! Last chance to lock in picks."
+            )
+            color = discord.Color.red()
+        else:  # 30-minute reminder
+            title = "⚔️ Upcoming Match Reminder"
+            description = (
+                f"Get your picks in! **{match.team1}** vs "
+                f"**{match.team2}** starts <t:{scheduled_ts}:R>."
+            )
+            color = discord.Color.blue()
+
         embed = discord.Embed(
-            title="Match Reminder",
-            description=(
-                f"{match.team1} vs {match.team2} is starting in {minutes} "
-                "minutes!"
-            ),
-            color=discord.Color.blue(),
+            title=title, description=description, color=color
         )
+
+        if team1 and team1.image_url:
+            embed.set_thumbnail(url=team1.image_url)
+        elif team2 and team2.image_url:
+            # Use team2 image if team1 is missing
+            embed.set_thumbnail(url=team2.image_url)
+
+        embed.add_field(
+            name="Scheduled Time",
+            value=f"<t:{scheduled_ts}:F>",
+            inline=False,
+        )
+        embed.set_footer(
+            text="Use the /picks command to make your predictions!"
+        )
+
         await send_announcement(guild, embed)
 
 
@@ -234,12 +298,5 @@ def start_scheduler():
             args=[ANNOUNCEMENT_GUILD_ID],
         )
 
-        # Schedule existing jobs
-        scheduler.add_job(
-            schedule_reminders,
-            "interval",
-            minutes=15,
-            args=[ANNOUNCEMENT_GUILD_ID],
-        )
         scheduler.start()
         logger.info("Scheduler started.")
