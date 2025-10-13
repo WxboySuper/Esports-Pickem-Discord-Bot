@@ -27,9 +27,7 @@ class LeaguepediaClient:
                 "LEAGUEPEDIA_USER or LEAGUEPEDIA_PASS not set. "
                 "Proceeding with unauthenticated client."
             )
-            self.client = EsportsClient(
-                wiki="lol", user_agent="EsportsPickemBot/1.0"
-            )
+            self.client = EsportsClient(wiki="lol")
             return
 
         try:
@@ -37,15 +35,12 @@ class LeaguepediaClient:
             self.client = EsportsClient(
                 wiki="lol",
                 credentials=credentials,
-                user_agent="EsportsPickemBot/1.0",
             )
             logger.info("Successfully logged in to Leaguepedia.")
         except Exception as e:
             logger.error(f"Failed to log in to Leaguepedia: {e}")
             # Fallback to an unauthenticated client
-            self.client = EsportsClient(
-                wiki="lol", user_agent="EsportsPickemBot/1.0"
-            )
+            self.client = EsportsClient(wiki="lol")
 
     async def fetch_upcoming_matches(self, tournament_name_like: str):
         """
