@@ -6,7 +6,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.jobstores.base import JobLookupError
 from sqlmodel import select
-from sqlalchemy.orm import selectinload
 from src.db import get_async_session
 from src.models import Match, Result, Pick
 from src.leaguepedia_client import LeaguepediaClient
@@ -111,7 +110,10 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
                 result = Result(
                     match_id=match.id,
                     winner=winner,
-                    score=f"{result_data.get('Team1Score')} - {result_data.get('Team2Score')}",
+                    score=(
+                        f"{result_data.get('Team1Score')} - "
+                        f"{result_data.get('Team2Score')}"
+                    ),
                 )
                 session.add(result)
                 await session.commit()

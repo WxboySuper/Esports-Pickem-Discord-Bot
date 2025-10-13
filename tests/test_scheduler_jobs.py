@@ -7,7 +7,6 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from sqlalchemy import create_engine
 
 from src.commands.sync_leaguepedia import perform_leaguepedia_sync
-from src.models import Contest
 
 
 @pytest.fixture
@@ -67,7 +66,9 @@ async def test_perform_leaguepedia_sync_logic(
     mock_db_session.exec.return_value = result_mock
 
     mock_http_session = AsyncMock()
-    mock_client_session.return_value.__aenter__.return_value = mock_http_session
+    mock_client_session.return_value.__aenter__.return_value = (
+        mock_http_session
+    )
 
     mock_leaguepedia_client = AsyncMock()
     # Mock the return values of the client methods
