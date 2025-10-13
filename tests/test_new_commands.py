@@ -135,7 +135,7 @@ async def test_leaderboard_command_empty(
 @pytest.mark.asyncio
 @patch("src.auth.get_admin_ids")
 async def test_enter_result_admin_check(mock_get_admin_ids, mock_interaction):
-    """Tests the predicate of the is_admin check on the enter_result command."""
+    """Tests the admin check predicate for the enter_result command."""
     # The predicate is the first (and only) check on the command
     predicate = result.enter_result.checks[0]
 
