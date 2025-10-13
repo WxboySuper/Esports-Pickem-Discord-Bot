@@ -31,14 +31,20 @@ class LeaguepediaClient:
             return
 
         try:
+            logger.info("Attempting to log in to Leaguepedia...")
             credentials = AuthCredentials(username=username, password=password)
             self.client = EsportsClient(
                 wiki="lol",
                 credentials=credentials,
             )
+            # Test the login by making a simple, authenticated-only query
+            self.client.cargo_client.query(
+                tables="Tournaments", fields="Name", limit="1"
+            )
             logger.info("Successfully logged in to Leaguepedia.")
         except Exception as e:
             logger.error(f"Failed to log in to Leaguepedia: {e}")
+            logger.warning("Falling back to unauthenticated client.")
             # Fallback to an unauthenticated client
             self.client = EsportsClient(wiki="lol")
 
