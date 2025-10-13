@@ -1,7 +1,6 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-import aiohttp
 
 from src.leaguepedia_client import LeaguepediaClient
 
@@ -57,9 +56,11 @@ class FindTournament(commands.Cog):
     ):
         await interaction.response.defer(ephemeral=True)
 
-        async with aiohttp.ClientSession() as session:
-            client = LeaguepediaClient(session)
+        client = LeaguepediaClient()
+        try:
             tournaments = await client.search_tournaments_by_name(search_query)
+        finally:
+            await client.close()
 
         if not tournaments:
             await interaction.followup.send(
