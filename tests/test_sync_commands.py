@@ -101,58 +101,32 @@ async def test_configure_sync_add_remove_list(
 
 
 @pytest.mark.asyncio
-@patch("src.commands.sync_leaguepedia.LeaguepediaClient")
+@patch("src.commands.sync_leaguepedia.perform_leaguepedia_sync")
 async def test_sync_leaguepedia_command(
-    MockLeaguepediaClient, mock_bot, mock_interaction, temp_config_file
+    mock_perform_sync, mock_bot, mock_interaction
 ):
     """Tests the main sync-leaguepedia command."""
-    # Setup mock client
-    mock_client_instance = MockLeaguepediaClient.return_value
-    mock_client_instance.get_tournament_by_slug = AsyncMock(
-        return_value={
-            "Name": "LCS",
-            "DateStart": "2024-01-01",
-            "DateEnd": "2024-12-31",
-        }
+    # Arrange
+    mock_perform_sync.return_value = {
+        "contests": 1,
+        "matches": 5,
+        "teams": 10,
+    }
+    cog = SyncLeaguepedia(mock_bot)
+
+    # Act
+    await cog.sync_leaguepedia.callback(cog, mock_interaction)
+
+    # Assert
+    mock_interaction.response.defer.assert_called_once_with(
+        ephemeral=True, thinking=True
     )
-    mock_client_instance.get_matches_for_tournament = AsyncMock(
-        return_value=[
-            {
-                "MatchId": "1",
-                "Team1": "Team A",
-                "Team2": "Team B",
-                "DateTime_UTC": "2024-05-05T12:00:00Z",
-            }
-        ]
-    )
+    mock_perform_sync.assert_awaited_once()
+    mock_interaction.followup.send.assert_called_once()
 
-    async def mock_get_team(team_name):
-        if team_name == "Team A":
-            return {"Name": "Team A", "Image": "a.png", "Roster": "[]"}
-        if team_name == "Team B":
-            return {"Name": "Team B", "Image": "b.png", "Roster": "[]"}
-        return {}
-
-    mock_client_instance.get_team = AsyncMock(side_effect=mock_get_team)
-
-    # Setup config file
-    with open(temp_config_file, "w") as f:
-        json.dump(["LCS_2024_Summer"], f)
-
-    with patch(
-        "src.commands.sync_leaguepedia.CONFIG_PATH", temp_config_file
-    ), patch(
-        "src.commands.sync_leaguepedia.get_async_session",
-        get_test_async_session,
-    ):
-
-        cog = SyncLeaguepedia(mock_bot)
-        await cog.sync_leaguepedia.callback(cog, mock_interaction)
-
-        mock_interaction.response.defer.assert_called_once()
-        mock_interaction.followup.send.assert_called_once()
-        call_args = mock_interaction.followup.send.call_args[0][0]
-        assert "Leaguepedia sync complete!" in call_args
-        assert "Upserted 1 contests." in call_args
-        assert "Upserted 1 matches." in call_args
-        assert "Upserted 2 teams." in call_args
+    # Check the content of the success message
+    call_args = mock_interaction.followup.send.call_args[0][0]
+    assert "Leaguepedia sync complete!" in call_args
+    assert "Upserted 1 contests." in call_args
+    assert "Upserted 5 matches." in call_args
+    assert "Upserted 10 teams." in call_args

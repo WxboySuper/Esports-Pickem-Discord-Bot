@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from src.auth import is_admin
 from src.config import DATA_PATH
-from src.leaguepedia_client import LeaguepediaClient
+from src.leaguepedia_client import leaguepedia_client
 from src.db import get_async_session
 from src.crud import upsert_contest, upsert_match, upsert_team
 
@@ -29,40 +29,67 @@ def _parse_date(date_str: str | None) -> datetime | None:
 
 
 async def _sync_single_tournament(
-    slug: str, client: LeaguepediaClient, db_session, summary: dict
+    tournament_name_like: str, db_session, summary: dict
 ):
-    """Helper to sync data for a single tournament slug."""
-    logger.info("Syncing tournament with slug: '%s'", slug)
-    contest_data = await client.get_tournament_by_slug(slug)
-    if not contest_data:
-        logger.warning("No contest data found for slug '%s'. Skipping.", slug)
-        return
-
-    logger.debug("Contest data for '%s': %s", slug, contest_data)
-    contest = await upsert_contest(
-        db_session,
-        {
-            "leaguepedia_id": slug,
-            "name": contest_data.get("Name"),
-            "start_date": _parse_date(contest_data.get("DateStart")),
-            "end_date": _parse_date(contest_data.get("DateEnd")),
-        },
-    )
-    if not contest:
-        logger.warning("Failed to upsert contest for slug '%s'.", slug)
-        return
-
-    summary["contests"] += 1
-    await db_session.flush()
-
-    logger.info("Fetching matches for tournament '%s'", slug)
-    matches_data = await client.get_matches_for_tournament(slug)
+    """
+    Helper to sync data for a single tournament using the new cargo query.
+    """
     logger.info(
-        "Found %d matches for tournament '%s'", len(matches_data), slug
+        "Fetching upcoming matches for tournament pattern: '%s'",
+        tournament_name_like,
     )
+    matches_data = await leaguepedia_client.fetch_upcoming_matches(
+        tournament_name_like
+    )
+
+    if not matches_data:
+        logger.warning(
+            "No matches found for tournament pattern '%s'.",
+            tournament_name_like,
+        )
+        return
+
+    log_msg = "Found %d matches for tournament pattern '%s'"
+    logger.info(log_msg, len(matches_data), tournament_name_like)
+
+    # Keep track of contests we've already processed in this run
+    processed_contests = {}
 
     for match_data in matches_data:
         logger.debug("Processing match data: %s", match_data)
+
+        tournament_name = match_data.get("Name")
+        overview_page = match_data.get("OverviewPage")
+
+        if not tournament_name or not overview_page:
+            log_msg = (
+                "Match data is missing Tournament Name or "
+                "OverviewPage. Skipping: %s"
+            )
+            logger.warning(log_msg, match_data)
+            continue
+
+        # Upsert contest if we haven't seen it before in this sync
+        if overview_page not in processed_contests:
+            contest = await upsert_contest(
+                db_session,
+                {
+                    "leaguepedia_id": overview_page,
+                    "name": tournament_name,
+                },
+            )
+            if not contest:
+                logger.warning(
+                    "Failed to upsert contest for '%s'.", tournament_name
+                )
+                continue
+            summary["contests"] += 1
+            await db_session.flush()  # Ensure contest.id is available
+            processed_contests[overview_page] = contest
+        else:
+            contest = processed_contests[overview_page]
+
+        # Upsert teams
         for team_name_key in ["Team1", "Team2"]:
             team_name = match_data.get(team_name_key)
             if not team_name:
@@ -72,24 +99,10 @@ async def _sync_single_tournament(
                 )
                 continue
 
-            logger.debug("Fetching team data for: '%s'", team_name)
-            team_api_data = await client.get_team(team_name)
-            if team_api_data:
-                logger.debug(
-                    "Got team API data for '%s': %s", team_name, team_api_data
-                )
-                team_data = {
-                    "leaguepedia_id": team_name,
-                    "name": team_api_data.get("Name"),
-                    "image_url": team_api_data.get("Image"),
-                    "roster": json.dumps(team_api_data.get("Roster")),
-                }
-                await upsert_team(db_session, team_data)
-                summary["teams"] += 1
-            else:
-                logger.warning(
-                    "No team data found for team name: '%s'", team_name
-                )
+            await upsert_team(
+                db_session, {"leaguepedia_id": team_name, "name": team_name}
+            )
+            summary["teams"] += 1
 
         match_id = match_data.get("MatchId")
         if not match_id:
@@ -110,7 +123,11 @@ async def _sync_single_tournament(
             },
         )
         summary["matches"] += 1
-    logger.info("Finished processing matches for tournament '%s'", slug)
+
+    logger.info(
+        "Finished processing matches for tournament pattern '%s'",
+        tournament_name_like,
+    )
 
 
 async def perform_leaguepedia_sync() -> dict | None:
@@ -137,16 +154,10 @@ async def perform_leaguepedia_sync() -> dict | None:
         return None
 
     summary = {"contests": 0, "matches": 0, "teams": 0}
-    client = LeaguepediaClient()
-    try:
-        async with get_async_session() as db_session:
-            for slug in tournament_slugs:
-                await _sync_single_tournament(
-                    slug, client, db_session, summary
-                )
-            await db_session.commit()
-    finally:
-        await client.close()
+    async with get_async_session() as db_session:
+        for slug in tournament_slugs:
+            await _sync_single_tournament(slug, db_session, summary)
+        await db_session.commit()
 
     logger.info(
         "Leaguepedia sync complete: "

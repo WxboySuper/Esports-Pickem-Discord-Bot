@@ -6,3 +6,4 @@ apscheduler
 aiohttp
 aiosqlite
 tenacity
+mwrogue
