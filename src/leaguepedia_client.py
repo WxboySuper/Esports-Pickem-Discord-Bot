@@ -1,6 +1,9 @@
 import aiohttp
+import logging
 from tenacity import retry, stop_after_attempt, wait_exponential
 from urllib.parse import quote
+
+logger = logging.getLogger(__name__)
 
 
 class LeaguepediaClient:
@@ -26,6 +29,10 @@ class LeaguepediaClient:
             "origin": "*",  # Required for unauthenticated requests
         }
         all_params = {**default_params, **params}
+
+        logger.debug(
+            "Making Leaguepedia API request with params: %s", all_params
+        )
 
         async with self.session.get(
             self.BASE_URL, params=all_params
