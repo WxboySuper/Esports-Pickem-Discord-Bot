@@ -26,10 +26,10 @@ async def schedule_match_reminders(match: Match):
     Schedules 30-minute and 5-minute reminders for a given match.
     Cancels any existing reminders for the match before scheduling new ones.
     """
-    logger.info(f"Scheduling reminders for match {match.id}")
+    logger.info("Scheduling reminders for match %s", match.id)
     now = datetime.now(timezone.utc)
     guild_id = ANNOUNCEMENT_GUILD_ID
-    logger.info(f"Using guild_id: {guild_id}")
+    logger.info("Using guild_id: %s", guild_id)
     job_id_30 = f"reminder_30_{match.id}"
     job_id_5 = f"reminder_5_{match.id}"
 
@@ -49,7 +49,7 @@ async def schedule_match_reminders(match: Match):
 
     # Schedule 5-minute reminder if it's not already past
     if now < reminder_time_5:
-        logger.info(f"Scheduling 5-minute reminder for match {match.id}")
+        logger.info("Scheduling 5-minute reminder for match %s", match.id)
         scheduler.add_job(
             send_reminder,
             "date",
@@ -60,8 +60,7 @@ async def schedule_match_reminders(match: Match):
     # If 5-min reminder is late, but match hasn't started, send immediately
     elif now < match.scheduled_time:
         logger.info(
-            f"5-minute reminder time for match {match.id} is in the past. "
-            "Scheduling to run immediately."
+            "5-minute reminder for match %s is late, sending now.", match.id
         )
         scheduler.add_job(
             send_reminder,
@@ -71,9 +70,9 @@ async def schedule_match_reminders(match: Match):
             args=[guild_id, match.id, 5],
         )
 
-    # Schedule 30-minute reminder ONLY IF the 5-minute one was not sent immediately
+    # Schedule 30-minute reminder
     if now < reminder_time_30:
-        logger.info(f"Scheduling 30-minute reminder for match {match.id}")
+        logger.info("Scheduling 30-minute reminder for match %s", match.id)
         scheduler.add_job(
             send_reminder,
             "date",
@@ -84,8 +83,7 @@ async def schedule_match_reminders(match: Match):
     # If 30-min is late, but 5-min is still in the future, send 30-min now
     elif now < reminder_time_5:
         logger.info(
-            f"30-minute reminder time for match {match.id} is in the past. "
-            "Scheduling to run immediately."
+            "30-minute reminder for match %s is late, sending now.", match.id
         )
         scheduler.add_job(
             send_reminder,
@@ -100,27 +98,44 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
     """
     Polls a specific match for live updates/results. If a winner is found,
     it saves the result, sends a notification, and removes itself from the
-    scheduler.
+    scheduler. Includes a timeout to prevent indefinite polling.
     """
     job_id = f"poll_match_{match_db_id}"
-    logger.info(f"Running job '{job_id}': Polling for match ID {match_db_id}")
+    logger.info(
+        "Running job '%s': Polling for match ID %s", job_id, match_db_id
+    )
 
     async with get_async_session() as session:
         match = await session.get(Match, match_db_id)
+
+        # Safety check: Unschedule if match is gone or already has a result
         if not match or match.result:
             logger.info(
-                f"Match {match_db_id} not found or result already exists. "
-                f"Unscheduling job '{job_id}'."
+                "Match %s not found or result exists. Unscheduling job '%s'.",
+                match_db_id,
+                job_id,
             )
             try:
                 scheduler.remove_job(job_id)
             except JobLookupError:
-                logger.warning(
-                    f"Could not find job '{job_id}' to remove. "
-                    "It might have been removed already."
-                )
+                logger.warning("Could not find job '%s' to remove.", job_id)
             return
 
+        # Timeout check: Unschedule if the job has been running for too long
+        now = datetime.now(timezone.utc)
+        if now > match.scheduled_time + timedelta(hours=12):
+            logger.warning(
+                "Job '%s' for match %s has timed out. Unscheduling.",
+                job_id,
+                match.id,
+            )
+            try:
+                scheduler.remove_job(job_id)
+            except JobLookupError:
+                logger.warning("Could not find job '%s' to remove.", job_id)
+            return
+
+        # Poll the API for results
         async with aiohttp.ClientSession() as http_session:
             client = LeaguepediaClient(http_session)
             result_data = await client.get_match_by_id(match.leaguepedia_id)
@@ -128,8 +143,9 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
 
             if winner:
                 logger.info(
-                    f"Result found for match {match.id}: Winner is {winner}. "
-                    f"Unscheduling job '{job_id}'."
+                    "Result found for match %s: Winner is %s. Unscheduling.",
+                    match.id,
+                    winner,
                 )
                 result = Result(
                     match_id=match.id,
@@ -147,8 +163,8 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
                     scheduler.remove_job(job_id)
                 except JobLookupError:
                     logger.warning(
-                        f"Could not find job '{job_id}' to remove. "
-                        "It might have been removed already."
+                        "Could not find job '%s' to remove after completion.",
+                        job_id,
                     )
 
 
@@ -157,16 +173,15 @@ async def send_reminder(guild_id: int, match_id: int, minutes: int):
     bot = get_bot_instance()
     guild = bot.get_guild(guild_id)
     if not guild:
-        logger.error(f"Guild {guild_id} not found.")
+        logger.error("Guild %s not found for reminder.", guild_id)
         return
 
     async with get_async_session() as session:
         match = await session.get(Match, match_id)
         if not match:
-            logger.error(f"Match {match_id} not found for reminder.")
+            logger.error("Match %s not found for reminder.", match_id)
             return
 
-        # Fetch team data to get image URLs
         team1_stmt = select(Team).where(Team.name == match.team1)
         team2_stmt = select(Team).where(Team.name == match.team2)
         team1 = (await session.exec(team1_stmt)).first()
@@ -202,9 +217,7 @@ async def send_reminder(guild_id: int, match_id: int, minutes: int):
             embed.set_thumbnail(url=thumbnail_url)
 
         embed.add_field(
-            name="Scheduled Time",
-            value=f"<t:{scheduled_ts}:F>",
-            inline=False,
+            name="Scheduled Time", value=f"<t:{scheduled_ts}:F>", inline=False
         )
         embed.set_footer(
             text="Use the /picks command to make your predictions!"
@@ -216,15 +229,23 @@ async def send_reminder(guild_id: int, match_id: int, minutes: int):
 async def send_result_notification(
     guild_id: int, match: Match, result: Result
 ):
+    """Sends a rich, detailed embed with match results."""
     bot = get_bot_instance()
     guild = bot.get_guild(guild_id)
     if not guild:
-        logger.error(f"Guild {guild_id} not found.")
+        logger.error("Guild %s not found for result notification.", guild_id)
         return
+
     async with get_async_session() as session:
+        team1_stmt = select(Team).where(Team.name == match.team1)
+        team2_stmt = select(Team).where(Team.name == match.team2)
+        team1 = (await session.exec(team1_stmt)).first()
+        team2 = (await session.exec(team2_stmt)).first()
+
+        winner_team_obj = team1 if result.winner == match.team1 else team2
+
         statement = select(Pick).where(Pick.match_id == match.id)
-        db_result = await session.exec(statement)
-        picks = db_result.all()
+        picks = (await session.exec(statement)).all()
         total_picks = len(picks)
         correct_picks = len(
             [p for p in picks if p.chosen_team == result.winner]
@@ -232,20 +253,34 @@ async def send_result_notification(
         correct_percentage = (
             (correct_picks / total_picks) * 100 if total_picks > 0 else 0
         )
+
         opponent = match.team2 if result.winner == match.team1 else match.team1
+        title = f"🏆 Match Results: {match.team1} vs {match.team2}"
+        description = (
+            f"**{result.winner}** emerges victorious over **{opponent}** "
+            f"with a final score of **{result.score}**."
+        )
         embed = discord.Embed(
-            title="Match Result",
-            description=f"{result.winner} won against {opponent}!",
-            color=discord.Color.green(),
+            title=title, description=description, color=discord.Color.gold()
         )
-        winner_picks_str = (
-            f"{correct_percentage:.2f}% of users "
-            "correctly picked the winner."
-        )
+
+        if winner_team_obj and winner_team_obj.image_url:
+            embed.set_thumbnail(url=winner_team_obj.image_url)
+
+        if total_picks > 0:
+            picks_value = (
+                f"**{correct_picks}** of **{total_picks}** users "
+                f"({correct_percentage:.2f}%) correctly picked the winner."
+            )
+        else:
+            picks_value = "No picks were made for this match."
+
         embed.add_field(
-            name="Picks",
-            value=winner_picks_str,
+            name="📊 Pick'em Stats", value=picks_value, inline=False
         )
+        embed.set_footer(text=f"Leaguepedia Match ID: {match.leaguepedia_id}")
+        embed.timestamp = datetime.now(timezone.utc)
+
         await send_announcement(guild, embed)
 
 
@@ -261,17 +296,17 @@ async def schedule_live_polling(guild_id: int):
         statement = select(Match).where(
             Match.scheduled_time >= now,
             Match.scheduled_time < one_minute_from_now,
-            Match.result == None,  # noqa: E711
+            Match.result.is_(None),
         )
-        result = await session.exec(statement)
-        matches_starting_soon = result.all()
+        matches_starting_soon = (await session.exec(statement)).all()
 
         for match in matches_starting_soon:
             job_id = f"poll_match_{match.id}"
             if not scheduler.get_job(job_id):
                 logger.info(
-                    f"Match {match.id} is starting soon. "
-                    f"Scheduling job '{job_id}' to poll for results."
+                    "Match %s is starting soon. Scheduling job '%s'.",
+                    match.id,
+                    job_id,
                 )
                 scheduler.add_job(
                     poll_live_match_job,
@@ -279,26 +314,24 @@ async def schedule_live_polling(guild_id: int):
                     minutes=5,
                     id=job_id,
                     args=[match.id, guild_id],
+                    misfire_grace_time=60,
                 )
 
 
 def start_scheduler():
     if not scheduler.running:
-        # Schedule the main Leaguepedia sync
         scheduler.add_job(
             perform_leaguepedia_sync,
             "interval",
             hours=6,
             id="sync_all_tournaments_job",
         )
-
-        # Schedule the orchestrator job to run every minute
         scheduler.add_job(
             schedule_live_polling,
             "interval",
             minutes=1,
+            id="schedule_live_polling_job",
             args=[ANNOUNCEMENT_GUILD_ID],
         )
-
         scheduler.start()
         logger.info("Scheduler started.")
