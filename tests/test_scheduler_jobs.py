@@ -1,6 +1,7 @@
 import pytest
 import pickle
 from unittest.mock import AsyncMock, Mock, patch, mock_open
+from datetime import datetime, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -95,9 +96,16 @@ async def test_perform_leaguepedia_sync_logic(
         mock_fetch_matches.assert_awaited_once_with("Worlds 2025")
 
         # Verify that upsert functions were called with correct data
+        expected_start_date = datetime(2025, 10, 13, 18, 0, tzinfo=timezone.utc)
+        expected_end_date = datetime(2025, 10, 13, 18, 0, tzinfo=timezone.utc)
         mock_upsert_contest.assert_awaited_once_with(
             mock_db_session,
-            {"leaguepedia_id": "Worlds_2025", "name": "Worlds 2025"},
+            {
+                "leaguepedia_id": "Worlds_2025",
+                "name": "Worlds 2025",
+                "start_date": expected_start_date,
+                "end_date": expected_end_date,
+            },
         )
         assert mock_upsert_team.call_count == 2
         mock_upsert_match.assert_awaited_once()

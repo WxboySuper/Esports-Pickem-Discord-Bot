@@ -52,77 +52,93 @@ async def _sync_single_tournament(
     log_msg = "Found %d matches for tournament pattern '%s'"
     logger.info(log_msg, len(matches_data), tournament_name_like)
 
-    # Keep track of contests we've already processed in this run
-    processed_contests = {}
-
+    # Group matches by contest (OverviewPage)
+    contests = {}
     for match_data in matches_data:
-        logger.debug("Processing match data: %s", match_data)
-
-        tournament_name = match_data.get("Name")
         overview_page = match_data.get("OverviewPage")
-
-        if not tournament_name or not overview_page:
-            log_msg = (
-                "Match data is missing Tournament Name or "
-                "OverviewPage. Skipping: %s"
-            )
-            logger.warning(log_msg, match_data)
-            continue
-
-        # Upsert contest if we haven't seen it before in this sync
-        if overview_page not in processed_contests:
-            contest = await upsert_contest(
-                db_session,
-                {
-                    "leaguepedia_id": overview_page,
-                    "name": tournament_name,
-                },
-            )
-            if not contest:
-                logger.warning(
-                    "Failed to upsert contest for '%s'.", tournament_name
-                )
-                continue
-            summary["contests"] += 1
-            await db_session.flush()  # Ensure contest.id is available
-            processed_contests[overview_page] = contest
-        else:
-            contest = processed_contests[overview_page]
-
-        # Upsert teams
-        for team_name_key in ["Team1", "Team2"]:
-            team_name = match_data.get(team_name_key)
-            if not team_name:
-                logger.warning(
-                    "Match data is missing '%s'. Skipping team sync.",
-                    team_name_key,
-                )
-                continue
-
-            await upsert_team(
-                db_session, {"leaguepedia_id": team_name, "name": team_name}
-            )
-            summary["teams"] += 1
-
-        match_id = match_data.get("MatchId")
-        if not match_id:
+        if not overview_page:
             logger.warning(
-                "Match data is missing MatchId. Skipping match sync: %s",
-                match_data,
+                "Match data is missing OverviewPage. Skipping: %s", match_data
+            )
+            continue
+        if overview_page not in contests:
+            contests[overview_page] = []
+        contests[overview_page].append(match_data)
+
+    for overview_page, contest_matches in contests.items():
+        # Determine start and end dates from all matches for the contest
+        match_times = [
+            _parse_date(m.get("DateTime_UTC")) for m in contest_matches
+        ]
+        valid_times = [t for t in match_times if t is not None]
+
+        if not valid_times:
+            logger.warning(
+                "No valid match times found for contest '%s'. Skipping.",
+                overview_page,
             )
             continue
 
-        await upsert_match(
+        start_date = min(valid_times)
+        end_date = max(valid_times)
+        tournament_name = contest_matches[0].get("Name")
+
+        # Upsert contest with calculated dates
+        contest = await upsert_contest(
             db_session,
             {
-                "leaguepedia_id": match_id,
-                "contest_id": contest.id,
-                "team1": match_data.get("Team1"),
-                "team2": match_data.get("Team2"),
-                "scheduled_time": _parse_date(match_data.get("DateTime_UTC")),
+                "leaguepedia_id": overview_page,
+                "name": tournament_name,
+                "start_date": start_date,
+                "end_date": end_date,
             },
         )
-        summary["matches"] += 1
+        if not contest:
+            logger.warning(
+                "Failed to upsert contest for '%s'.", tournament_name
+            )
+            continue
+        summary["contests"] += 1
+        await db_session.flush()  # Ensure contest.id is available
+
+        # Process all matches for this contest
+        for match_data in contest_matches:
+            # Upsert teams
+            for team_name_key in ["Team1", "Team2"]:
+                team_name = match_data.get(team_name_key)
+                if not team_name:
+                    logger.warning(
+                        "Match data is missing '%s'. Skipping team sync.",
+                        team_name_key,
+                    )
+                    continue
+                await upsert_team(
+                    db_session,
+                    {"leaguepedia_id": team_name, "name": team_name},
+                )
+                summary["teams"] += 1
+
+            match_id = match_data.get("MatchId")
+            if not match_id:
+                logger.warning(
+                    "Match data is missing MatchId. Skipping match sync: %s",
+                    match_data,
+                )
+                continue
+
+            await upsert_match(
+                db_session,
+                {
+                    "leaguepedia_id": match_id,
+                    "contest_id": contest.id,
+                    "team1": match_data.get("Team1"),
+                    "team2": match_data.get("Team2"),
+                    "scheduled_time": _parse_date(
+                        match_data.get("DateTime_UTC")
+                    ),
+                },
+            )
+            summary["matches"] += 1
 
     logger.info(
         "Finished processing matches for tournament pattern '%s'",
