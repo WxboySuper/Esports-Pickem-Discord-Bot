@@ -100,13 +100,15 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
     """
     Polls a specific match for live updates/results. If a winner is found,
     it saves the result, sends a notification, and removes itself from the
-    scheduler.
+    scheduler. Includes a timeout to prevent indefinite polling.
     """
     job_id = f"poll_match_{match_db_id}"
     logger.info(f"Running job '{job_id}': Polling for match ID {match_db_id}")
 
     async with get_async_session() as session:
         match = await session.get(Match, match_db_id)
+
+        # Safety check: Unschedule if match is gone or already has a result
         if not match or match.result:
             logger.info(
                 f"Match {match_db_id} not found or result already exists. "
@@ -115,12 +117,23 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             try:
                 scheduler.remove_job(job_id)
             except JobLookupError:
-                logger.warning(
-                    f"Could not find job '{job_id}' to remove. "
-                    "It might have been removed already."
-                )
+                logger.warning(f"Could not find job '{job_id}' to remove.")
             return
 
+        # Timeout check: Unschedule if the job has been running for too long
+        now = datetime.now(timezone.utc)
+        if now > match.scheduled_time + timedelta(hours=12):
+            logger.warning(
+                f"Job '{job_id}' for match {match.id} has been running for "
+                "over 12 hours. Unscheduling to prevent infinite loop."
+            )
+            try:
+                scheduler.remove_job(job_id)
+            except JobLookupError:
+                logger.warning(f"Could not find job '{job_id}' to remove.")
+            return
+
+        # Poll the API for results
         async with aiohttp.ClientSession() as http_session:
             client = LeaguepediaClient(http_session)
             result_data = await client.get_match_by_id(match.leaguepedia_id)
@@ -216,12 +229,27 @@ async def send_reminder(guild_id: int, match_id: int, minutes: int):
 async def send_result_notification(
     guild_id: int, match: Match, result: Result
 ):
+    """Sends a rich, detailed embed with match results."""
     bot = get_bot_instance()
     guild = bot.get_guild(guild_id)
     if not guild:
         logger.error(f"Guild {guild_id} not found.")
         return
+
     async with get_async_session() as session:
+        # Fetch team data to get image URLs
+        team1_stmt = select(Team).where(Team.name == match.team1)
+        team2_stmt = select(Team).where(Team.name == match.team2)
+        team1 = (await session.exec(team1_stmt)).first()
+        team2 = (await session.exec(team2_stmt)).first()
+
+        winner_team_obj = None
+        if team1 and result.winner == team1.name:
+            winner_team_obj = team1
+        elif team2 and result.winner == team2.name:
+            winner_team_obj = team2
+
+        # Calculate pick statistics
         statement = select(Pick).where(Pick.match_id == match.id)
         db_result = await session.exec(statement)
         picks = db_result.all()
@@ -232,20 +260,42 @@ async def send_result_notification(
         correct_percentage = (
             (correct_picks / total_picks) * 100 if total_picks > 0 else 0
         )
+
+        # Construct the embed
         opponent = match.team2 if result.winner == match.team1 else match.team1
+        title = f"🏆 Match Results: {match.team1} vs {match.team2}"
+        description = (
+            f"**{result.winner}** emerges victorious over **{opponent}** "
+            f"with a final score of **{result.score}**."
+        )
+
         embed = discord.Embed(
-            title="Match Result",
-            description=f"{result.winner} won against {opponent}!",
-            color=discord.Color.green(),
+            title=title,
+            description=description,
+            color=discord.Color.gold(),
         )
-        winner_picks_str = (
-            f"{correct_percentage:.2f}% of users "
-            "correctly picked the winner."
-        )
+
+        if winner_team_obj and winner_team_obj.image_url:
+            embed.set_thumbnail(url=winner_team_obj.image_url)
+
+        # Add a field for pick statistics
+        if total_picks > 0:
+            picks_value = (
+                f"**{correct_picks}** out of **{total_picks}** total picks "
+                f"were correct. ({correct_percentage:.2f}%)"
+            )
+        else:
+            picks_value = "No picks were made for this match."
+
         embed.add_field(
-            name="Picks",
-            value=winner_picks_str,
+            name="📊 Pick'em Stats",
+            value=picks_value,
+            inline=False,
         )
+
+        embed.set_footer(text=f"Leaguepedia Match ID: {match.leaguepedia_id}")
+        embed.timestamp = datetime.now(timezone.utc)
+
         await send_announcement(guild, embed)
 
 
