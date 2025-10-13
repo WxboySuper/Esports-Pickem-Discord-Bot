@@ -129,7 +129,7 @@ class SyncLeaguepedia(commands.Cog):
         name="sync-leaguepedia",
         description="Syncs configured tournaments from Leaguepedia.",
     )
-    @app_commands.check(is_admin)
+    @is_admin()
     async def sync_leaguepedia(self, interaction: discord.Interaction):
         """
         Performs a full sync of tournaments, matches, and teams from
