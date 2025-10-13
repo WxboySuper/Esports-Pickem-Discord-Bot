@@ -325,6 +325,7 @@ def start_scheduler():
             "interval",
             hours=6,
             id="sync_all_tournaments_job",
+            replace_existing=True,
         )
         scheduler.add_job(
             schedule_live_polling,
@@ -332,6 +333,7 @@ def start_scheduler():
             minutes=1,
             id="schedule_live_polling_job",
             args=[ANNOUNCEMENT_GUILD_ID],
+            replace_existing=True,
         )
         scheduler.start()
         logger.info("Scheduler started.")
