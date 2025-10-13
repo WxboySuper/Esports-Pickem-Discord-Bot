@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from sqlalchemy import delete
-from src.db import get_session
+from src.db import get_async_session
 from src.models import Contest, Match, Pick, Result
 from src.auth import is_admin
 
@@ -17,7 +17,7 @@ class Wipe(commands.Cog):
     )
     @is_admin()
     async def wipe_data(self, interaction: discord.Interaction):
-        async with get_session() as session:
+        async with get_async_session() as session:
             await session.exec(delete(Result))
             await session.exec(delete(Pick))
             await session.exec(delete(Match))

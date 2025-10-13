@@ -132,21 +132,21 @@ async def test_leaderboard_command_empty(
         assert "The leaderboard is empty" in kwargs["embed"].description
 
 
+@pytest.mark.asyncio
 @patch("src.auth.get_admin_ids")
-def test_enter_result_admin_check(mock_get_admin_ids, mock_interaction):
-    """Tests the predicate of the is_admin check on the enter_result
-    command."""
+async def test_enter_result_admin_check(mock_get_admin_ids, mock_interaction):
+    """Tests the predicate of the is_admin check on the enter_result command."""
     # The predicate is the first (and only) check on the command
     predicate = result.enter_result.checks[0]
 
     # Test with admin user
     mock_interaction.user.id = 123
     mock_get_admin_ids.return_value = [123, 456]
-    assert predicate(mock_interaction) is True
+    assert await predicate(mock_interaction) is True
 
     # Test with non-admin user
     mock_interaction.user.id = 789
-    assert predicate(mock_interaction) is False
+    assert await predicate(mock_interaction) is False
 
 
 @pytest.mark.asyncio

@@ -63,7 +63,7 @@ async def upsert_match(
 ) -> Optional[Match]:
     """Creates or updates a match based on leaguepedia_id."""
     # Local import to avoid circular dependency
-    from src.scheduler import schedule_match_reminders
+    from src.scheduler import schedule_reminders
 
     try:
         existing_match = await session.exec(
@@ -92,7 +92,7 @@ async def upsert_match(
 
         # If the match time has changed or it's a new match, schedule reminders
         if time_changed:
-            await schedule_match_reminders(match)
+            await schedule_reminders(match)
 
         return match
     except KeyError as e:

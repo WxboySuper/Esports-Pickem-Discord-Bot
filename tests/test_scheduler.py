@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
 from datetime import datetime, timedelta, timezone
-from src.scheduler import schedule_match_reminders, send_reminder
+from src.scheduler import schedule_reminders, send_reminder
 from src.models import Match, Team
 from contextlib import asynccontextmanager
 
@@ -31,7 +31,7 @@ async def test_schedule_far_future_match():
             contest_id=1,
         )
 
-        await schedule_match_reminders(match)
+        await schedule_reminders(match)
 
         # Check that remove_job was called for both potential old jobs
         mock_scheduler.remove_job.assert_has_calls(
@@ -95,7 +95,7 @@ async def test_schedule_late_30_min_reminder():
             contest_id=1,
         )
 
-        await schedule_match_reminders(match)
+        await schedule_reminders(match)
 
         # Check that add_job was called correctly
         mock_scheduler.add_job.assert_has_calls(
@@ -149,7 +149,7 @@ async def test_schedule_late_5_min_reminder():
             contest_id=1,
         )
 
-        await schedule_match_reminders(match)
+        await schedule_reminders(match)
 
         # Check that only the 5-minute reminder is scheduled immediately
         mock_scheduler.add_job.assert_called_once_with(

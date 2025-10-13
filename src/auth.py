@@ -20,11 +20,10 @@ def get_admin_ids() -> list[int]:
     return admin_ids
 
 
-def is_admin_check(interaction: discord.Interaction) -> bool:
-    """Predicate to check if the user is an admin."""
-    return interaction.user.id in get_admin_ids()
-
-
-def is_admin():
+def is_admin() -> bool:
     """Custom check decorator to verify if the user is an admin."""
-    return app_commands.check(is_admin_check)
+
+    async def predicate(interaction: discord.Interaction) -> bool:
+        return interaction.user.id in get_admin_ids()
+
+    return app_commands.check(predicate)
