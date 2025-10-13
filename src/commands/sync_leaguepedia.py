@@ -8,12 +8,13 @@ import aiohttp
 from datetime import datetime, timezone
 
 from src.auth import is_admin
+from src.config import DATA_PATH
 from src.leaguepedia_client import LeaguepediaClient
 from src.db import get_async_session
 from src.crud import upsert_contest, upsert_match, upsert_team
 
 logger = logging.getLogger(__name__)
-CONFIG_PATH = Path("data/tournaments.json")
+CONFIG_PATH = DATA_PATH / "tournaments.json"
 
 
 def _parse_date(date_str: str | None) -> datetime | None:

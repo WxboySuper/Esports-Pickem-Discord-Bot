@@ -87,6 +87,7 @@ jobs:
             # The env var is populated from secrets in the `env:` block above.
             cat > deployment-package/.env <<EOF
           DATABASE_URL=${DATABASE_URL:-"sqlite:///${PROD_DEPLOY_PATH}/data/prod.db"}
+          DATA_PATH=${PROD_DEPLOY_PATH}/data
           DISCORD_TOKEN=${DISCORD_TOKEN:-}
           DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
           DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}

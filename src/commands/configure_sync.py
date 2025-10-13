@@ -5,8 +5,9 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.auth import is_admin
+from src.config import DATA_PATH
 
-CONFIG_PATH = Path("data/tournaments.json")
+CONFIG_PATH = DATA_PATH / "tournaments.json"
 
 
 class ConfigureSync(commands.Cog):
