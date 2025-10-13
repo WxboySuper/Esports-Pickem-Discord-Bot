@@ -39,7 +39,7 @@ class LeaguepediaClient:
             "action": "cargoquery",
             "tables": "Tournaments",
             "fields": "Name, DateStart, DateEnd, TournamentLevel, IsOfficial",
-            "where": f"Tournaments.Name = '{quote(slug)}'",
+            "where": f"Tournaments.OverviewPage = '{quote(slug)}'",
             "limit": 1,
         }
         response = await self._make_request(params)
@@ -53,12 +53,12 @@ class LeaguepediaClient:
         params = {
             "action": "cargoquery",
             "tables": "ScoreboardGames=SG, Tournaments=T",
-            "join_on": "SG.Tournament=T.Name",
+            "join_on": "SG.OverviewPage=T.OverviewPage",
             "fields": (
                 "SG.MatchId, SG.Team1, SG.Team2, SG.Winner, SG.DateTime_UTC, "
                 "SG.Team1Score, SG.Team2Score, SG.Tournament"
             ),
-            "where": f"T.Name = '{quote(tournament_slug)}'",
+            "where": f"T.OverviewPage = '{quote(tournament_slug)}'",
             "limit": 500,  # Max limit
             "order_by": "SG.DateTime_UTC",
         }
