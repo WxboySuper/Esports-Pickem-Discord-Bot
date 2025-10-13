@@ -193,11 +193,13 @@ async def send_reminder(guild_id: int, match_id: int, minutes: int):
             title=title, description=description, color=color
         )
 
+        thumbnail_url = None
         if team1 and team1.image_url:
-            embed.set_thumbnail(url=team1.image_url)
+            thumbnail_url = team1.image_url
         elif team2 and team2.image_url:
-            # Use team2 image if team1 is missing
-            embed.set_thumbnail(url=team2.image_url)
+            thumbnail_url = team2.image_url
+        if thumbnail_url:
+            embed.set_thumbnail(url=thumbnail_url)
 
         embed.add_field(
             name="Scheduled Time",
