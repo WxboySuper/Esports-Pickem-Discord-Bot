@@ -61,6 +61,8 @@ jobs:
           DEVELOPER_USER_ID: ${{ secrets.DEVELOPER_USER_ID }}
           DEVELOPER_GUILD_ID: ${{ secrets.DEVELOPER_GUILD_ID }}
           LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+          LEAGUEPEDIA_USER: ${{ secrets.LEAGUEPEDIA_USER }}
+          LEAGUEPEDIA_PASS: ${{ secrets.LEAGUEPEDIA_PASS }}
         run: |
           set -euo pipefail
           mkdir -p deployment-package
@@ -95,6 +97,8 @@ jobs:
           DEVELOPER_USER_ID=${DEVELOPER_USER_ID:-}
           DEVELOPER_GUILD_ID=${DEVELOPER_GUILD_ID:-}
           LOG_LEVEL=${LOG_LEVEL:-INFO}
+          LEAGUEPEDIA_USER=${LEAGUEPEDIA_USER:-}
+          LEAGUEPEDIA_PASS=${LEAGUEPEDIA_PASS:-}
           # Add other keys as needed; set them as repository secrets
           EOF
 
