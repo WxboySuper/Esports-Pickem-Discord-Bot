@@ -1,9 +1,10 @@
-import io
 import json
 import logging
+from pathlib import Path
 import discord
 from discord import app_commands
 from discord.ext import commands
+import aiohttp
 from datetime import datetime, timezone
 
 from src.auth import is_admin
@@ -32,13 +33,10 @@ async def _sync_single_tournament(
     slug: str, client: LeaguepediaClient, db_session, summary: dict
 ):
     """Helper to sync data for a single tournament slug."""
-    logger.info("Syncing tournament with slug: '%s'", slug)
     contest_data = await client.get_tournament_by_slug(slug)
     if not contest_data:
-        logger.warning("No contest data found for slug '%s'. Skipping.", slug)
         return
 
-    logger.debug("Contest data for '%s': %s", slug, contest_data)
     contest = await upsert_contest(
         db_session,
         {
@@ -49,35 +47,19 @@ async def _sync_single_tournament(
         },
     )
     if not contest:
-        logger.warning("Failed to upsert contest for slug '%s'.", slug)
         return
 
     summary["contests"] += 1
     await db_session.flush()
 
-    logger.info("Fetching matches for tournament '%s'", slug)
     matches_data = await client.get_matches_for_tournament(slug)
-    logger.info(
-        "Found %d matches for tournament '%s'", len(matches_data), slug
-    )
-
     for match_data in matches_data:
-        logger.debug("Processing match data: %s", match_data)
         for team_name_key in ["Team1", "Team2"]:
             team_name = match_data.get(team_name_key)
             if not team_name:
-                logger.warning(
-                    "Match data is missing '%s'. Skipping team sync.",
-                    team_name_key,
-                )
                 continue
-
-            logger.debug("Fetching team data for: '%s'", team_name)
             team_api_data = await client.get_team(team_name)
             if team_api_data:
-                logger.debug(
-                    "Got team API data for '%s': %s", team_name, team_api_data
-                )
                 team_data = {
                     "leaguepedia_id": team_name,
                     "name": team_api_data.get("Name"),
@@ -86,23 +68,11 @@ async def _sync_single_tournament(
                 }
                 await upsert_team(db_session, team_data)
                 summary["teams"] += 1
-            else:
-                logger.warning(
-                    "No team data found for team name: '%s'", team_name
-                )
-
-        match_id = match_data.get("MatchId")
-        if not match_id:
-            logger.warning(
-                "Match data is missing MatchId. Skipping match sync: %s",
-                match_data,
-            )
-            continue
 
         await upsert_match(
             db_session,
             {
-                "leaguepedia_id": match_id,
+                "leaguepedia_id": match_data.get("MatchId"),
                 "contest_id": contest.id,
                 "team1": match_data.get("Team1"),
                 "team2": match_data.get("Team2"),
@@ -110,7 +80,6 @@ async def _sync_single_tournament(
             },
         )
         summary["matches"] += 1
-    logger.info("Finished processing matches for tournament '%s'", slug)
 
 
 async def perform_leaguepedia_sync() -> dict | None:
@@ -122,10 +91,6 @@ async def perform_leaguepedia_sync() -> dict | None:
     try:
         with open(CONFIG_PATH, "r") as f:
             tournament_slugs = json.load(f)
-        logger.info(
-            "Loaded %d tournament slugs for sync.", len(tournament_slugs)
-        )
-        logger.debug("Tournament slugs: %s", tournament_slugs)
     except FileNotFoundError:
         logger.warning(
             "data/tournaments.json not found. Skipping scheduled sync."
@@ -137,16 +102,14 @@ async def perform_leaguepedia_sync() -> dict | None:
         return None
 
     summary = {"contests": 0, "matches": 0, "teams": 0}
-    client = LeaguepediaClient()
-    try:
+    async with aiohttp.ClientSession() as http_session:
+        client = LeaguepediaClient(http_session)
         async with get_async_session() as db_session:
             for slug in tournament_slugs:
                 await _sync_single_tournament(
                     slug, client, db_session, summary
                 )
             await db_session.commit()
-    finally:
-        await client.close()
 
     logger.info(
         "Leaguepedia sync complete: "
@@ -170,62 +133,29 @@ class SyncLeaguepedia(commands.Cog):
     @is_admin()
     async def sync_leaguepedia(self, interaction: discord.Interaction):
         """
-        Performs a full sync and returns the logs as a file for debugging.
+        Performs a full sync of tournaments, matches, and teams from
+        Leaguepedia based on the configured tournament slugs.
         """
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        # Set up a temporary logger to capture the sync process output
-        log_stream = io.StringIO()
-        root_logger = logging.getLogger()
-        original_level = root_logger.level
-        root_logger.setLevel(logging.DEBUG)  # Capture everything
+        summary = await perform_leaguepedia_sync()
 
-        handler = logging.StreamHandler(log_stream)
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        if summary is None:
+            await interaction.followup.send(
+                "Sync could not be completed. This may be because the "
+                "configuration file was not found or was empty. "
+                "Check logs for more details.",
+                ephemeral=True,
+            )
+            return
+
+        summary_message = (
+            "Leaguepedia sync complete!\n"
+            f"- Upserted {summary['contests']} contests.\n"
+            f"- Upserted {summary['matches']} matches.\n"
+            f"- Upserted {summary['teams']} teams."
         )
-        handler.setFormatter(formatter)
-        root_logger.addHandler(handler)
-
-        try:
-            summary = await perform_leaguepedia_sync()
-
-            # Retrieve the logs
-            log_contents = log_stream.getvalue()
-
-            if summary is None:
-                message = (
-                    "Sync could not be completed. This may be because the "
-                    "configuration file was not found or was empty. "
-                    "See attached logs for more details."
-                )
-            else:
-                message = (
-                    "Leaguepedia sync complete!\n"
-                    f"- Upserted {summary['contests']} contests.\n"
-                    f"- Upserted {summary['matches']} matches.\n"
-                    f"- Upserted {summary['teams']} teams."
-                )
-
-            if log_contents:
-                # Create a file object from the log contents
-                log_file = discord.File(
-                    io.BytesIO(log_contents.encode()),
-                    filename="sync_logs.txt",
-                )
-                await interaction.followup.send(
-                    message, file=log_file, ephemeral=True
-                )
-            else:
-                await interaction.followup.send(
-                    message + "\n_No log output was generated._",
-                    ephemeral=True,
-                )
-        finally:
-            # Clean up the logger
-            root_logger.removeHandler(handler)
-            root_logger.setLevel(original_level)
-            log_stream.close()
+        await interaction.followup.send(summary_message, ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
