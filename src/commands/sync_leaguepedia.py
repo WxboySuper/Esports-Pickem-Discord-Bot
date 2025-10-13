@@ -1,6 +1,5 @@
 import json
 import logging
-from pathlib import Path
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -33,10 +32,13 @@ async def _sync_single_tournament(
     slug: str, client: LeaguepediaClient, db_session, summary: dict
 ):
     """Helper to sync data for a single tournament slug."""
+    logger.info("Syncing tournament with slug: '%s'", slug)
     contest_data = await client.get_tournament_by_slug(slug)
     if not contest_data:
+        logger.warning("No contest data found for slug '%s'. Skipping.", slug)
         return
 
+    logger.debug("Contest data for '%s': %s", slug, contest_data)
     contest = await upsert_contest(
         db_session,
         {
@@ -47,19 +49,35 @@ async def _sync_single_tournament(
         },
     )
     if not contest:
+        logger.warning("Failed to upsert contest for slug '%s'.", slug)
         return
 
     summary["contests"] += 1
     await db_session.flush()
 
+    logger.info("Fetching matches for tournament '%s'", slug)
     matches_data = await client.get_matches_for_tournament(slug)
+    logger.info(
+        "Found %d matches for tournament '%s'", len(matches_data), slug
+    )
+
     for match_data in matches_data:
+        logger.debug("Processing match data: %s", match_data)
         for team_name_key in ["Team1", "Team2"]:
             team_name = match_data.get(team_name_key)
             if not team_name:
+                logger.warning(
+                    "Match data is missing '%s'. Skipping team sync.",
+                    team_name_key,
+                )
                 continue
+
+            logger.debug("Fetching team data for: '%s'", team_name)
             team_api_data = await client.get_team(team_name)
             if team_api_data:
+                logger.debug(
+                    "Got team API data for '%s': %s", team_name, team_api_data
+                )
                 team_data = {
                     "leaguepedia_id": team_name,
                     "name": team_api_data.get("Name"),
@@ -68,11 +86,23 @@ async def _sync_single_tournament(
                 }
                 await upsert_team(db_session, team_data)
                 summary["teams"] += 1
+            else:
+                logger.warning(
+                    "No team data found for team name: '%s'", team_name
+                )
+
+        match_id = match_data.get("MatchId")
+        if not match_id:
+            logger.warning(
+                "Match data is missing MatchId. Skipping match sync: %s",
+                match_data,
+            )
+            continue
 
         await upsert_match(
             db_session,
             {
-                "leaguepedia_id": match_data.get("MatchId"),
+                "leaguepedia_id": match_id,
                 "contest_id": contest.id,
                 "team1": match_data.get("Team1"),
                 "team2": match_data.get("Team2"),
@@ -80,6 +110,7 @@ async def _sync_single_tournament(
             },
         )
         summary["matches"] += 1
+    logger.info("Finished processing matches for tournament '%s'", slug)
 
 
 async def perform_leaguepedia_sync() -> dict | None:
@@ -91,6 +122,10 @@ async def perform_leaguepedia_sync() -> dict | None:
     try:
         with open(CONFIG_PATH, "r") as f:
             tournament_slugs = json.load(f)
+        logger.info(
+            "Loaded %d tournament slugs for sync.", len(tournament_slugs)
+        )
+        logger.debug("Tournament slugs: %s", tournament_slugs)
     except FileNotFoundError:
         logger.warning(
             "data/tournaments.json not found. Skipping scheduled sync."
