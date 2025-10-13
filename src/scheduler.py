@@ -1,5 +1,4 @@
 import logging
-import aiohttp
 import discord
 from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -8,7 +7,7 @@ from apscheduler.jobstores.base import JobLookupError
 from sqlmodel import select
 from src.db import get_async_session
 from src.models import Match, Result, Pick, Team
-from src.leaguepedia_client import LeaguepediaClient
+from src.leaguepedia_client import leaguepedia_client
 from src.announcements import send_announcement
 from src.config import ANNOUNCEMENT_GUILD_ID
 from src.db import DATABASE_URL
@@ -136,36 +135,36 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             return
 
         # Poll the API for results
-        async with aiohttp.ClientSession() as http_session:
-            client = LeaguepediaClient(http_session)
-            result_data = await client.get_match_by_id(match.leaguepedia_id)
-            winner = result_data.get("Winner")
+        result_data = await leaguepedia_client.get_match_result(
+            match.leaguepedia_id
+        )
 
-            if winner:
-                logger.info(
-                    "Result found for match %s: Winner is %s. Unscheduling.",
-                    match.id,
-                    winner,
-                )
-                result = Result(
-                    match_id=match.id,
-                    winner=winner,
-                    score=(
-                        f"{result_data.get('Team1Score')} - "
-                        f"{result_data.get('Team2Score')}"
-                    ),
-                )
-                session.add(result)
-                await session.commit()
-                await send_result_notification(guild_id, match, result)
+        if result_data and result_data.get("Winner"):
+            winner = result_data["Winner"]
+            logger.info(
+                "Result found for match %s: Winner is %s. Unscheduling.",
+                match.id,
+                winner,
+            )
+            result = Result(
+                match_id=match.id,
+                winner=winner,
+                score=(
+                    f"{result_data.get('Team1Score', 'N/A')} - "
+                    f"{result_data.get('Team2Score', 'N/A')}"
+                ),
+            )
+            session.add(result)
+            await session.commit()
+            await send_result_notification(guild_id, match, result)
 
-                try:
-                    scheduler.remove_job(job_id)
-                except JobLookupError:
-                    logger.warning(
-                        "Could not find job '%s' to remove after completion.",
-                        job_id,
-                    )
+            try:
+                scheduler.remove_job(job_id)
+            except JobLookupError:
+                logger.warning(
+                    "Could not find job '%s' to remove after completion.",
+                    job_id,
+                )
 
 
 async def send_reminder(guild_id: int, match_id: int, minutes: int):

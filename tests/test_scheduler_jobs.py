@@ -42,52 +42,67 @@ async def test_perform_leaguepedia_sync_is_picklable(jobstore):
 
 
 @pytest.mark.asyncio
-@patch("src.commands.sync_leaguepedia.aiohttp.ClientSession")
 @patch("src.commands.sync_leaguepedia.get_async_session")
 @patch(
     "src.commands.sync_leaguepedia.open",
-    mock_open(read_data='["LCS 2024 Summer", "LEC 2024 Summer"]'),
+    mock_open(read_data='["Worlds 2025"]'),
 )
+@patch("src.leaguepedia_client.leaguepedia_client.fetch_upcoming_matches")
 async def test_perform_leaguepedia_sync_logic(
-    mock_get_session, mock_client_session
+    mock_fetch_matches, mock_get_session
 ):
     """
-    Tests the core logic of the sync function, ensuring it calls the
-    correct client methods and database operations.
+    Tests the core logic of the sync function with the new cargo query,
+    ensuring it calls the correct client methods and database operations.
     """
     # Arrange
     mock_db_session = AsyncMock()
     mock_get_session.return_value.__aenter__.return_value = mock_db_session
 
-    # Configure the mock for session.exec(...) to return a result object
-    # whose .first() method returns a non-async Mock or None.
-    result_mock = Mock()
-    result_mock.first.return_value = None  # Simulate contest not found
-    mock_db_session.exec.return_value = result_mock
-
-    mock_http_session = AsyncMock()
-    mock_client_session.return_value.__aenter__.return_value = (
-        mock_http_session
+    # Mock the DB calls to simulate a new contest and teams
+    mock_contest = Mock()
+    mock_contest.id = 1
+    mock_db_session.exec.return_value.first.return_value = (
+        None  # No existing contest
     )
 
-    mock_leaguepedia_client = AsyncMock()
-    # Mock the return values of the client methods
-    mock_leaguepedia_client.get_tournament_by_slug.return_value = {
-        "Name": "LCS 2024 Summer",
-        "DateStart": "2024-06-15",
-        "DateEnd": "2024-09-01",
-    }
-    mock_leaguepedia_client.get_matches_for_tournament.return_value = []
-    # Patch the client instantiation to return our mock
     with patch(
-        "src.commands.sync_leaguepedia.LeaguepediaClient",
-        return_value=mock_leaguepedia_client,
-    ):
+        "src.commands.sync_leaguepedia.upsert_contest",
+        return_value=mock_contest,
+    ) as mock_upsert_contest, patch(
+        "src.commands.sync_leaguepedia.upsert_team", new_callable=AsyncMock
+    ) as mock_upsert_team, patch(
+        "src.commands.sync_leaguepedia.upsert_match", new_callable=AsyncMock
+    ) as mock_upsert_match:
+
+        # Mock the API response
+        mock_fetch_matches.return_value = [
+            {
+                "Name": "Worlds 2025",
+                "OverviewPage": "Worlds_2025",
+                "DateTime_UTC": "2025-10-13T18:00:00Z",
+                "Team1": "Team A",
+                "Team2": "Team B",
+                "MatchId": "12345",
+            }
+        ]
+
         # Act
         summary = await perform_leaguepedia_sync()
 
-    # Assert
-    assert summary is not None
-    assert summary["contests"] > 0
-    mock_db_session.commit.assert_awaited_once()
-    assert mock_leaguepedia_client.get_tournament_by_slug.call_count == 2
+        # Assert
+        assert summary is not None
+        mock_fetch_matches.assert_awaited_once_with("Worlds 2025")
+
+        # Verify that upsert functions were called with correct data
+        mock_upsert_contest.assert_awaited_once_with(
+            mock_db_session,
+            {"leaguepedia_id": "Worlds_2025", "name": "Worlds 2025"},
+        )
+        assert mock_upsert_team.call_count == 2
+        mock_upsert_match.assert_awaited_once()
+
+        assert summary["contests"] == 1
+        assert summary["matches"] == 1
+        assert summary["teams"] == 2
+        mock_db_session.commit.assert_awaited_once()

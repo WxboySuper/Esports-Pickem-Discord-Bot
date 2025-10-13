@@ -17,6 +17,7 @@ from discord.ext import commands
 from dotenv import load_dotenv, find_dotenv
 from src.scheduler import start_scheduler
 from src.bot_instance import set_bot_instance
+from src.leaguepedia_client import leaguepedia_client
 import aiohttp
 
 load_dotenv(find_dotenv())
@@ -58,6 +59,7 @@ class EsportsBot(commands.Bot):
     async def setup_hook(self):
         self.session = aiohttp.ClientSession()
         set_bot_instance(self)
+        await leaguepedia_client.login()
         start_scheduler()
         commands_pkg = self._resolve_commands_package()
         if commands_pkg is not None:
