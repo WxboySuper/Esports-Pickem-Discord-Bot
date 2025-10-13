@@ -3,6 +3,7 @@ from typing import List, Optional
 from sqlmodel import Session, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from src.models import User, Contest, Match, Pick, Result, Team
+from src.scheduler import schedule_match_reminders
 from datetime import datetime, timezone
 
 
@@ -61,7 +62,10 @@ async def upsert_contest(
 async def upsert_match(
     session: AsyncSession, match_data: dict
 ) -> Optional[Match]:
-    """Creates or updates a match based on leaguepedia_id."""
+    """
+    Creates or updates a match based on leaguepedia_id.
+    Schedules reminders for the match after upserting.
+    """
     try:
         existing_match = await session.exec(
             select(Match).where(
@@ -78,6 +82,9 @@ async def upsert_match(
             match = Match(**match_data)
 
         session.add(match)
+        await session.flush()  # Flush to ensure the match object has an ID
+        schedule_match_reminders(match)
+
         return match
     except KeyError as e:
         logging.error(f"Missing key in match_data: {e}")

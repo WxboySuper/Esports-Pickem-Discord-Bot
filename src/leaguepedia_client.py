@@ -65,6 +65,19 @@ class LeaguepediaClient:
         response = await self._make_request(params)
         return [item["title"] for item in response.get("cargoquery", [])]
 
+    async def get_match_by_id(self, match_id: str) -> dict:
+        """Fetches a single match's data by its Leaguepedia MatchId."""
+        params = {
+            "action": "cargoquery",
+            "tables": "ScoreboardGames=SG",
+            "fields": "SG.Winner, SG.Team1Score, SG.Team2Score",
+            "where": f"SG.MatchId = '{quote(match_id)}'",
+            "limit": 1,
+        }
+        response = await self._make_request(params)
+        items = response.get("cargoquery", [])
+        return items[0]["title"] if items else {}
+
     async def get_team(self, team_name: str) -> dict:
         """Fetches data for a single team by its name."""
         params = {

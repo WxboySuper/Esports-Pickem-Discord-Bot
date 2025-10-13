@@ -15,7 +15,13 @@ import inspect
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv, find_dotenv
-from src.scheduler import start_scheduler
+
+from src.scheduler import (
+    scheduler,
+    schedule_live_polling,
+)
+from src.commands.sync_leaguepedia import perform_leaguepedia_sync
+from src.config import ANNOUNCEMENT_GUILD_ID
 from src.bot_instance import set_bot_instance
 import aiohttp
 
@@ -57,7 +63,24 @@ class EsportsBot(commands.Bot):
     async def setup_hook(self):
         self.session = aiohttp.ClientSession()
         set_bot_instance(self)
-        start_scheduler()
+
+        # Schedule persistent jobs
+        if not scheduler.running:
+            scheduler.add_job(
+                perform_leaguepedia_sync,
+                "interval",
+                hours=6,
+                id="sync_all_tournaments_job",
+            )
+            scheduler.add_job(
+                schedule_live_polling,
+                "interval",
+                minutes=1,
+                args=[ANNOUNCEMENT_GUILD_ID],
+            )
+            scheduler.start()
+            logger.info("Scheduler started with persistent jobs.")
+
         commands_pkg = self._resolve_commands_package()
         if commands_pkg is not None:
             await self._load_command_modules(commands_pkg)
