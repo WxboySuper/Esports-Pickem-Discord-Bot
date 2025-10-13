@@ -68,7 +68,7 @@ async def _sync_single_tournament(
     for overview_page, contest_matches in contests.items():
         # Determine start and end dates from all matches for the contest
         match_times = [
-            _parse_date(m.get("DateTime_UTC")) for m in contest_matches
+            _parse_date(m.get("DateTime UTC")) for m in contest_matches
         ]
         valid_times = [t for t in match_times if t is not None]
 
@@ -134,7 +134,7 @@ async def _sync_single_tournament(
                     "team1": match_data.get("Team1"),
                     "team2": match_data.get("Team2"),
                     "scheduled_time": _parse_date(
-                        match_data.get("DateTime_UTC")
+                        match_data.get("DateTime UTC")
                     ),
                 },
             )
