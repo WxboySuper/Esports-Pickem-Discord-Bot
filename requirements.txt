@@ -6,4 +6,5 @@ apscheduler
 aiohttp
 aiosqlite
 tenacity
+mwcleric @ git+https://github.com/arbolitoloco1/mwcleric@cargo_ratelimit_fix
 mwrogue==0.1.5
