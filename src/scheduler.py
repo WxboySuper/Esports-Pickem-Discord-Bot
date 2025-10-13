@@ -195,7 +195,7 @@ async def schedule_live_polling(guild_id: int):
         statement = select(Match).where(
             Match.scheduled_time >= now,
             Match.scheduled_time < one_minute_from_now,
-            Match.result == None,  # noqa: E711
+            Match.result.is_(None),
         )
         result = await session.exec(statement)
         matches_starting_soon = result.all()
