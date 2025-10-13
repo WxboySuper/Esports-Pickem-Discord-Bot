@@ -21,7 +21,7 @@ jobstores = {"default": SQLAlchemyJobStore(url=DATABASE_URL)}
 scheduler = AsyncIOScheduler(jobstores=jobstores)
 
 
-async def schedule_match_reminders(match: Match):
+async def schedule_reminders(match: Match):
     """
     Schedules 30-minute and 5-minute reminders for a given match.
     Cancels any existing reminders for the match before scheduling new ones.
@@ -296,7 +296,7 @@ async def schedule_live_polling(guild_id: int):
         statement = select(Match).where(
             Match.scheduled_time >= now,
             Match.scheduled_time < one_minute_from_now,
-            Match.result.is_(None),
+            Match.result == None,  # noqa: E711
         )
         matches_starting_soon = (await session.exec(statement)).all()
 
