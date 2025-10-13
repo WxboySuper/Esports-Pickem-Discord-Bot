@@ -62,6 +62,9 @@ async def upsert_match(
     session: AsyncSession, match_data: dict
 ) -> Optional[Match]:
     """Creates or updates a match based on leaguepedia_id."""
+    # Local import to avoid circular dependency
+    from src.scheduler import schedule_match_reminders
+
     try:
         existing_match = await session.exec(
             select(Match).where(
@@ -71,13 +74,26 @@ async def upsert_match(
         match = existing_match.first()
 
         if match:
+            # Update existing match
             match.team1 = match_data["team1"]
             match.team2 = match_data["team2"]
-            match.scheduled_time = match_data["scheduled_time"]
+            original_time = match.scheduled_time
+            new_time = match_data["scheduled_time"]
+            match.scheduled_time = new_time
+            time_changed = original_time != new_time
         else:
+            # Create new match
             match = Match(**match_data)
+            time_changed = True  # It's a new match, so schedule it
 
         session.add(match)
+        await session.flush()  # Flush to get the match.id if it's new
+        await session.refresh(match)
+
+        # If the match time has changed or it's a new match, schedule reminders
+        if time_changed:
+            await schedule_match_reminders(match)
+
         return match
     except KeyError as e:
         logging.error(f"Missing key in match_data: {e}")
