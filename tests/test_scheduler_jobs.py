@@ -81,7 +81,7 @@ async def test_perform_leaguepedia_sync_logic(
             {
                 "Name": "Worlds 2025",
                 "OverviewPage": "Worlds_2025",
-                "DateTime_UTC": "2025-10-13T18:00:00Z",
+                "DateTime UTC": "2025-10-13T18:00:00Z",
                 "Team1": "Team A",
                 "Team2": "Team B",
                 "MatchId": "12345",
