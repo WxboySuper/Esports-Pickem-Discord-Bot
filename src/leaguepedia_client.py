@@ -3,42 +3,47 @@ import logging
 from tenacity import retry, stop_after_attempt, wait_exponential
 from urllib.parse import quote
 
+from src.config import LEAGUEPEDIA_USER, LEAGUEPEDIA_PASS
+
 logger = logging.getLogger(__name__)
 
 
 class LeaguepediaClient:
     """
     An asynchronous client for interacting with the Leaguepedia (Fandom) API.
+    Handles authentication and session management.
     """
 
     BASE_URL = "https://lol.fandom.com/api.php"
 
-    def __init__(self, session: aiohttp.ClientSession):
-        self.session = session
+    def __init__(self):
+        self.session = aiohttp.ClientSession()
+        self._is_logged_in = False
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
     )
     async def _make_request(self, params: dict) -> dict:
-        """Makes a request to the Leaguepedia API with retry logic."""
+        """
+        Makes a request to the Leaguepedia API, handling login and retries.
+        """
+        if not self._is_logged_in:
+            await self._login()
+
         # Default parameters for all requests
         default_params = {
             "action": "query",
             "format": "json",
-            "origin": "*",  # Required for unauthenticated requests
         }
         all_params = {**default_params, **params}
 
         logger.debug(
             "Making Leaguepedia API request with params: %s", all_params
         )
-
-        async with self.session.get(
-            self.BASE_URL, params=all_params
-        ) as response:
-            response.raise_for_status()
-            return await response.json()
+        response = await self.session.post(self.BASE_URL, data=all_params)
+        response.raise_for_status()
+        return await response.json()
 
     async def get_tournament_by_slug(self, slug: str) -> dict:
         """Fetches a single tournament's data by its page name."""
@@ -52,6 +57,63 @@ class LeaguepediaClient:
         response = await self._make_request(params)
         items = response.get("cargoquery", [])
         return items[0]["title"] if items else {}
+
+    async def _login(self):
+        """Logs the client in to the wiki to allow authenticated queries."""
+        if not LEAGUEPEDIA_USER or not LEAGUEPEDIA_PASS:
+            logger.warning(
+                "Leaguepedia credentials not set. Proceeding anonymously. "
+                "API calls may fail."
+            )
+            return
+
+        # Step 1: Get login token
+        token_response = await self.session.post(
+            self.BASE_URL,
+            params={
+                "action": "query",
+                "meta": "tokens",
+                "type": "login",
+                "format": "json",
+            },
+        ).json()
+
+        login_token = (
+            token_response.get("query", {}).get("tokens", {}).get("logintoken")
+        )
+        if not login_token:
+            logger.error("Failed to retrieve Leaguepedia login token.")
+            return
+
+        # Step 2: Log in with username, password, and token
+        login_response = await self.session.post(
+            self.BASE_URL,
+            data={
+                "action": "login",
+                "lgname": LEAGUEPEDIA_USER,
+                "lgpassword": LEAGUEPEDIA_PASS,
+                "lgtoken": login_token,
+                "format": "json",
+            },
+        ).json()
+
+        result = login_response.get("login", {}).get("result")
+        if result == "Success":
+            logger.info(
+                "Successfully logged in to Leaguepedia as %s.",
+                LEAGUEPEDIA_USER,
+            )
+            self._is_logged_in = True
+        else:
+            logger.error(
+                "Failed to log in to Leaguepedia. Reason: %s",
+                result,
+            )
+
+    async def close(self):
+        """Closes the aiohttp session."""
+        if self.session and not self.session.closed:
+            await self.session.close()
 
     async def search_tournaments_by_name(
         self, name_query: str, limit: int = 10

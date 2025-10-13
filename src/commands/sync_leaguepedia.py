@@ -4,7 +4,6 @@ import logging
 import discord
 from discord import app_commands
 from discord.ext import commands
-import aiohttp
 from datetime import datetime, timezone
 
 from src.auth import is_admin
@@ -138,14 +137,16 @@ async def perform_leaguepedia_sync() -> dict | None:
         return None
 
     summary = {"contests": 0, "matches": 0, "teams": 0}
-    async with aiohttp.ClientSession() as http_session:
-        client = LeaguepediaClient(http_session)
+    client = LeaguepediaClient()
+    try:
         async with get_async_session() as db_session:
             for slug in tournament_slugs:
                 await _sync_single_tournament(
                     slug, client, db_session, summary
                 )
             await db_session.commit()
+    finally:
+        await client.close()
 
     logger.info(
         "Leaguepedia sync complete: "
