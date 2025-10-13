@@ -33,15 +33,28 @@ class LeaguepediaClient:
         try:
             logger.info("Attempting to log in to Leaguepedia...")
             credentials = AuthCredentials(username=username, password=password)
+
+            # Add the required user_agent attribute
+            credentials.user_agent = "EsportsPickemBot/1.0"
+
             self.client = EsportsClient(
                 wiki="lol",
                 credentials=credentials,
             )
-            # Test the login by making a simple, authenticated-only query
-            self.client.cargo_client.query(
-                tables="Tournaments", fields="Name", limit="1"
-            )
-            logger.info("Successfully logged in to Leaguepedia.")
+
+            # Verify authentication with a meta=userinfo query
+            user_info_response = self.client.client.api('query', meta='userinfo')
+            user_data = user_info_response.get('query', {}).get('userinfo', {})
+            user_id = user_data.get('id')
+
+            if user_id is None or user_id == 0:
+                logger.error("Leaguepedia authentication failed. Check credentials.")
+                # Fallback to an unauthenticated client
+                self.client = EsportsClient(wiki="lol")
+                return
+
+            username = user_data.get('name')
+            logger.info(f"Successfully logged in to Leaguepedia as '{username}'.")
         except Exception as e:
             logger.error(f"Failed to log in to Leaguepedia: {e}")
             logger.warning("Falling back to unauthenticated client.")
