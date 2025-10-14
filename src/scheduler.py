@@ -114,28 +114,33 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             try:
                 scheduler.remove_job(job_id)
             except JobLookupError:
-                pass
+                logger.debug("Job %s was already removed.", job_id)
             return
 
         now = datetime.now(timezone.utc)
         if now > match.scheduled_time + timedelta(hours=12):
             logger.warning(
-                "Job '%s' for match %s timed out. Unscheduling.",
+                "Job '%s' for match %s timed out after 12 hours. "
+                "Unscheduling.",
                 job_id,
                 match.id,
             )
             try:
                 scheduler.remove_job(job_id)
             except JobLookupError:
-                pass
+                logger.debug("Job %s was already removed.", job_id)
             return
 
+        logger.debug(f"Fetching scoreboard data for match {match.id}")
         scoreboard_data = await leaguepedia_client.get_scoreboard_data(
             match.contest.leaguepedia_id
         )
 
         if not scoreboard_data:
-            logger.info("No scoreboard data for match %s.", match.id)
+            logger.info(
+                "No scoreboard data found for match %s. Will retry.",
+                match.id,
+            )
             return
 
         team1_score = 0
@@ -146,7 +151,6 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             elif game.get("Winner") == "2":
                 team2_score += 1
 
-        # Check if the series is over
         games_to_win = (match.best_of // 2) + 1
         winner = None
         if team1_score >= games_to_win:
@@ -155,6 +159,11 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             winner = match.team2
 
         current_score_str = f"{team1_score}-{team2_score}"
+        logger.debug(
+            f"Match {match.id} score: {current_score_str}. "
+            f"Last announced: {match.last_announced_score}"
+        )
+
         if winner:
             logger.info(
                 "Series winner found for match %s: %s. Final Score: %s",
@@ -169,12 +178,15 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             )
             session.add(result)
             await session.commit()
+            logger.info(f"Saved result for match {match.id}.")
             await send_result_notification(guild_id, match, result)
 
+            logger.info(f"Unscheduling job '{job_id}' for completed match.")
             try:
                 scheduler.remove_job(job_id)
             except JobLookupError:
-                pass
+                logger.debug("Job %s was already removed.", job_id)
+
         elif match.last_announced_score != current_score_str:
             logger.info(
                 "New score for match %s: %s. Announcing update.",
@@ -184,13 +196,14 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             match.last_announced_score = current_score_str
             session.add(match)
             await session.commit()
-            await send_mid_series_update(
-                guild_id, match, current_score_str
-            )
+            await send_mid_series_update(guild_id, match, current_score_str)
+        else:
+            logger.debug(f"No change in score for match {match.id}.")
 
 
 async def send_reminder(guild_id: int, match_id: int, minutes: int):
     """Sends a rich, informative embed as a match reminder."""
+    logger.info(f"Sending {minutes}-minute reminder for match {match_id}")
     bot = get_bot_instance()
     guild = bot.get_guild(guild_id)
     if not guild:
@@ -203,6 +216,7 @@ async def send_reminder(guild_id: int, match_id: int, minutes: int):
             logger.error("Match %s not found for reminder.", match_id)
             return
 
+        logger.debug(f"Fetching team data for match {match_id}")
         team1_stmt = select(Team).where(Team.name == match.team1)
         team2_stmt = select(Team).where(Team.name == match.team2)
         team1 = (await session.exec(team1_stmt)).first()
@@ -245,12 +259,14 @@ async def send_reminder(guild_id: int, match_id: int, minutes: int):
         )
 
         await send_announcement(guild, embed)
+        logger.info(f"Sent {minutes}-minute reminder for match {match_id}")
 
 
 async def send_result_notification(
     guild_id: int, match: Match, result: Result
 ):
     """Sends a rich, detailed embed with match results."""
+    logger.info(f"Sending result notification for match {match.id}")
     bot = get_bot_instance()
     guild = bot.get_guild(guild_id)
     if not guild:
@@ -258,6 +274,7 @@ async def send_result_notification(
         return
 
     async with get_async_session() as session:
+        logger.debug(f"Fetching teams and picks for match {match.id}")
         team1_stmt = select(Team).where(Team.name == match.team1)
         team2_stmt = select(Team).where(Team.name == match.team2)
         team1 = (await session.exec(team1_stmt)).first()
@@ -303,18 +320,18 @@ async def send_result_notification(
         embed.timestamp = datetime.now(timezone.utc)
 
         await send_announcement(guild, embed)
+        logger.info(f"Sent result notification for match {match.id}")
 
 
-async def send_mid_series_update(
-    guild_id: int, match: Match, score: str
-):
+async def send_mid_series_update(guild_id: int, match: Match, score: str):
     """Sends a Discord embed with a mid-series score update."""
+    logger.info(
+        f"Sending mid-series update for match {match.id}: score {score}"
+    )
     bot = get_bot_instance()
     guild = bot.get_guild(guild_id)
     if not guild:
-        logger.error(
-            "Guild %s not found for mid-series update.", guild_id
-        )
+        logger.error("Guild %s not found for mid-series update.", guild_id)
         return
 
     title = f"Live Update: {match.team1} vs {match.team2}"
@@ -328,6 +345,7 @@ async def send_mid_series_update(
     embed.timestamp = datetime.now(timezone.utc)
 
     await send_announcement(guild, embed)
+    logger.info(f"Sent mid-series update for match {match.id}")
 
 
 async def schedule_live_polling(guild_id: int):
@@ -335,6 +353,7 @@ async def schedule_live_polling(guild_id: int):
     Checks for matches starting soon and schedules a dedicated polling job
     for each one.
     """
+    logger.debug("Running schedule_live_polling job...")
     async with get_async_session() as session:
         now = datetime.now(timezone.utc)
         one_minute_from_now = now + timedelta(minutes=1)
@@ -346,13 +365,22 @@ async def schedule_live_polling(guild_id: int):
         )
         matches_starting_soon = (await session.exec(statement)).all()
 
+        if not matches_starting_soon:
+            logger.debug("No matches starting in the next minute.")
+            return
+
+        logger.info(
+            f"Found {len(matches_starting_soon)} matches starting soon."
+        )
         for match in matches_starting_soon:
             job_id = f"poll_match_{match.id}"
             if not scheduler.get_job(job_id):
+                log_msg = (
+                    "Match %s (%s vs %s) is starting soon. "
+                    "Scheduling job '%s'."
+                )
                 logger.info(
-                    "Match %s is starting soon. Scheduling job '%s'.",
-                    match.id,
-                    job_id,
+                    log_msg, match.id, match.team1, match.team2, job_id
                 )
                 scheduler.add_job(
                     poll_live_match_job,
@@ -361,6 +389,13 @@ async def schedule_live_polling(guild_id: int):
                     id=job_id,
                     args=[match.id, guild_id],
                     misfire_grace_time=60,
+                    replace_existing=True,
+                )
+            else:
+                logger.debug(
+                    "Job '%s' for match %s already exists. Skipping.",
+                    job_id,
+                    match.id,
                 )
 
 
@@ -369,6 +404,7 @@ def start_scheduler():
     from src.commands.sync_leaguepedia import perform_leaguepedia_sync
 
     if not scheduler.running:
+        logger.info("Scheduler not running. Starting jobs...")
         scheduler.add_job(
             perform_leaguepedia_sync,
             "interval",
@@ -376,6 +412,8 @@ def start_scheduler():
             id="sync_all_tournaments_job",
             replace_existing=True,
         )
+        logger.info("Added 'sync_all_tournaments_job' to scheduler.")
+
         scheduler.add_job(
             schedule_live_polling,
             "interval",
@@ -384,5 +422,9 @@ def start_scheduler():
             args=[ANNOUNCEMENT_GUILD_ID],
             replace_existing=True,
         )
+        logger.info("Added 'schedule_live_polling_job' to scheduler.")
+
         scheduler.start()
         logger.info("Scheduler started.")
+    else:
+        logger.info("Scheduler is already running.")

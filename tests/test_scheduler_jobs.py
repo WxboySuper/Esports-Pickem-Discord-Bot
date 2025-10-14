@@ -43,7 +43,9 @@ async def test_perform_leaguepedia_sync_is_picklable(jobstore):
 
 
 @pytest.mark.asyncio
-@patch("src.commands.sync_leaguepedia.schedule_reminders", new_callable=AsyncMock)
+@patch(
+    "src.commands.sync_leaguepedia.schedule_reminders", new_callable=AsyncMock
+)
 @patch("src.commands.sync_leaguepedia.get_async_session")
 @patch(
     "src.commands.sync_leaguepedia.open",
@@ -68,8 +70,9 @@ async def test_perform_leaguepedia_sync_logic(
         None  # No existing contest
     )
 
-    # Mock the return value for upsert_match to be a tuple (match, time_changed)
     mock_match = Mock()
+    # Mock the return value for upsert_match to be a tuple
+    # (match, time_changed)
     mock_upsert_match_return_value = (mock_match, True)
 
     with patch(
@@ -102,7 +105,9 @@ async def test_perform_leaguepedia_sync_logic(
         mock_fetch_matches.assert_awaited_once_with("Worlds 2025")
 
         # Verify that upsert functions were called with correct data
-        expected_start_date = datetime(2025, 10, 13, 18, 0, tzinfo=timezone.utc)
+        expected_start_date = datetime(
+            2025, 10, 13, 18, 0, tzinfo=timezone.utc
+        )
         expected_end_date = datetime(2025, 10, 13, 18, 0, tzinfo=timezone.utc)
         mock_upsert_contest.assert_awaited_once_with(
             mock_db_session,

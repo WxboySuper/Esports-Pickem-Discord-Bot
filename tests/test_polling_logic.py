@@ -9,7 +9,8 @@ from src.scheduler import poll_live_match_job
 @pytest.mark.asyncio
 async def test_poll_live_match_job_mid_series_update():
     """
-    Tests that a mid-series update is correctly announced when the score changes.
+    Tests that a mid-series update is correctly announced when the score
+    changes.
     """
     # Arrange
     mock_match = Match(
@@ -24,21 +25,36 @@ async def test_poll_live_match_job_mid_series_update():
     mock_scoreboard_data = [{"Winner": "1"}]
     mock_session = AsyncMock()
 
-    with patch("src.scheduler.get_async_session") as mock_get_async_session, \
-         patch("src.scheduler.crud.get_match_with_result_by_id", new_callable=AsyncMock, return_value=mock_match) as mock_get_match, \
-         patch("src.scheduler.leaguepedia_client.get_scoreboard_data", new_callable=AsyncMock, return_value=mock_scoreboard_data) as mock_get_scoreboard, \
-         patch("src.scheduler.send_mid_series_update", new_callable=AsyncMock) as mock_send_update, \
-         patch("src.scheduler.send_result_notification", new_callable=AsyncMock) as mock_send_result, \
-         patch("src.scheduler.scheduler.remove_job") as mock_remove_job:
+    with patch(
+        "src.scheduler.get_async_session"
+    ) as mock_get_async_session, patch(
+        "src.scheduler.crud.get_match_with_result_by_id",
+        new_callable=AsyncMock,
+        return_value=mock_match,
+    ) as mock_get_match, patch(
+        "src.scheduler.leaguepedia_client.get_scoreboard_data",
+        new_callable=AsyncMock,
+        return_value=mock_scoreboard_data,
+    ) as mock_get_scoreboard, patch(
+        "src.scheduler.send_mid_series_update", new_callable=AsyncMock
+    ) as mock_send_update, patch(
+        "src.scheduler.send_result_notification", new_callable=AsyncMock
+    ) as mock_send_result, patch(
+        "src.scheduler.scheduler.remove_job"
+    ) as mock_remove_job:
 
-        mock_get_async_session.return_value.__aenter__.return_value = mock_session
+        mock_get_async_session.return_value.__aenter__.return_value = (
+            mock_session
+        )
 
         # Act
         await poll_live_match_job(match_db_id=1, guild_id=123)
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 1)
-        mock_get_scoreboard.assert_awaited_once_with("LPL/2025_Season/Spring_Season")
+        mock_get_scoreboard.assert_awaited_once_with(
+            "LPL/2025_Season/Spring_Season"
+        )
         mock_send_update.assert_awaited_once()
         mock_send_result.assert_not_called()
         mock_remove_job.assert_not_called()
@@ -65,21 +81,36 @@ async def test_poll_live_match_job_final_result():
     mock_scoreboard_data = [{"Winner": "1"}, {"Winner": "1"}]
     mock_session = AsyncMock()
 
-    with patch("src.scheduler.get_async_session") as mock_get_async_session, \
-         patch("src.scheduler.crud.get_match_with_result_by_id", new_callable=AsyncMock, return_value=mock_match) as mock_get_match, \
-         patch("src.scheduler.leaguepedia_client.get_scoreboard_data", new_callable=AsyncMock, return_value=mock_scoreboard_data) as mock_get_scoreboard, \
-         patch("src.scheduler.send_mid_series_update", new_callable=AsyncMock) as mock_send_update, \
-         patch("src.scheduler.send_result_notification", new_callable=AsyncMock) as mock_send_result, \
-         patch("src.scheduler.scheduler.remove_job") as mock_remove_job:
+    with patch(
+        "src.scheduler.get_async_session"
+    ) as mock_get_async_session, patch(
+        "src.scheduler.crud.get_match_with_result_by_id",
+        new_callable=AsyncMock,
+        return_value=mock_match,
+    ) as mock_get_match, patch(
+        "src.scheduler.leaguepedia_client.get_scoreboard_data",
+        new_callable=AsyncMock,
+        return_value=mock_scoreboard_data,
+    ) as mock_get_scoreboard, patch(
+        "src.scheduler.send_mid_series_update", new_callable=AsyncMock
+    ) as mock_send_update, patch(
+        "src.scheduler.send_result_notification", new_callable=AsyncMock
+    ) as mock_send_result, patch(
+        "src.scheduler.scheduler.remove_job"
+    ) as mock_remove_job:
 
-        mock_get_async_session.return_value.__aenter__.return_value = mock_session
+        mock_get_async_session.return_value.__aenter__.return_value = (
+            mock_session
+        )
 
         # Act
         await poll_live_match_job(match_db_id=2, guild_id=123)
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 2)
-        mock_get_scoreboard.assert_awaited_once_with("LPL/2025_Season/Spring_Season")
+        mock_get_scoreboard.assert_awaited_once_with(
+            "LPL/2025_Season/Spring_Season"
+        )
         mock_send_update.assert_not_called()
         mock_send_result.assert_awaited_once()
         mock_remove_job.assert_called_once()
@@ -107,21 +138,36 @@ async def test_poll_live_match_job_no_score_change():
     mock_scoreboard_data = [{"Winner": "1"}]
     mock_session = AsyncMock()
 
-    with patch("src.scheduler.get_async_session") as mock_get_async_session, \
-         patch("src.scheduler.crud.get_match_with_result_by_id", new_callable=AsyncMock, return_value=mock_match) as mock_get_match, \
-         patch("src.scheduler.leaguepedia_client.get_scoreboard_data", new_callable=AsyncMock, return_value=mock_scoreboard_data) as mock_get_scoreboard, \
-         patch("src.scheduler.send_mid_series_update", new_callable=AsyncMock) as mock_send_update, \
-         patch("src.scheduler.send_result_notification", new_callable=AsyncMock) as mock_send_result, \
-         patch("src.scheduler.scheduler.remove_job") as mock_remove_job:
+    with patch(
+        "src.scheduler.get_async_session"
+    ) as mock_get_async_session, patch(
+        "src.scheduler.crud.get_match_with_result_by_id",
+        new_callable=AsyncMock,
+        return_value=mock_match,
+    ) as mock_get_match, patch(
+        "src.scheduler.leaguepedia_client.get_scoreboard_data",
+        new_callable=AsyncMock,
+        return_value=mock_scoreboard_data,
+    ) as mock_get_scoreboard, patch(
+        "src.scheduler.send_mid_series_update", new_callable=AsyncMock
+    ) as mock_send_update, patch(
+        "src.scheduler.send_result_notification", new_callable=AsyncMock
+    ) as mock_send_result, patch(
+        "src.scheduler.scheduler.remove_job"
+    ) as mock_remove_job:
 
-        mock_get_async_session.return_value.__aenter__.return_value = mock_session
+        mock_get_async_session.return_value.__aenter__.return_value = (
+            mock_session
+        )
 
         # Act
         await poll_live_match_job(match_db_id=3, guild_id=123)
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 3)
-        mock_get_scoreboard.assert_awaited_once_with("LPL/2025_Season/Spring_Season")
+        mock_get_scoreboard.assert_awaited_once_with(
+            "LPL/2025_Season/Spring_Season"
+        )
         mock_send_update.assert_not_called()
         mock_send_result.assert_not_called()
         mock_remove_job.assert_not_called()
@@ -145,12 +191,22 @@ async def test_poll_live_match_job_already_has_result():
     )
     mock_session = AsyncMock()
 
-    with patch("src.scheduler.get_async_session") as mock_get_async_session, \
-         patch("src.scheduler.crud.get_match_with_result_by_id", new_callable=AsyncMock, return_value=mock_match) as mock_get_match, \
-         patch("src.scheduler.leaguepedia_client.get_scoreboard_data", new_callable=AsyncMock) as mock_get_scoreboard, \
-         patch("src.scheduler.scheduler.remove_job") as mock_remove_job:
+    with patch(
+        "src.scheduler.get_async_session"
+    ) as mock_get_async_session, patch(
+        "src.scheduler.crud.get_match_with_result_by_id",
+        new_callable=AsyncMock,
+        return_value=mock_match,
+    ) as mock_get_match, patch(
+        "src.scheduler.leaguepedia_client.get_scoreboard_data",
+        new_callable=AsyncMock,
+    ) as mock_get_scoreboard, patch(
+        "src.scheduler.scheduler.remove_job"
+    ) as mock_remove_job:
 
-        mock_get_async_session.return_value.__aenter__.return_value = mock_session
+        mock_get_async_session.return_value.__aenter__.return_value = (
+            mock_session
+        )
 
         # Act
         await poll_live_match_job(match_db_id=4, guild_id=123)

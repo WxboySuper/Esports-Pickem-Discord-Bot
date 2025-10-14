@@ -31,14 +31,17 @@ def run_migrations_offline():
 
 
 def run_migrations_online():
-    # Get the DATABASE_URL from environment variables and override the one in alembic.ini
-    # This is essential for CI/CD environments where the database URL is provided dynamically.
-    db_url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+    # Get the DATABASE_URL from environment variables and override the one
+    # in alembic.ini This is essential for CI/CD environments where the
+    # database URL is provided dynamically.
+    db_url = os.getenv(
+        "DATABASE_URL", config.get_main_option("sqlalchemy.url")
+    )
 
     # Create a new configuration dictionary for engine_from_config
     # This ensures that we are not modifying the global config object in-place
     config_options = config.get_section(config.config_ini_section)
-    config_options['sqlalchemy.url'] = db_url
+    config_options["sqlalchemy.url"] = db_url
 
     connectable = engine_from_config(
         config_options,
