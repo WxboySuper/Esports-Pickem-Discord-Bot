@@ -155,6 +155,8 @@ async def pick(interaction: discord.Interaction):
     active_matches_stmt = (
         select(Match)
         .where(Match.scheduled_time > now_utc)
+        .where(Match.team1 != "TBD")
+        .where(Match.team2 != "TBD")
         .order_by(Match.scheduled_time)
         .limit(25)
     )
