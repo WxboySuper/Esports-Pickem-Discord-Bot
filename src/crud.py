@@ -1,6 +1,7 @@
 import logging
 from typing import List, Optional
 from sqlmodel import Session, select
+from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from src.models import User, Contest, Match, Pick, Result, Team
 from datetime import datetime, timezone
@@ -263,19 +264,16 @@ def list_matches_for_contest(session: Session, contest_id: int) -> List[Match]:
     return list(session.exec(stmt))
 
 
-from sqlalchemy.orm import selectinload
-
-
 async def get_match_with_result_by_id(
     session: AsyncSession, match_id: int
 ) -> Optional[Match]:
     """
-    Fetches a match by its ID, eagerly loading the related result.
+    Fetches a match by its ID, eagerly loading the related result and contest.
     """
     result = await session.exec(
         select(Match)
         .where(Match.id == match_id)
-        .options(selectinload(Match.result))
+        .options(selectinload(Match.result), selectinload(Match.contest))
     )
     return result.first()
 
