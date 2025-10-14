@@ -240,19 +240,25 @@ def get_matches_by_date(session: Session, date: datetime) -> List[Match]:
     end = datetime(
         date.year, date.month, date.day, 23, 59, 59, tzinfo=timezone.utc
     )
-    return list(
-        session.exec(
-            select(Match).where(
-                (Match.scheduled_time >= start) & (Match.scheduled_time <= end)
-            )
-        )
+    statement = (
+        select(Match)
+        .where(Match.scheduled_time >= start)
+        .where(Match.scheduled_time <= end)
+        .where(Match.team1 != "TBD")
+        .where(Match.team2 != "TBD")
     )
+    return list(session.exec(statement))
 
 
 def list_matches_for_contest(session: Session, contest_id: int) -> List[Match]:
     # split into two statements
     # to keep line length < 79 chars
-    stmt = select(Match).where(Match.contest_id == contest_id)
+    stmt = (
+        select(Match)
+        .where(Match.contest_id == contest_id)
+        .where(Match.team1 != "TBD")
+        .where(Match.team2 != "TBD")
+    )
     return list(session.exec(stmt))
 
 
