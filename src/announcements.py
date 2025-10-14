@@ -3,7 +3,7 @@ import discord
 
 logger = logging.getLogger(__name__)
 
-ANNOUNCEMENT_CHANNEL_NAME = "esports-announcements"
+ANNOUNCEMENT_CHANNEL_NAME = "pickem-announcements"
 
 
 async def get_announcement_channel(

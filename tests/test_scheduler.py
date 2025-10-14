@@ -16,9 +16,7 @@ async def test_schedule_far_future_match():
     mock_scheduler.add_job = MagicMock()
     mock_scheduler.remove_job = MagicMock()
 
-    with patch("src.scheduler.scheduler", mock_scheduler), patch(
-        "src.scheduler.ANNOUNCEMENT_GUILD_ID", 12345
-    ):
+    with patch("src.scheduler.scheduler", mock_scheduler):
 
         now = datetime.now(timezone.utc)
         match_time = now + timedelta(days=1)
@@ -50,14 +48,14 @@ async def test_schedule_far_future_match():
                     "date",
                     id="reminder_30_1",
                     run_date=match_time - timedelta(minutes=30),
-                    args=[12345, 1, 30],
+                    args=[1, 30],
                 ),
                 call(
                     send_reminder,
                     "date",
                     id="reminder_5_1",
                     run_date=match_time - timedelta(minutes=5),
-                    args=[12345, 1, 5],
+                    args=[1, 5],
                 ),
             ],
             any_order=True,
@@ -78,8 +76,8 @@ async def test_schedule_late_30_min_reminder():
     mock_scheduler.remove_job = MagicMock()
 
     with patch("src.scheduler.scheduler", mock_scheduler), patch(
-        "src.scheduler.ANNOUNCEMENT_GUILD_ID", 12345
-    ), patch("src.scheduler.datetime") as mock_dt:
+        "src.scheduler.datetime"
+    ) as mock_dt:
 
         now = datetime.now(timezone.utc)
         mock_dt.now.return_value = now
@@ -105,7 +103,7 @@ async def test_schedule_late_30_min_reminder():
                     "date",
                     id="reminder_30_2",
                     run_date=now,  # Should run immediately
-                    args=[12345, 2, 30],
+                    args=[2, 30],
                 ),
                 call(
                     send_reminder,
@@ -113,7 +111,7 @@ async def test_schedule_late_30_min_reminder():
                     id="reminder_5_2",
                     run_date=match_time
                     - timedelta(minutes=5),  # Should run at normal time
-                    args=[12345, 2, 5],
+                    args=[2, 5],
                 ),
             ],
             any_order=True,
@@ -132,8 +130,8 @@ async def test_schedule_late_5_min_reminder():
     mock_scheduler.remove_job = MagicMock()
 
     with patch("src.scheduler.scheduler", mock_scheduler), patch(
-        "src.scheduler.ANNOUNCEMENT_GUILD_ID", 12345
-    ), patch("src.scheduler.datetime") as mock_dt:
+        "src.scheduler.datetime"
+    ) as mock_dt:
 
         now = datetime.now(timezone.utc)
         mock_dt.now.return_value = now
@@ -157,7 +155,7 @@ async def test_schedule_late_5_min_reminder():
             "date",
             id="reminder_5_3",
             run_date=now,
-            args=[12345, 3, 5],
+            args=[3, 5],
         )
 
 
@@ -175,7 +173,7 @@ async def test_send_reminder_embed_content(
     # Mock bot and guild
     mock_bot = MagicMock()
     mock_guild = MagicMock()
-    mock_bot.get_guild.return_value = mock_guild
+    mock_bot.guilds = [mock_guild]
     mock_get_bot.return_value = mock_bot
 
     # Mock session and DB objects
@@ -213,7 +211,7 @@ async def test_send_reminder_embed_content(
     mock_get_session.return_value = async_context_manager()
 
     # Test 30-minute reminder
-    await send_reminder(guild_id=123, match_id=1, minutes=30)
+    await send_reminder(match_id=1, minutes=30)
 
     # Check that send_announcement was called
     mock_send_announcement.assert_called_once()
@@ -229,7 +227,7 @@ async def test_send_reminder_embed_content(
     mock_get_session.return_value = async_context_manager()
 
     # Test 5-minute reminder
-    await send_reminder(guild_id=123, match_id=1, minutes=5)
+    await send_reminder(match_id=1, minutes=5)
 
     mock_send_announcement.assert_called_once()
     sent_embed = mock_send_announcement.call_args[0][1]
