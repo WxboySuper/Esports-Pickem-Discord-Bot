@@ -8,6 +8,7 @@ from sqlmodel import select
 from src.db import get_async_session
 from src.models import Match, Result, Pick, Team
 from src.leaguepedia_client import leaguepedia_client
+from src import crud
 from src.announcements import send_announcement
 from src.config import ANNOUNCEMENT_GUILD_ID
 from src.db import DATABASE_URL
@@ -94,64 +95,77 @@ async def schedule_reminders(match: Match):
 
 async def poll_live_match_job(match_db_id: int, guild_id: int):
     """
-    Polls a specific match for live updates/results. If a winner is found,
-    it saves the result, sends a notification, and removes itself from the
-    scheduler. Includes a timeout to prevent indefinite polling.
+    Polls a specific match for live updates/results using scoreboard data.
+    If a winner is found, it saves the result, sends a notification, and
+    removes itself from the scheduler. Includes a timeout.
     """
     job_id = f"poll_match_{match_db_id}"
-    logger.info(
-        "Running job '%s': Polling for match ID %s", job_id, match_db_id
-    )
+    logger.info("Polling for match ID %s (Job: %s)", match_db_id, job_id)
 
     async with get_async_session() as session:
-        match = await session.get(Match, match_db_id)
+        match = await crud.get_match_with_result_by_id(session, match_db_id)
 
-        # Safety check: Unschedule if match is gone or already has a result
         if not match or match.result:
             logger.info(
-                "Match %s not found or result exists. Unscheduling job '%s'.",
+                "Match %s not found or result exists. Unscheduling '%s'.",
                 match_db_id,
                 job_id,
             )
             try:
                 scheduler.remove_job(job_id)
             except JobLookupError:
-                logger.warning("Could not find job '%s' to remove.", job_id)
+                pass
             return
 
-        # Timeout check: Unschedule if the job has been running for too long
         now = datetime.now(timezone.utc)
         if now > match.scheduled_time + timedelta(hours=12):
             logger.warning(
-                "Job '%s' for match %s has timed out. Unscheduling.",
+                "Job '%s' for match %s timed out. Unscheduling.",
                 job_id,
                 match.id,
             )
             try:
                 scheduler.remove_job(job_id)
             except JobLookupError:
-                logger.warning("Could not find job '%s' to remove.", job_id)
+                pass
             return
 
-        # Poll the API for results
-        result_data = await leaguepedia_client.get_match_result(
-            match.leaguepedia_id
+        scoreboard_data = await leaguepedia_client.get_scoreboard_data(
+            match.contest.leaguepedia_id
         )
 
-        if result_data and result_data.get("Winner"):
-            winner = result_data["Winner"]
+        if not scoreboard_data:
+            logger.info("No scoreboard data for match %s.", match.id)
+            return
+
+        team1_score = 0
+        team2_score = 0
+        for game in scoreboard_data:
+            if game.get("Winner") == "1":
+                team1_score += 1
+            elif game.get("Winner") == "2":
+                team2_score += 1
+
+        # Check if the series is over
+        games_to_win = (match.best_of // 2) + 1
+        winner = None
+        if team1_score >= games_to_win:
+            winner = match.team1
+        elif team2_score >= games_to_win:
+            winner = match.team2
+
+        current_score_str = f"{team1_score}-{team2_score}"
+        if winner:
             logger.info(
-                "Result found for match %s: Winner is %s. Unscheduling.",
+                "Series winner found for match %s: %s. Final Score: %s",
                 match.id,
                 winner,
+                current_score_str,
             )
             result = Result(
                 match_id=match.id,
                 winner=winner,
-                score=(
-                    f"{result_data.get('Team1Score', 'N/A')} - "
-                    f"{result_data.get('Team2Score', 'N/A')}"
-                ),
+                score=current_score_str,
             )
             session.add(result)
             await session.commit()
@@ -160,10 +174,19 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             try:
                 scheduler.remove_job(job_id)
             except JobLookupError:
-                logger.warning(
-                    "Could not find job '%s' to remove after completion.",
-                    job_id,
-                )
+                pass
+        elif match.last_announced_score != current_score_str:
+            logger.info(
+                "New score for match %s: %s. Announcing update.",
+                match.id,
+                current_score_str,
+            )
+            match.last_announced_score = current_score_str
+            session.add(match)
+            await session.commit()
+            await send_mid_series_update(
+                guild_id, match, current_score_str
+            )
 
 
 async def send_reminder(guild_id: int, match_id: int, minutes: int):
@@ -280,6 +303,31 @@ async def send_result_notification(
         embed.timestamp = datetime.now(timezone.utc)
 
         await send_announcement(guild, embed)
+
+
+async def send_mid_series_update(
+    guild_id: int, match: Match, score: str
+):
+    """Sends a Discord embed with a mid-series score update."""
+    bot = get_bot_instance()
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        logger.error(
+            "Guild %s not found for mid-series update.", guild_id
+        )
+        return
+
+    title = f"Live Update: {match.team1} vs {match.team2}"
+    description = (
+        f"The score is now **{score}** in this best of {match.best_of} series."
+    )
+    embed = discord.Embed(
+        title=title, description=description, color=discord.Color.orange()
+    )
+    embed.set_footer(text=f"Match ID: {match.id}")
+    embed.timestamp = datetime.now(timezone.utc)
+
+    await send_announcement(guild, embed)
 
 
 async def schedule_live_polling(guild_id: int):

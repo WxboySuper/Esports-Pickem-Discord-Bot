@@ -73,7 +73,7 @@ class LeaguepediaClient:
                 tables="MatchSchedule=MS, Tournaments=T",
                 fields=(
                     "T.Name, MS.DateTime_UTC, MS.Team1, MS.Team2, "
-                    "MS.OverviewPage, MS.MatchId"
+                    "MS.OverviewPage, MS.MatchId, MS.BestOf"
                 ),
                 where=f'T.Name LIKE "{tournament_name_like}%"',
                 join_on="MS.OverviewPage=T.OverviewPage",
@@ -87,27 +87,33 @@ class LeaguepediaClient:
             )
             return []
 
-    async def get_match_result(self, match_id: str):
+
+
+    async def get_scoreboard_data(self, overview_page: str):
         """
-        Fetches the result of a specific match by its MatchId.
+        Fetches scoreboard data for a given tournament overview page.
         """
         if not self.client:
             await self.login()
 
         try:
-            # The cargo_client returns a list of dicts, even for one result.
             response = self.client.cargo_client.query(
-                tables="MatchSchedule",
-                fields="Winner, Team1Score, Team2Score",
-                where=f"MatchId='{match_id}'",
-                limit="1",
+                tables="ScoreboardGames=SG, Tournaments=T",
+                fields=(
+                    "T.Name, SG.DateTime_UTC, SG.Team1, SG.Team2, SG.Winner, "
+                    "SG.Team1Score, SG.Team2Score"
+                ),
+                where=f'T.OverviewPage="{overview_page}"',
+                join_on="SG.OverviewPage=T.OverviewPage",
+                order_by="SG.DateTime_UTC DESC",
+                limit="100",  # Get all games for the series
             )
-            if response:
-                return response[0]  # Return the first (and only) result
-            return None
+            return response
         except Exception as e:
-            logger.error(f"Error fetching match result for {match_id}: {e}")
-            return None
+            logger.error(
+                f"Error fetching scoreboard data for {overview_page}: {e}"
+            )
+            return []
 
 
 # Create a single instance of the client to be used across the application
