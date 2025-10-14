@@ -60,11 +60,12 @@ async def upsert_contest(
 
 async def upsert_match(
     session: AsyncSession, match_data: dict
-) -> Optional[Match]:
-    """Creates or updates a match based on leaguepedia_id."""
-    # Local import to avoid circular dependency
-    from src.scheduler import schedule_reminders
+) -> tuple[Optional[Match], bool]:
+    """
+    Creates or updates a match based on leaguepedia_id.
 
+    Returns the match object and a boolean indicating if the time changed.
+    """
     try:
         existing_match = await session.exec(
             select(Match).where(
@@ -90,14 +91,10 @@ async def upsert_match(
         await session.flush()  # Flush to get the match.id if it's new
         await session.refresh(match)
 
-        # If the match time has changed or it's a new match, schedule reminders
-        if time_changed:
-            await schedule_reminders(match)
-
-        return match
+        return match, time_changed
     except KeyError as e:
         logging.error(f"Missing key in match_data: {e}")
-        return None
+        return None, False
 
 
 # ---- USER ----

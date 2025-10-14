@@ -12,7 +12,6 @@ from src.announcements import send_announcement
 from src.config import ANNOUNCEMENT_GUILD_ID
 from src.db import DATABASE_URL
 from src.bot_instance import get_bot_instance
-from src.commands.sync_leaguepedia import perform_leaguepedia_sync
 
 logger = logging.getLogger(__name__)
 
@@ -318,6 +317,9 @@ async def schedule_live_polling(guild_id: int):
 
 
 def start_scheduler():
+    # Local import to avoid circular dependency
+    from src.commands.sync_leaguepedia import perform_leaguepedia_sync
+
     if not scheduler.running:
         scheduler.add_job(
             perform_leaguepedia_sync,
