@@ -136,6 +136,8 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             match.contest.leaguepedia_id
         )
 
+        logger.info(f"Scoreboard data for match {match.id}: {scoreboard_data}")
+
         if not scoreboard_data:
             logger.info(
                 "No scoreboard data found for match %s. Will retry.",
