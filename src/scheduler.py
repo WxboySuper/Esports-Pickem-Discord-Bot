@@ -136,8 +136,6 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             match.contest.leaguepedia_id
         )
 
-        logger.info(f"Scoreboard data for match {match.id}: {scoreboard_data}")
-
         if not scoreboard_data:
             logger.info(
                 "No scoreboard data found for match %s. Will retry.",
@@ -145,13 +143,44 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             )
             return
 
+        # Filter for games relevant to this specific match
+        match_teams = {match.team1, match.team2}
+        relevant_games = [
+            g
+            for g in scoreboard_data
+            if {g.get("Team1"), g.get("Team2")} == match_teams
+        ]
+
+        if not relevant_games:
+            logger.info(
+                "No relevant games found in scoreboard data for match %s.",
+                match.id,
+            )
+            return
+
+        logger.debug(
+            f"Found {len(relevant_games)} relevant games for match {match.id}."
+        )
+
         team1_score = 0
         team2_score = 0
-        for game in scoreboard_data:
-            if game.get("Winner") == "1":
-                team1_score += 1
-            elif game.get("Winner") == "2":
-                team2_score += 1
+        for game in relevant_games:
+            winner_id = game.get("Winner")
+            if not winner_id:
+                continue
+
+            # Determine which team in the game corresponds to match.team1
+            if game.get("Team1") == match.team1:
+                if winner_id == "1":
+                    team1_score += 1
+                elif winner_id == "2":
+                    team2_score += 1
+            # Handle case where teams are swapped in the data
+            elif game.get("Team1") == match.team2:
+                if winner_id == "1":
+                    team2_score += 1
+                elif winner_id == "2":
+                    team1_score += 1
 
         games_to_win = (match.best_of // 2) + 1
         winner = None
@@ -163,6 +192,7 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
         current_score_str = f"{team1_score}-{team2_score}"
         logger.debug(
             f"Match {match.id} score: {current_score_str}. "
+            f"Games to win: {games_to_win}. "
             f"Last announced: {match.last_announced_score}"
         )
 
@@ -200,7 +230,12 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             await session.commit()
             await send_mid_series_update(guild_id, match, current_score_str)
         else:
-            logger.debug(f"No change in score for match {match.id}.")
+            logger.info(
+                "Polling for match %s complete. No winner yet. "
+                "Current score: %s.",
+                match.id,
+                current_score_str,
+            )
 
 
 async def send_reminder(guild_id: int, match_id: int, minutes: int):

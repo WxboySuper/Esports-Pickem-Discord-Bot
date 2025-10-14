@@ -22,7 +22,9 @@ async def test_poll_live_match_job_mid_series_update():
         last_announced_score="0-0",
         contest=Contest(leaguepedia_id="LPL/2025_Season/Spring_Season"),
     )
-    mock_scoreboard_data = [{"Winner": "1"}]
+    mock_scoreboard_data = [
+        {"Team1": "Team A", "Team2": "Team B", "Winner": "1"}
+    ]
     mock_session = AsyncMock()
 
     with patch(
@@ -78,7 +80,10 @@ async def test_poll_live_match_job_final_result():
         last_announced_score="1-0",
         contest=Contest(leaguepedia_id="LPL/2025_Season/Spring_Season"),
     )
-    mock_scoreboard_data = [{"Winner": "1"}, {"Winner": "1"}]
+    mock_scoreboard_data = [
+        {"Team1": "Team A", "Team2": "Team B", "Winner": "1"},
+        {"Team1": "Team A", "Team2": "Team B", "Winner": "1"},
+    ]
     mock_session = AsyncMock()
 
     with patch(
@@ -135,7 +140,9 @@ async def test_poll_live_match_job_no_score_change():
         last_announced_score="1-0",
         contest=Contest(leaguepedia_id="LPL/2025_Season/Spring_Season"),
     )
-    mock_scoreboard_data = [{"Winner": "1"}]
+    mock_scoreboard_data = [
+        {"Team1": "Team A", "Team2": "Team B", "Winner": "1"}
+    ]
     mock_session = AsyncMock()
 
     with patch(
