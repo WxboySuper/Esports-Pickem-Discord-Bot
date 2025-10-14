@@ -131,9 +131,11 @@ async def _sync_single_tournament(
                     "contest_id": contest.id,
                     "team1": match_data.get("Team1"),
                     "team2": match_data.get("Team2"),
-                    "best_of": int(match_data["BestOf"])
-                    if match_data.get("BestOf")
-                    else None,
+                    "best_of": (
+                        int(match_data["BestOf"])
+                        if match_data.get("BestOf")
+                        else None
+                    ),
                     "scheduled_time": scheduled_time,
                 },
             )

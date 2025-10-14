@@ -7,8 +7,8 @@ Environment variables used:
 - ADMIN_IDS (optional, comma-separated user IDs)
 """
 
-import os
 import logging
+import os
 import sys
 import importlib
 import inspect
@@ -18,16 +18,15 @@ from dotenv import load_dotenv, find_dotenv
 from src.scheduler import start_scheduler
 from src.bot_instance import set_bot_instance
 from src.leaguepedia_client import leaguepedia_client
+from src.logging_config import setup_logging
 import aiohttp
 
 load_dotenv(find_dotenv())
+setup_logging()
 
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(level=LOG_LEVEL)
-logger = logging.getLogger("esports-bot")
+logger = logging.getLogger(__name__)
 
-logger.info("Startup cwd=%s", os.getcwd())
-logger.debug("Startup sys.path (first entries)=%s", sys.path[:6])
+logger.info("Starting up bot...")
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -57,14 +56,19 @@ class EsportsBot(commands.Bot):
         self.session = None
 
     async def setup_hook(self):
+        logger.info("Executing setup_hook...")
         self.session = aiohttp.ClientSession()
         set_bot_instance(self)
+        logger.info("Logging into Leaguepedia...")
         await leaguepedia_client.login()
+        logger.info("Starting scheduler...")
         start_scheduler()
+        logger.info("Loading command modules...")
         commands_pkg = self._resolve_commands_package()
         if commands_pkg is not None:
             await self._load_command_modules(commands_pkg)
         await self._sync_global_commands()
+        logger.info("setup_hook complete.")
 
     def _resolve_commands_package(self):
         if __package__:
@@ -123,25 +127,8 @@ bot = EsportsBot()
 
 @bot.event
 async def on_ready():
+    logger.info("Bot is ready.")
     logger.info("Logged in as %s (id=%s)", bot.user, bot.user.id)
-
-    # Temporary code to leave a specific server.
-    # TODO: Remove this after it has run once in production.
-    guild_to_leave_id = 1306318188081844335
-    guild = bot.get_guild(guild_to_leave_id)
-    if guild:
-        try:
-            await guild.leave()
-            logger.info(
-                f"Successfully left guild: {guild.name} (ID: {guild.id})"
-            )
-        except discord.HTTPException as e:
-            logger.error(f"Failed to leave guild {guild_to_leave_id}: {e}")
-    else:
-        logger.info(
-            f"Guild with ID {guild_to_leave_id} not found, "
-            "skipping leave operation."
-        )
 
 
 @bot.event
