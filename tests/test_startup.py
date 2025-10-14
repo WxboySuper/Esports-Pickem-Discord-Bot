@@ -4,7 +4,6 @@ from src.commands.sync_leaguepedia import perform_leaguepedia_sync
 from src.scheduler import (
     start_scheduler,
     schedule_live_polling,
-    ANNOUNCEMENT_GUILD_ID,
 )
 
 
@@ -40,7 +39,6 @@ def test_start_scheduler_adds_jobs_with_replace_existing():
                 "interval",
                 minutes=1,
                 id="schedule_live_polling_job",
-                args=[ANNOUNCEMENT_GUILD_ID],
                 replace_existing=True,
             ),
         ]

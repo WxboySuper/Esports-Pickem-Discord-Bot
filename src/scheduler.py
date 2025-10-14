@@ -10,7 +10,6 @@ from src.models import Match, Result, Pick, Team
 from src.leaguepedia_client import leaguepedia_client
 from src import crud
 from src.announcements import send_announcement
-from src.config import ANNOUNCEMENT_GUILD_ID
 from src.db import DATABASE_URL
 from src.bot_instance import get_bot_instance
 
@@ -27,8 +26,6 @@ async def schedule_reminders(match: Match):
     """
     logger.info("Scheduling reminders for match %s", match.id)
     now = datetime.now(timezone.utc)
-    guild_id = ANNOUNCEMENT_GUILD_ID
-    logger.info("Using guild_id: %s", guild_id)
     job_id_30 = f"reminder_30_{match.id}"
     job_id_5 = f"reminder_5_{match.id}"
 
@@ -54,7 +51,7 @@ async def schedule_reminders(match: Match):
             "date",
             id=job_id_5,
             run_date=reminder_time_5,
-            args=[guild_id, match.id, 5],
+            args=[match.id, 5],
         )
     # If 5-min reminder is late, but match hasn't started, send immediately
     elif now < match.scheduled_time:
@@ -66,7 +63,7 @@ async def schedule_reminders(match: Match):
             "date",
             id=job_id_5,
             run_date=now,
-            args=[guild_id, match.id, 5],
+            args=[match.id, 5],
         )
 
     # Schedule 30-minute reminder
@@ -77,7 +74,7 @@ async def schedule_reminders(match: Match):
             "date",
             id=job_id_30,
             run_date=reminder_time_30,
-            args=[guild_id, match.id, 30],
+            args=[match.id, 30],
         )
     # If 30-min is late, but 5-min is still in the future, send 30-min now
     elif now < reminder_time_5:
@@ -89,11 +86,11 @@ async def schedule_reminders(match: Match):
             "date",
             id=job_id_30,
             run_date=now,
-            args=[guild_id, match.id, 30],
+            args=[match.id, 30],
         )
 
 
-async def poll_live_match_job(match_db_id: int, guild_id: int):
+async def poll_live_match_job(match_db_id: int):
     """
     Polls a specific match for live updates/results using scoreboard data.
     If a winner is found, it saves the result, sends a notification, and
@@ -203,15 +200,33 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
                 winner,
                 current_score_str,
             )
+            # All database updates for a match result are in one transaction
             result = Result(
                 match_id=match.id,
                 winner=winner,
                 score=current_score_str,
             )
             session.add(result)
+
+            # Update picks
+            logger.info(f"Updating picks for match {match.id}")
+            statement = select(Pick).where(Pick.match_id == match.id)
+            result_proxy = await session.exec(statement)
+            picks_to_update = result_proxy.all()
+            updated_count = 0
+            for pick in picks_to_update:
+                pick.is_correct = pick.chosen_team == winner
+                session.add(pick)
+                updated_count += 1
+            logger.info(
+                f"Updated {updated_count} picks for match {match.id}."
+            )
+
             await session.commit()
-            logger.info(f"Saved result for match {match.id}.")
-            await send_result_notification(guild_id, match, result)
+            logger.info(f"Saved result and updated picks for match {match.id}.")
+
+            # Send notifications only after successful commit
+            await send_result_notification(match, result)
 
             logger.info(f"Unscheduling job '{job_id}' for completed match.")
             try:
@@ -228,7 +243,7 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             match.last_announced_score = current_score_str
             session.add(match)
             await session.commit()
-            await send_mid_series_update(guild_id, match, current_score_str)
+            await send_mid_series_update(match, current_score_str)
         else:
             logger.info(
                 "Polling for match %s complete. No winner yet. "
@@ -238,14 +253,12 @@ async def poll_live_match_job(match_db_id: int, guild_id: int):
             )
 
 
-async def send_reminder(guild_id: int, match_id: int, minutes: int):
-    """Sends a rich, informative embed as a match reminder."""
-    logger.info(f"Sending {minutes}-minute reminder for match {match_id}")
+async def send_reminder(match_id: int, minutes: int):
+    """Sends a rich, informative embed as a match reminder to all guilds."""
+    logger.info(
+        f"Broadcasting {minutes}-minute reminder for match {match_id} to all guilds."
+    )
     bot = get_bot_instance()
-    guild = bot.get_guild(guild_id)
-    if not guild:
-        logger.error("Guild %s not found for reminder.", guild_id)
-        return
 
     async with get_async_session() as session:
         match = await session.get(Match, match_id)
@@ -295,20 +308,24 @@ async def send_reminder(guild_id: int, match_id: int, minutes: int):
             text="Use the /picks command to make your predictions!"
         )
 
-        await send_announcement(guild, embed)
-        logger.info(f"Sent {minutes}-minute reminder for match {match_id}")
+        for guild in bot.guilds:
+            try:
+                await send_announcement(guild, embed)
+                logger.info(
+                    f"Sent {minutes}-minute reminder for match {match_id} to guild {guild.id}."
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to send reminder for match {match_id} to guild {guild.id}: {e}"
+                )
 
 
-async def send_result_notification(
-    guild_id: int, match: Match, result: Result
-):
-    """Sends a rich, detailed embed with match results."""
-    logger.info(f"Sending result notification for match {match.id}")
+async def send_result_notification(match: Match, result: Result):
+    """Sends a rich, detailed embed with match results to all guilds."""
+    logger.info(
+        f"Broadcasting result notification for match {match.id} to all guilds."
+    )
     bot = get_bot_instance()
-    guild = bot.get_guild(guild_id)
-    if not guild:
-        logger.error("Guild %s not found for result notification.", guild_id)
-        return
 
     async with get_async_session() as session:
         logger.debug(f"Fetching teams and picks for match {match.id}")
@@ -356,20 +373,24 @@ async def send_result_notification(
         embed.set_footer(text=f"Leaguepedia Match ID: {match.leaguepedia_id}")
         embed.timestamp = datetime.now(timezone.utc)
 
-        await send_announcement(guild, embed)
-        logger.info(f"Sent result notification for match {match.id}")
+        for guild in bot.guilds:
+            try:
+                await send_announcement(guild, embed)
+                logger.info(
+                    f"Sent result notification for match {match.id} to guild {guild.id}."
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to send result notification for match {match.id} to guild {guild.id}: {e}"
+                )
 
 
-async def send_mid_series_update(guild_id: int, match: Match, score: str):
-    """Sends a Discord embed with a mid-series score update."""
+async def send_mid_series_update(match: Match, score: str):
+    """Sends a Discord embed with a mid-series score update to all guilds."""
     logger.info(
-        f"Sending mid-series update for match {match.id}: score {score}"
+        f"Broadcasting mid-series update for match {match.id} (score: {score}) to all guilds."
     )
     bot = get_bot_instance()
-    guild = bot.get_guild(guild_id)
-    if not guild:
-        logger.error("Guild %s not found for mid-series update.", guild_id)
-        return
 
     title = f"Live Update: {match.team1} vs {match.team2}"
     description = (
@@ -381,11 +402,19 @@ async def send_mid_series_update(guild_id: int, match: Match, score: str):
     embed.set_footer(text=f"Match ID: {match.id}")
     embed.timestamp = datetime.now(timezone.utc)
 
-    await send_announcement(guild, embed)
-    logger.info(f"Sent mid-series update for match {match.id}")
+    for guild in bot.guilds:
+        try:
+            await send_announcement(guild, embed)
+            logger.info(
+                f"Sent mid-series update for match {match.id} to guild {guild.id}."
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to send mid-series update for match {match.id} to guild {guild.id}: {e}"
+            )
 
 
-async def schedule_live_polling(guild_id: int):
+async def schedule_live_polling():
     """
     Checks for matches starting soon and schedules a dedicated polling job
     for each one.
@@ -424,7 +453,7 @@ async def schedule_live_polling(guild_id: int):
                     "interval",
                     minutes=5,
                     id=job_id,
-                    args=[match.id, guild_id],
+                    args=[match.id],
                     misfire_grace_time=60,
                     replace_existing=True,
                 )
@@ -456,7 +485,6 @@ def start_scheduler():
             "interval",
             minutes=1,
             id="schedule_live_polling_job",
-            args=[ANNOUNCEMENT_GUILD_ID],
             replace_existing=True,
         )
         logger.info("Added 'schedule_live_polling_job' to scheduler.")

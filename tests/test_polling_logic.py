@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime, timedelta, timezone
 
 from src.models import Match, Contest, Result
@@ -50,7 +50,7 @@ async def test_poll_live_match_job_mid_series_update():
         )
 
         # Act
-        await poll_live_match_job(match_db_id=1, guild_id=123)
+        await poll_live_match_job(match_db_id=1)
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 1)
@@ -85,6 +85,11 @@ async def test_poll_live_match_job_final_result():
         {"Team1": "Team A", "Team2": "Team B", "Winner": "1"},
     ]
     mock_session = AsyncMock()
+    # Configure the mock for session.exec to return a result proxy
+    # whose `all()` method returns an empty list.
+    mock_result_proxy = MagicMock()
+    mock_result_proxy.all.return_value = []
+    mock_session.exec.return_value = mock_result_proxy
 
     with patch(
         "src.scheduler.get_async_session"
@@ -109,7 +114,7 @@ async def test_poll_live_match_job_final_result():
         )
 
         # Act
-        await poll_live_match_job(match_db_id=2, guild_id=123)
+        await poll_live_match_job(match_db_id=2)
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 2)
@@ -168,7 +173,7 @@ async def test_poll_live_match_job_no_score_change():
         )
 
         # Act
-        await poll_live_match_job(match_db_id=3, guild_id=123)
+        await poll_live_match_job(match_db_id=3)
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 3)
@@ -216,7 +221,7 @@ async def test_poll_live_match_job_already_has_result():
         )
 
         # Act
-        await poll_live_match_job(match_db_id=4, guild_id=123)
+        await poll_live_match_job(match_db_id=4)
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 4)
