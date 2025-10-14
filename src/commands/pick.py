@@ -156,6 +156,7 @@ async def pick(interaction: discord.Interaction):
         select(Match)
         .where(Match.scheduled_time > now_utc)
         .order_by(Match.scheduled_time)
+        .limit(25)
     )
     active_matches = session.exec(active_matches_stmt).all()
 
