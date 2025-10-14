@@ -117,6 +117,13 @@ async def _sync_single_tournament(
                 logger.warning("Missing MatchId in data: %s", match_data)
                 continue
 
+            scheduled_time = _parse_date(match_data.get("DateTime UTC"))
+            if not scheduled_time:
+                logger.warning(
+                    "Match %s has no scheduled time. Skipping.", match_id
+                )
+                continue
+
             match, time_changed = await upsert_match(
                 db_session,
                 {
@@ -127,9 +134,7 @@ async def _sync_single_tournament(
                     "best_of": int(match_data["BestOf"])
                     if match_data.get("BestOf")
                     else None,
-                    "scheduled_time": _parse_date(
-                        match_data.get("DateTime UTC")
-                    ),
+                    "scheduled_time": scheduled_time,
                 },
             )
             summary["matches"] += 1
