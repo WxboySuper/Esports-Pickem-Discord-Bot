@@ -71,6 +71,8 @@ class Match(SQLModel, table=True):
     contest_id: int = Field(foreign_key="contest.id", index=True)
     team1: str
     team2: str
+    best_of: Optional[int] = Field(default=None)
+    last_announced_score: Optional[str] = Field(default=None)
     scheduled_time: datetime = Field(
         sa_column=Column(TZDateTime(), nullable=False, index=True)
     )

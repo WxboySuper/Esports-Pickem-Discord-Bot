@@ -78,6 +78,7 @@ async def upsert_match(
             # Update existing match
             match.team1 = match_data["team1"]
             match.team2 = match_data["team2"]
+            match.best_of = match_data.get("best_of")
             original_time = match.scheduled_time
             new_time = match_data["scheduled_time"]
             match.scheduled_time = new_time
@@ -260,6 +261,23 @@ def list_matches_for_contest(session: Session, contest_id: int) -> List[Match]:
         .where(Match.team2 != "TBD")
     )
     return list(session.exec(stmt))
+
+
+from sqlalchemy.orm import selectinload
+
+
+async def get_match_with_result_by_id(
+    session: AsyncSession, match_id: int
+) -> Optional[Match]:
+    """
+    Fetches a match by its ID, eagerly loading the related result.
+    """
+    result = await session.exec(
+        select(Match)
+        .where(Match.id == match_id)
+        .options(selectinload(Match.result))
+    )
+    return result.first()
 
 
 def get_match_by_id(session: Session, match_id: int) -> Optional[Match]:
