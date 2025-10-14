@@ -43,6 +43,7 @@ async def test_perform_leaguepedia_sync_is_picklable(jobstore):
 
 
 @pytest.mark.asyncio
+@patch("src.commands.sync_leaguepedia.schedule_reminders", new_callable=AsyncMock)
 @patch("src.commands.sync_leaguepedia.get_async_session")
 @patch(
     "src.commands.sync_leaguepedia.open",
@@ -50,7 +51,7 @@ async def test_perform_leaguepedia_sync_is_picklable(jobstore):
 )
 @patch("src.leaguepedia_client.leaguepedia_client.fetch_upcoming_matches")
 async def test_perform_leaguepedia_sync_logic(
-    mock_fetch_matches, mock_get_session
+    mock_fetch_matches, mock_get_session, mock_schedule_reminders
 ):
     """
     Tests the core logic of the sync function with the new cargo query,
@@ -67,13 +68,18 @@ async def test_perform_leaguepedia_sync_logic(
         None  # No existing contest
     )
 
+    # Mock the return value for upsert_match to be a tuple (match, time_changed)
+    mock_match = Mock()
+    mock_upsert_match_return_value = (mock_match, True)
+
     with patch(
         "src.commands.sync_leaguepedia.upsert_contest",
         return_value=mock_contest,
     ) as mock_upsert_contest, patch(
         "src.commands.sync_leaguepedia.upsert_team", new_callable=AsyncMock
     ) as mock_upsert_team, patch(
-        "src.commands.sync_leaguepedia.upsert_match", new_callable=AsyncMock
+        "src.commands.sync_leaguepedia.upsert_match",
+        return_value=mock_upsert_match_return_value,
     ) as mock_upsert_match:
 
         # Mock the API response
@@ -114,3 +120,4 @@ async def test_perform_leaguepedia_sync_logic(
         assert summary["matches"] == 1
         assert summary["teams"] == 2
         mock_db_session.commit.assert_awaited_once()
+        mock_schedule_reminders.assert_awaited_once_with(mock_match)

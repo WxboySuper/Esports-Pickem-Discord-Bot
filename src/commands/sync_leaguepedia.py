@@ -11,6 +11,7 @@ from src.config import DATA_PATH
 from src.leaguepedia_client import leaguepedia_client
 from src.db import get_async_session
 from src.crud import upsert_contest, upsert_match, upsert_team
+from src.scheduler import schedule_reminders
 
 logger = logging.getLogger(__name__)
 CONFIG_PATH = DATA_PATH / "tournaments.json"
@@ -30,14 +31,16 @@ def _parse_date(date_str: str | None) -> datetime | None:
 
 async def _sync_single_tournament(
     tournament_name_like: str, db_session, summary: dict
-):
+) -> list:
     """
-    Helper to sync data for a single tournament using the new cargo query.
+    Helper to sync data for a single tournament.
+    Returns a list of matches that need reminders scheduled.
     """
     logger.info(
         "Fetching upcoming matches for tournament pattern: '%s'",
         tournament_name_like,
     )
+    matches_to_schedule = []
     matches_data = await leaguepedia_client.fetch_upcoming_matches(
         tournament_name_like
     )
@@ -47,7 +50,7 @@ async def _sync_single_tournament(
             "No matches found for tournament pattern '%s'.",
             tournament_name_like,
         )
-        return
+        return matches_to_schedule
 
     log_msg = "Found %d matches for tournament pattern '%s'"
     logger.info(log_msg, len(matches_data), tournament_name_like)
@@ -66,7 +69,6 @@ async def _sync_single_tournament(
         contests[overview_page].append(match_data)
 
     for overview_page, contest_matches in contests.items():
-        # Determine start and end dates from all matches for the contest
         match_times = [
             _parse_date(m.get("DateTime UTC")) for m in contest_matches
         ]
@@ -74,7 +76,7 @@ async def _sync_single_tournament(
 
         if not valid_times:
             logger.warning(
-                "No valid match times found for contest '%s'. Skipping.",
+                "No valid match times for contest '%s'. Skipping.",
                 overview_page,
             )
             continue
@@ -83,7 +85,6 @@ async def _sync_single_tournament(
         end_date = max(valid_times)
         tournament_name = contest_matches[0].get("Name")
 
-        # Upsert contest with calculated dates
         contest = await upsert_contest(
             db_session,
             {
@@ -94,23 +95,16 @@ async def _sync_single_tournament(
             },
         )
         if not contest:
-            logger.warning(
-                "Failed to upsert contest for '%s'.", tournament_name
-            )
+            logger.warning("Failed to upsert contest '%s'.", tournament_name)
             continue
         summary["contests"] += 1
-        await db_session.flush()  # Ensure contest.id is available
+        await db_session.flush()
 
-        # Process all matches for this contest
         for match_data in contest_matches:
-            # Upsert teams
-            for team_name_key in ["Team1", "Team2"]:
-                team_name = match_data.get(team_name_key)
+            for team_key in ["Team1", "Team2"]:
+                team_name = match_data.get(team_key)
                 if not team_name:
-                    logger.warning(
-                        "Match data is missing '%s'. Skipping team sync.",
-                        team_name_key,
-                    )
+                    logger.warning("Missing '%s' in match data.", team_key)
                     continue
                 await upsert_team(
                     db_session,
@@ -120,13 +114,10 @@ async def _sync_single_tournament(
 
             match_id = match_data.get("MatchId")
             if not match_id:
-                logger.warning(
-                    "Match data is missing MatchId. Skipping match sync: %s",
-                    match_data,
-                )
+                logger.warning("Missing MatchId in data: %s", match_data)
                 continue
 
-            await upsert_match(
+            match, time_changed = await upsert_match(
                 db_session,
                 {
                     "leaguepedia_id": match_id,
@@ -139,11 +130,11 @@ async def _sync_single_tournament(
                 },
             )
             summary["matches"] += 1
+            if match and time_changed:
+                matches_to_schedule.append(match)
 
-    logger.info(
-        "Finished processing matches for tournament pattern '%s'",
-        tournament_name_like,
-    )
+    logger.info("Finished processing matches for '%s'", tournament_name_like)
+    return matches_to_schedule
 
 
 async def perform_leaguepedia_sync() -> dict | None:
@@ -155,31 +146,36 @@ async def perform_leaguepedia_sync() -> dict | None:
     try:
         with open(CONFIG_PATH, "r") as f:
             tournament_slugs = json.load(f)
-        logger.info(
-            "Loaded %d tournament slugs for sync.", len(tournament_slugs)
-        )
-        logger.debug("Tournament slugs: %s", tournament_slugs)
+        logger.info("Loaded %d slugs for sync.", len(tournament_slugs))
+        logger.debug("Slugs: %s", tournament_slugs)
     except FileNotFoundError:
-        logger.warning(
-            "data/tournaments.json not found. Skipping scheduled sync."
-        )
+        logger.warning("tournaments.json not found. Skipping sync.")
         return None
 
     if not tournament_slugs:
-        logger.info("No tournaments configured for sync. Skipping.")
+        logger.info("No tournaments configured. Skipping sync.")
         return None
 
     summary = {"contests": 0, "matches": 0, "teams": 0}
+    all_matches_to_schedule = []
+
     async with get_async_session() as db_session:
         for slug in tournament_slugs:
-            await _sync_single_tournament(slug, db_session, summary)
+            matches_to_schedule = await _sync_single_tournament(
+                slug, db_session, summary
+            )
+            all_matches_to_schedule.extend(matches_to_schedule)
         await db_session.commit()
 
+    # Schedule reminders after the main transaction is committed
+    for match in all_matches_to_schedule:
+        await schedule_reminders(match)
+
     logger.info(
-        "Leaguepedia sync complete: "
-        f"{summary['contests']} contests, "
-        f"{summary['matches']} matches, "
-        f"{summary['teams']} teams upserted."
+        "Sync complete: %d contests, %d matches, %d teams upserted.",
+        summary["contests"],
+        summary["matches"],
+        summary["teams"],
     )
     return summary
 

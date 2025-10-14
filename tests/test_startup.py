@@ -1,9 +1,8 @@
 from unittest.mock import patch, MagicMock, call
 
-# Import the function to test
+from src.commands.sync_leaguepedia import perform_leaguepedia_sync
 from src.scheduler import (
     start_scheduler,
-    perform_leaguepedia_sync,
     schedule_live_polling,
     ANNOUNCEMENT_GUILD_ID,
 )
@@ -17,8 +16,13 @@ def test_start_scheduler_adds_jobs_with_replace_existing():
     mock_scheduler = MagicMock()
     mock_scheduler.running = False
 
-    # Patch the global scheduler instance with our mock
-    with patch("src.scheduler.scheduler", mock_scheduler):
+    # Since perform_leaguepedia_sync is now imported locally within
+    # start_scheduler, we need to patch it in the scheduler module's context.
+    with patch("src.scheduler.scheduler", mock_scheduler), patch(
+        "src.scheduler.perform_leaguepedia_sync",
+        new=perform_leaguepedia_sync,
+        create=True,
+    ):
         # Call the function that configures and starts the scheduler
         start_scheduler()
 
