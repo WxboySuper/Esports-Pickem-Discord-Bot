@@ -90,6 +90,85 @@ async def schedule_reminders(match: Match):
         )
 
 
+def _remove_job_if_exists(job_id: str):
+    """
+    Helper function to safely remove a job from the scheduler.
+    Logs a debug message if the job doesn't exist.
+    """
+    try:
+        scheduler.remove_job(job_id)
+    except JobLookupError:
+        logger.debug("Job %s was already removed.", job_id)
+
+
+def _calculate_team_scores(relevant_games, match):
+    """
+    Calculate scores for both teams from the relevant games.
+    Returns a tuple of (team1_score, team2_score).
+    """
+    team1_score = 0
+    team2_score = 0
+    for game in relevant_games:
+        winner_id = game.get("Winner")
+        if not winner_id:
+            continue
+
+        # Determine which team in the game corresponds to match.team1
+        if game.get("Team1") == match.team1:
+            if winner_id == "1":
+                team1_score += 1
+            elif winner_id == "2":
+                team2_score += 1
+        # Handle case where teams are swapped in the data
+        elif game.get("Team1") == match.team2:
+            if winner_id == "1":
+                team2_score += 1
+            elif winner_id == "2":
+                team1_score += 1
+
+    return team1_score, team2_score
+
+
+def _determine_winner(team1_score, team2_score, match):
+    """
+    Determine if there's a winner based on the current scores.
+    Returns the winner team name or None if no winner yet.
+    """
+    games_to_win = (match.best_of // 2) + 1
+    if team1_score >= games_to_win:
+        return match.team1
+    elif team2_score >= games_to_win:
+        return match.team2
+    return None
+
+
+async def _save_result_and_update_picks(session, match, winner, score_str):
+    """
+    Save the match result and update all picks for the match.
+    Returns the created Result object.
+    """
+    result = Result(
+        match_id=match.id,
+        winner=winner,
+        score=score_str,
+    )
+    session.add(result)
+
+    # Update picks
+    logger.info(f"Updating picks for match {match.id}")
+    statement = select(Pick).where(Pick.match_id == match.id)
+    result_proxy = await session.exec(statement)
+    picks_to_update = result_proxy.all()
+    updated_count = 0
+    for pick in picks_to_update:
+        pick.is_correct = pick.chosen_team == winner
+        session.add(pick)
+        updated_count += 1
+    logger.info(f"Updated {updated_count} picks for match {match.id}.")
+
+    return result
+
+
 async def poll_live_match_job(match_db_id: int):
     """
     Polls a specific match for live updates/results using scoreboard data.
@@ -108,10 +187,7 @@ async def poll_live_match_job(match_db_id: int):
                 match_db_id,
                 job_id,
             )
-            try:
-                scheduler.remove_job(job_id)
-            except JobLookupError:
-                logger.debug("Job %s was already removed.", job_id)
+            _remove_job_if_exists(job_id)
             return
 
         now = datetime.now(timezone.utc)
@@ -122,10 +198,7 @@ async def poll_live_match_job(match_db_id: int):
                 job_id,
                 match.id,
             )
-            try:
-                scheduler.remove_job(job_id)
-            except JobLookupError:
-                logger.debug("Job %s was already removed.", job_id)
+            _remove_job_if_exists(job_id)
             return
 
         logger.debug(f"Fetching scoreboard data for match {match.id}")
@@ -159,37 +232,14 @@ async def poll_live_match_job(match_db_id: int):
             f"Found {len(relevant_games)} relevant games for match {match.id}."
         )
 
-        team1_score = 0
-        team2_score = 0
-        for game in relevant_games:
-            winner_id = game.get("Winner")
-            if not winner_id:
-                continue
-
-            # Determine which team in the game corresponds to match.team1
-            if game.get("Team1") == match.team1:
-                if winner_id == "1":
-                    team1_score += 1
-                elif winner_id == "2":
-                    team2_score += 1
-            # Handle case where teams are swapped in the data
-            elif game.get("Team1") == match.team2:
-                if winner_id == "1":
-                    team2_score += 1
-                elif winner_id == "2":
-                    team1_score += 1
-
-        games_to_win = (match.best_of // 2) + 1
-        winner = None
-        if team1_score >= games_to_win:
-            winner = match.team1
-        elif team2_score >= games_to_win:
-            winner = match.team2
+        team1_score, team2_score = _calculate_team_scores(
+            relevant_games, match
+        )
+        winner = _determine_winner(team1_score, team2_score, match)
 
         current_score_str = f"{team1_score}-{team2_score}"
         logger.debug(
             f"Match {match.id} score: {current_score_str}. "
-            f"Games to win: {games_to_win}. "
             f"Last announced: {match.last_announced_score}"
         )
 
@@ -201,38 +251,20 @@ async def poll_live_match_job(match_db_id: int):
                 current_score_str,
             )
             # All database updates for a match result are in one transaction
-            result = Result(
-                match_id=match.id,
-                winner=winner,
-                score=current_score_str,
-            )
-            session.add(result)
-
-            # Update picks
-            logger.info(f"Updating picks for match {match.id}")
-            statement = select(Pick).where(Pick.match_id == match.id)
-            result_proxy = await session.exec(statement)
-            picks_to_update = result_proxy.all()
-            updated_count = 0
-            for pick in picks_to_update:
-                pick.is_correct = pick.chosen_team == winner
-                session.add(pick)
-                updated_count += 1
-            logger.info(
-                f"Updated {updated_count} picks for match {match.id}."
+            result = await _save_result_and_update_picks(
+                session, match, winner, current_score_str
             )
 
             await session.commit()
-            logger.info(f"Saved result and updated picks for match {match.id}.")
+            logger.info(
+                f"Saved result and updated picks for match {match.id}."
+            )
 
             # Send notifications only after successful commit
             await send_result_notification(match, result)
 
             logger.info(f"Unscheduling job '{job_id}' for completed match.")
-            try:
-                scheduler.remove_job(job_id)
-            except JobLookupError:
-                logger.debug("Job %s was already removed.", job_id)
+            _remove_job_if_exists(job_id)
 
         elif match.last_announced_score != current_score_str:
             logger.info(
