@@ -485,7 +485,7 @@ async def schedule_live_polling():
                 len(poll_jobs),
             )
         except Exception:
-            logger.debug("schedule_live_polling: could not enumerate scheduler jobs.")
+            logger.warning("schedule_live_polling: could not enumerate scheduler jobs.")
 
         if not matches_starting_soon:
             return
