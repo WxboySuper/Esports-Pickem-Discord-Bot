@@ -1,4 +1,4 @@
-discord.py==2.6.3
+discord.py==2.6.4
 python-dotenv==1.2.1  # optional for local dev if you want to load .env
 sqlmodel==0.0.25
 alembic==1.17.1
