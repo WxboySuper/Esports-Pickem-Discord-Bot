@@ -19,7 +19,7 @@ See [ITERATIONS.md](./ITERATIONS.md) for the development roadmap and detailed fe
 
 ## Prerequisites
 
-- Python 3.9 or higher
+- Python 3.10 or higher
 - PostgreSQL database
 - Discord Application with Bot Token
 - Git
