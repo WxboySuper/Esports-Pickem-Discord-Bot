@@ -29,6 +29,117 @@ def _parse_date(date_str: str | None) -> datetime | None:
         return None
 
 
+async def _process_teams_for_match(
+    match_data: dict, db_session, summary: dict
+) -> None:
+    """
+    Process and upsert teams for a single match.
+    """
+    for team_key in ["Team1", "Team2"]:
+        team_name = match_data.get(team_key)
+        if not team_name:
+            logger.warning("Missing '%s' in match data.", team_key)
+            continue
+        await upsert_team(
+            db_session,
+            {"leaguepedia_id": team_name, "name": team_name},
+        )
+        summary["teams"] += 1
+
+
+async def _process_match(
+    match_data: dict, contest, db_session, summary: dict
+) -> tuple | None:
+    """
+    Process and upsert a single match.
+    Returns (match, time_changed) tuple or None if match cannot be processed.
+    """
+    match_id = match_data.get("MatchId")
+    if not match_id:
+        logger.warning("Missing MatchId in data: %s", match_data)
+        return None
+
+    scheduled_time = _parse_date(match_data.get("DateTime UTC"))
+    if not scheduled_time:
+        logger.warning(
+            "Match %s has no scheduled time. Skipping.", match_id
+        )
+        return None
+
+    match, time_changed = await upsert_match(
+        db_session,
+        {
+            "leaguepedia_id": match_id,
+            "contest_id": contest.id,
+            "team1": match_data.get("Team1"),
+            "team2": match_data.get("Team2"),
+            "best_of": (
+                int(match_data["BestOf"])
+                if match_data.get("BestOf")
+                else None
+            ),
+            "scheduled_time": scheduled_time,
+        },
+    )
+    summary["matches"] += 1
+    return (match, time_changed)
+
+
+async def _process_contest(
+    overview_page: str,
+    contest_matches: list,
+    db_session,
+    summary: dict
+) -> list:
+    """
+    Process a single contest and its matches.
+    Returns a list of matches that need reminders scheduled.
+    """
+    matches_to_schedule = []
+    match_times = [
+        _parse_date(m.get("DateTime UTC")) for m in contest_matches
+    ]
+    valid_times = [t for t in match_times if t is not None]
+
+    if not valid_times:
+        logger.warning(
+            "No valid match times for contest '%s'. Skipping.",
+            overview_page,
+        )
+        return matches_to_schedule
+
+    start_date = min(valid_times)
+    end_date = max(valid_times)
+    tournament_name = contest_matches[0].get("Name")
+
+    contest = await upsert_contest(
+        db_session,
+        {
+            "leaguepedia_id": overview_page,
+            "name": tournament_name,
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+    )
+    if not contest:
+        logger.warning("Failed to upsert contest '%s'.", tournament_name)
+        return matches_to_schedule
+
+    summary["contests"] += 1
+    await db_session.flush()
+
+    for match_data in contest_matches:
+        await _process_teams_for_match(match_data, db_session, summary)
+
+        result = await _process_match(match_data, contest, db_session, summary)
+        if result:
+            match, time_changed = result
+            if match and time_changed:
+                matches_to_schedule.append(match)
+
+    return matches_to_schedule
+
+
 async def _sync_single_tournament(
     tournament_name_like: str, db_session, summary: dict
 ) -> list:
@@ -69,79 +180,10 @@ async def _sync_single_tournament(
         contests[overview_page].append(match_data)
 
     for overview_page, contest_matches in contests.items():
-        match_times = [
-            _parse_date(m.get("DateTime UTC")) for m in contest_matches
-        ]
-        valid_times = [t for t in match_times if t is not None]
-
-        if not valid_times:
-            logger.warning(
-                "No valid match times for contest '%s'. Skipping.",
-                overview_page,
-            )
-            continue
-
-        start_date = min(valid_times)
-        end_date = max(valid_times)
-        tournament_name = contest_matches[0].get("Name")
-
-        contest = await upsert_contest(
-            db_session,
-            {
-                "leaguepedia_id": overview_page,
-                "name": tournament_name,
-                "start_date": start_date,
-                "end_date": end_date,
-            },
+        contest_schedule = await _process_contest(
+            overview_page, contest_matches, db_session, summary
         )
-        if not contest:
-            logger.warning("Failed to upsert contest '%s'.", tournament_name)
-            continue
-        summary["contests"] += 1
-        await db_session.flush()
-
-        for match_data in contest_matches:
-            for team_key in ["Team1", "Team2"]:
-                team_name = match_data.get(team_key)
-                if not team_name:
-                    logger.warning("Missing '%s' in match data.", team_key)
-                    continue
-                await upsert_team(
-                    db_session,
-                    {"leaguepedia_id": team_name, "name": team_name},
-                )
-                summary["teams"] += 1
-
-            match_id = match_data.get("MatchId")
-            if not match_id:
-                logger.warning("Missing MatchId in data: %s", match_data)
-                continue
-
-            scheduled_time = _parse_date(match_data.get("DateTime UTC"))
-            if not scheduled_time:
-                logger.warning(
-                    "Match %s has no scheduled time. Skipping.", match_id
-                )
-                continue
-
-            match, time_changed = await upsert_match(
-                db_session,
-                {
-                    "leaguepedia_id": match_id,
-                    "contest_id": contest.id,
-                    "team1": match_data.get("Team1"),
-                    "team2": match_data.get("Team2"),
-                    "best_of": (
-                        int(match_data["BestOf"])
-                        if match_data.get("BestOf")
-                        else None
-                    ),
-                    "scheduled_time": scheduled_time,
-                },
-            )
-            summary["matches"] += 1
-            if match and time_changed:
-                matches_to_schedule.append(match)
+        matches_to_schedule.extend(contest_schedule)
 
     logger.info("Finished processing matches for '%s'", tournament_name_like)
     return matches_to_schedule
