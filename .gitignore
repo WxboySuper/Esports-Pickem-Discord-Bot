@@ -214,3 +214,4 @@ logs/
 # Temporary files
 tmp/
 temp/
+docs/personal/*
