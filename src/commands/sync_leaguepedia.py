@@ -61,9 +61,7 @@ async def _process_match(
 
     scheduled_time = _parse_date(match_data.get("DateTime UTC"))
     if not scheduled_time:
-        logger.warning(
-            "Match %s has no scheduled time. Skipping.", match_id
-        )
+        logger.warning("Match %s has no scheduled time. Skipping.", match_id)
         return None
 
     match, time_changed = await upsert_match(
@@ -74,9 +72,7 @@ async def _process_match(
             "team1": match_data.get("Team1"),
             "team2": match_data.get("Team2"),
             "best_of": (
-                int(match_data["BestOf"])
-                if match_data.get("BestOf")
-                else None
+                int(match_data["BestOf"]) if match_data.get("BestOf") else None
             ),
             "scheduled_time": scheduled_time,
         },
@@ -86,19 +82,14 @@ async def _process_match(
 
 
 async def _process_contest(
-    overview_page: str,
-    contest_matches: list,
-    db_session,
-    summary: dict
+    overview_page: str, contest_matches: list, db_session, summary: dict
 ) -> list:
     """
     Process a single contest and its matches.
     Returns a list of matches that need reminders scheduled.
     """
     matches_to_schedule = []
-    match_times = [
-        _parse_date(m.get("DateTime UTC")) for m in contest_matches
-    ]
+    match_times = [_parse_date(m.get("DateTime UTC")) for m in contest_matches]
     valid_times = [t for t in match_times if t is not None]
 
     if not valid_times:
