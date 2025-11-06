@@ -1,5 +1,5 @@
 discord.py==2.6.3
-python-dotenv==1.2.1  # optional for local dev if you want to load .env
+python-dotenv==1.2.1
 sqlmodel==0.0.27
 alembic==1.17.1
 apscheduler
