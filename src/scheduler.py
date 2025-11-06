@@ -463,13 +463,32 @@ async def schedule_live_polling():
         )
         matches_starting_soon = (await session.exec(statement)).all()
 
-        if not matches_starting_soon:
-            logger.debug("No matches starting in the next minute.")
-            return
+        # Diagnostic logging: always log candidate count and earliest time
+        if matches_starting_soon:
+            try:
+                earliest = min(m.scheduled_time for m in matches_starting_soon)
+            except Exception:
+                earliest = None
+            logger.info(
+                "schedule_live_polling: found %d candidate(s); earliest scheduled_time=%s",
+                len(matches_starting_soon),
+                earliest,
+            )
+        else:
+            logger.info("schedule_live_polling: found 0 candidates in the 1-minute window.")
 
-        logger.info(
-            f"Found {len(matches_starting_soon)} matches starting soon."
-        )
+        # Also log how many poll jobs currently exist in scheduler (quick sanity)
+        try:
+            poll_jobs = [j for j in scheduler.get_jobs() if j.id.startswith("poll_match_")]
+            logger.info(
+                "schedule_live_polling: currently %d poll_match_* job(s) in scheduler",
+                len(poll_jobs),
+            )
+        except Exception:
+            logger.debug("schedule_live_polling: could not enumerate scheduler jobs.")
+
+        if not matches_starting_soon:
+            return
         for match in matches_starting_soon:
             job_id = f"poll_match_{match.id}"
             if not scheduler.get_job(job_id):
