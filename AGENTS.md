@@ -22,7 +22,7 @@ This file resides in the repository root as `AGENTS.md`.
 3. Transparency: every automated change must open a pull request with a clear description and link to an onboarding issue when applicable.
 4. Approval confirmation: agents MUST NOT push changes or open PRs without an explicit human confirmation recorded for that operation. The canonical confirmation phrase for this repo is:
 
-   "@Copilot Accepted Confirmation: Are you sure?"
+   "I approve the changes by the agent to proceed"
 
    - An authorized human must post this exact line in the relevant conversation thread, issue, or PR comment to grant permission for a specific operation initiated by an agent.
    - Agents must include the human confirmation comment permalink in the PR body when creating the PR and must reference the person who posted it.
