@@ -465,10 +465,10 @@ async def schedule_live_polling():
 
         # Diagnostic logging: always log candidate count and earliest time
         if matches_starting_soon:
-            try:
-                earliest = min(m.scheduled_time for m in matches_starting_soon)
-            except Exception:
-                earliest = None
+            # Safely extract scheduled_time attributes and ignore None values
+            times = [getattr(m, "scheduled_time", None) for m in matches_starting_soon]
+            times = [t for t in times if t is not None]
+            earliest = min(times) if times else None
             logger.info(
                 "schedule_live_polling: found %d candidate(s); earliest scheduled_time=%s",
                 len(matches_starting_soon),
@@ -478,14 +478,27 @@ async def schedule_live_polling():
             logger.info("schedule_live_polling: found 0 candidates in the 1-minute window.")
 
         # Also log how many poll jobs currently exist in scheduler (quick sanity)
+        poll_jobs_count = 0
         try:
-            poll_jobs = [j for j in scheduler.get_jobs() if j.id.startswith("poll_match_")]
+            jobs = scheduler.get_jobs()
+        except AttributeError:
+            logger.debug("schedule_live_polling: scheduler.get_jobs() not available")
+        except Exception as e:
+            logger.warning(
+                "schedule_live_polling: failed to enumerate scheduler jobs: %s",
+                e,
+            )
+        else:
+            try:
+                poll_jobs_count = sum(1 for j in jobs if getattr(j, "id", "").startswith("poll_match_"))
+            except Exception:
+                # Be defensive about unexpected job object shapes
+                logger.debug("schedule_live_polling: unexpected job object while counting poll jobs")
+
             logger.info(
                 "schedule_live_polling: currently %d poll_match_* job(s) in scheduler",
-                len(poll_jobs),
+                poll_jobs_count,
             )
-        except Exception:
-            logger.warning("schedule_live_polling: could not enumerate scheduler jobs.")
 
         if not matches_starting_soon:
             return
