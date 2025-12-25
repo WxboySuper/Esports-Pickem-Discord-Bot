@@ -8,7 +8,10 @@ def _cleanup_bot_session():
 	"""
 	Close the bot's HTTP session if one exists.
 	
-	Performs a lazy import to obtain the bot instance and, if the instance exposes a `session` attribute, calls its `close()` method. Any exceptions raised during lookup or closing are swallowed and logged at debug level.
+	Performs a lazy import to obtain the bot instance and, if the
+	instance exposes a `session` attribute, calls its `close()`
+	method. Any exceptions raised during lookup or closing are
+	swallowed and logged at debug level.
 	"""
 	try:
 		from .bot_instance import get_bot_instance
@@ -43,15 +46,23 @@ def _shutdown_scheduler():
 
 def _dispose_db_engines():
 	"""
-	Dispose available database engines to help avoid hanging background resources at process exit.
+	        Dispose available database engines to help avoid hanging background
+	resources at process exit.
 	
-	Attempts a lazy import of the package's `db` module; if present, disposes `db.engine` (sync) and then disposes either `db.async_engine.sync_engine` (if exposed) or `db.async_engine` itself. All disposal attempts swallow exceptions and log failures at the debug level to avoid raising during shutdown.
+	        Attempts a lazy import of the package's `db` module; if present,
+	disposes `db.engine` (sync) and then disposes either
+	`db.async_engine.sync_engine` (if exposed) or `db.async_engine` itself. All
+	disposal attempts swallow exceptions and log failures at the debug level to
+	avoid raising during shutdown.
 	"""
 	def _safe_dispose(obj, label: str) -> None:
 		"""
-		Dispose an object if it exposes a callable `dispose` method, logging failures without raising.
+		                Dispose an object if it exposes a callable `dispose` method,
+		logging failures without raising.
 		
-		If `obj` is None nothing is done. If `obj` has a callable `dispose` attribute it will be called; any exception raised during disposal is caught and logged at debug level using `label` to identify the resource.
+		                If `obj` is None nothing is done. If `obj` has a callable
+		`dispose` attribute it will be called; any exception raised during disposal
+		is caught and logged at debug level using `label` to identify the resource.
 		
 		Parameters:
 			obj: The object to dispose (may be None or not implement `dispose`).

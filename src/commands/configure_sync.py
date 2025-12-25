@@ -30,7 +30,8 @@ class ConfigureSync(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         """
-        Initialize the ConfigureSync cog and retain a reference to the bot for use by the cog's commands and handlers.
+                Initialize the ConfigureSync cog and retain a reference to the
+        bot for use by the cog's commands and handlers.
         """
         self.bot = bot
 
