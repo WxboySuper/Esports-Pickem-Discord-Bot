@@ -5,12 +5,13 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-TEST_DATABASE_URL = "sqlite+aiosqlite:///test.db"
+import uuid
+TEST_DB_PATH = f"test-{uuid.uuid4().hex}.db"
+TEST_DATABASE_URL = f"sqlite+aiosqlite:///{TEST_DB_PATH}"
 engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 
 # Store the original db path to restore it later
 ORIGINAL_DB_PATH = "esports_pickem.db"
-TEST_DB_PATH = "test.db"
 
 
 async def setup_test_db():
@@ -22,10 +23,31 @@ async def setup_test_db():
         await conn.run_sync(SQLModel.metadata.create_all)
 
 
-def teardown_test_db():
-    """Removes the test database file."""
+async def teardown_test_db():
+    """Asynchronously disposes the test engine and removes the DB file.
+
+    This must be awaited from an async test fixture to ensure all async
+    connections are closed before attempting to delete the file on Windows.
+    """
+    try:
+        await engine.dispose()
+    except Exception:
+        # Best-effort; if disposal fails, continue to file removal attempt.
+        pass
+
+    # Also try disposing the sync_engine if available
+    try:
+        if hasattr(engine, "sync_engine") and engine.sync_engine is not None:
+            engine.sync_engine.dispose()
+    except Exception:
+        pass
+
     if os.path.exists(TEST_DB_PATH):
-        os.remove(TEST_DB_PATH)
+        try:
+            os.remove(TEST_DB_PATH)
+        except PermissionError:
+            # On Windows, file may still be released shortly; ignore here.
+            pass
 
 
 @asynccontextmanager

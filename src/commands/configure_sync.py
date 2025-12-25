@@ -6,7 +6,23 @@ from discord.ext import commands
 from src.auth import is_admin
 from src.config import DATA_PATH
 
+from pathlib import Path
+
 CONFIG_PATH = DATA_PATH / "tournaments.json"
+
+# Ensure the configured DATA_PATH is usable; if not, fall back to a
+# project-local `data/` directory so local dev on Windows works.
+try:
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+except Exception:
+    fallback = Path("data")
+    fallback.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH = fallback / "tournaments.json"
+
+# Ensure the config file exists
+if not CONFIG_PATH.exists():
+    with open(CONFIG_PATH, "w") as f:
+        json.dump([], f)
 
 
 class ConfigureSync(commands.Cog):
@@ -14,11 +30,6 @@ class ConfigureSync(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # Ensure the data directory and config file exist
-        CONFIG_PATH.parent.mkdir(exist_ok=True)
-        if not CONFIG_PATH.exists():
-            with open(CONFIG_PATH, "w") as f:
-                json.dump([], f)
 
     configure_group = app_commands.Group(
         name="configure-sync",

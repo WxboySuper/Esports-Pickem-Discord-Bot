@@ -112,11 +112,13 @@ class TeamSelect(discord.ui.Select):
         else:
             # Create a new pick
             crud.create_pick(
-                session=session,
-                user_id=db_user.id,
-                contest_id=self.match.contest_id,
-                match_id=self.match.id,
-                chosen_team=chosen_team,
+                session,
+                crud.PickCreateParams(
+                    user_id=db_user.id,
+                    contest_id=self.match.contest_id,
+                    match_id=self.match.id,
+                    chosen_team=chosen_team,
+                ),
             )
             message = (
                 f"You have picked **{chosen_team}** to win the match: "

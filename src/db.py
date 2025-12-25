@@ -1,5 +1,8 @@
+# Temporary/local-friendly DB path handling:
 import os
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -7,11 +10,30 @@ from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 # --- Sync Setup ---
-DB_PATH = os.path.join("/opt", "esports-bot", "data", "esports-pickem.db")
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
-# Workaround: Some deployments may set the database name as 'esports_pickem'
-# instead of 'esports-pickem'. To ensure consistency, we replace the
-# database name only if necessary.
+# Default production path (Linux). If unavailable (e.g., on Windows/dev),
+# fall back to a project-local `./data/esports-pickem.db` to make
+# local runs easy.
+DEFAULT_DB_PATH = Path("/opt/esports-bot/data/esports-pickem.db")
+project_root = Path(__file__).resolve().parents[1]
+local_data_dir = project_root / "data"
+local_data_dir.mkdir(parents=True, exist_ok=True)
+LOCAL_DB_PATH = local_data_dir / "esports-pickem.db"
+
+# Use env override if provided. Otherwise prefer the default production
+# path when it exists; otherwise use the local DB path (helpful for
+# Windows/dev).
+env_db = os.getenv("DATABASE_URL")
+if env_db:
+    DATABASE_URL = env_db
+else:
+    if os.name == "nt" or not DEFAULT_DB_PATH.parent.exists():
+        DB_PATH = str(LOCAL_DB_PATH)
+    else:
+        DB_PATH = str(DEFAULT_DB_PATH)
+    DATABASE_URL = f"sqlite:///{DB_PATH}"
+# Workaround: Some deployments may set the database name as
+# 'esports_pickem' instead of 'esports-pickem'. To ensure consistency,
+# we replace the database name only if necessary.
 if "esports_pickem" in DATABASE_URL:
     DATABASE_URL = DATABASE_URL.replace("esports_pickem", "esports-pickem")
 
@@ -39,7 +61,7 @@ AsyncSessionLocal = sessionmaker(
 
 
 @asynccontextmanager
-async def get_async_session() -> AsyncSession:
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
 

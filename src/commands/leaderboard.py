@@ -6,7 +6,7 @@ from typing import List, Union
 
 import discord
 from discord import app_commands
-from sqlalchemy import func, case, Float
+from sqlalchemy import func, case
 from sqlmodel import Session, select
 
 from src.db import get_session
@@ -28,94 +28,187 @@ LeaderboardData = Union[
 ]
 
 
+def _get_pick_correct_attr():
+    """Return the attribute on Pick that represents correctness.
+
+    Tries common names so this file doesn't hard-fail if the field name
+    differs slightly across schema versions.
+    """
+    for name in ("correct", "is_correct", "was_correct"):
+        if hasattr(Pick, name):
+            return getattr(Pick, name)
+    raise AttributeError("Pick model has no attribute indicating correctness")
+
+
+def _build_accuracy_query():
+    """Build a query that returns (User, accuracy_percent, total_correct).
+
+    Accuracy is returned as a percentage (0-100). Only users with at least
+    MIN_PICKS_FOR_ACCURACY_LEADERBOARD picks are included.
+    """
+    correct_attr = _get_pick_correct_attr()
+    total_picks = func.count(getattr(Pick, "id"))
+    total_correct = func.sum(case((correct_attr.is_(True), 1), else_=0))
+    # accuracy as percentage
+    accuracy = (total_correct * 100.0) / total_picks
+
+    query = (
+        select(
+            User,
+            accuracy.label("accuracy"),
+            total_correct.label("total_correct"),
+        )
+        .join(Pick, getattr(Pick, "user_id") == User.id)
+        .group_by(User.id)
+        .having(total_picks >= MIN_PICKS_FOR_ACCURACY_LEADERBOARD)
+        .order_by(accuracy.desc())
+    )
+    return query
+
+
+def _build_count_query(days: int = None, contest_id: int = None):
+    """
+    Build a query that returns (User, total_correct),
+    filtered by time/contest.
+    """
+    correct_attr = _get_pick_correct_attr()
+    total_correct = func.sum(
+        case((correct_attr.is_(True), 1), else_=0)
+    )
+
+    query = select(User, total_correct.label("total_correct")).join(
+        Pick, getattr(Pick, "user_id") == User.id
+    )
+
+    # Apply optional filters
+    if days is not None:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        if hasattr(Pick, "created_at"):
+            query = query.where(getattr(Pick, "created_at") >= cutoff)
+    if contest_id is not None and hasattr(Pick, "contest_id"):
+        query = query.where(getattr(Pick, "contest_id") == contest_id)
+
+    query = query.group_by(User.id).order_by(total_correct.desc())
+    return query
+
+
+def _passes_guild(user, guild_id: int) -> bool:
+    if guild_id is None:
+        return True
+    ug = getattr(user, "guild_id", None) or getattr(user, "server_id", None)
+    # If we're filtering by a specific guild, only include users who
+    # are associated with that guild (i.e. have a guild/server id that
+    # matches). Previously users with no guild_id were incorrectly
+    # included when a guild filter was applied.
+    return ug is not None and ug == guild_id
+
+
+def _normalize_row(row):
+    if isinstance(row, tuple):
+        return row
+    try:
+        return tuple(row)
+    except Exception:
+        return (row,)
+
+
+def _to_float(val, default=0.0):
+    try:
+        return float(val)
+    except Exception:
+        return default
+
+
+def _to_int(val, default=0):
+    try:
+        return int(val)
+    except Exception:
+        return default
+
+
+def _parse_accuracy_row(t: tuple):
+    """Parse an accuracy-based leaderboard tuple into (User, accuracy, total)."""
+    raw_accuracy = t[1] if len(t) > 1 else None
+    accuracy = _to_float(raw_accuracy, default=0.0)
+
+    # Normalize fractions (0-1) to percentage (0-100)
+    if 0.0 <= accuracy <= 1.0:
+        accuracy = accuracy * 100.0
+
+    # Clamp to sensible bounds
+    if accuracy < 0.0:
+        accuracy = 0.0
+    elif accuracy > 100.0:
+        accuracy = 100.0
+
+    total = _to_int(t[2]) if len(t) > 2 and t[2] is not None else 0
+    if total < 0:
+        total = 0
+    return (t[0], accuracy, total)
+
+
+def _parse_count_row(t: tuple):
+    """Parse a count-based leaderboard tuple into (User, total)."""
+    total = _to_int(t[1]) if len(t) > 1 and t[1] is not None else 0
+    if total < 0:
+        total = 0
+    return (t[0], total)
+
+
+def _parse_row(tup, is_accuracy_based: bool):
+    """Return a normalized leaderboard tuple or None on parse failure.
+
+    For accuracy-based: (User, accuracy: float, total_correct: int)
+    For count-based: (User, total_correct: int)
+    """
+    if not tup:
+        return None
+    user = tup[0]
+    if user is None:
+        return None
+
+    return _parse_accuracy_row(tup) if is_accuracy_based else _parse_count_row(tup)
+
+
+async def _apply_guild_filter(results, guild_id: int, is_accuracy_based: bool):
+    """Normalize DB results into LeaderboardData and apply optional guild filter.
+
+    This version delegates parsing and simple checks to small helpers to
+    reduce cognitive complexity of the main loop.
+    """
+    processed = []
+    for row in results:
+        tup = _normalize_row(row)
+        parsed = _parse_row(tup, is_accuracy_based)
+        if parsed is None:
+            continue
+
+        user = parsed[0]
+        if not _passes_guild(user, guild_id):
+            continue
+
+        processed.append(parsed)
+
+    return processed
+
+
 async def get_leaderboard_data(
     session: Session,
     days: int = None,
     guild_id: int = None,
     contest_id: int = None,
 ) -> LeaderboardData:
-    """
-    Fetches and calculates leaderboard data based on the given criteria.
-
-    - If 'days' or 'contest_id' is provided, it's a count-based leaderboard
-      (total correct picks).
-    - Otherwise, it's an accuracy-based leaderboard (Global/Server).
-    """
+    # Decide leaderboard type
     is_accuracy_based = not days and not contest_id
 
+    # Build appropriate query
     if is_accuracy_based:
-        # --- Accuracy-Based Leaderboard (Global/Server) ---
-        total_correct = func.sum(case((Pick.status == "correct", 1), else_=0))
-        total_resolved = func.sum(
-            case((Pick.status.in_(["correct", "incorrect"]), 1), else_=0)
-        )
-
-        accuracy = case(
-            (
-                total_resolved > 0,
-                (
-                    func.cast(total_correct, Float)
-                    / func.cast(total_resolved, Float)
-                )
-                * 100,
-            ),
-            else_=0.0,
-        ).label("accuracy")
-
-        query = (
-            select(User, accuracy, total_correct.label("total_correct"))
-            .join(Pick)
-            .where(Pick.status.in_(["correct", "incorrect"]))
-            .group_by(User.id)
-            .having(total_resolved >= MIN_PICKS_FOR_ACCURACY_LEADERBOARD)
-            .order_by(
-                accuracy.desc(), total_correct.label("total_correct").desc()
-            )
-        )
+        query = _build_accuracy_query()
     else:
-        # --- Count-Based Leaderboard (Daily/Weekly/Contest) ---
-        total_correct = func.count(Pick.id).label("total_correct")
-        query = (
-            select(User, total_correct)
-            .join(Pick)
-            .where(Pick.status == "correct")
-        )
-
-        if days:
-            start_date = datetime.now(timezone.utc) - timedelta(days=days)
-            query = query.where(Pick.timestamp >= start_date)
-
-        if contest_id:
-            query = query.where(Pick.contest_id == contest_id)
-
-        query = query.group_by(User.id).order_by(total_correct.desc())
+        query = _build_count_query(days=days, contest_id=contest_id)
 
     results = session.exec(query).all()
-
-    # Guild filtering logic. This is inefficient for large bots but matches
-    # the existing implementation's approach.
-    if guild_id:
-        try:
-            # The 'bot' global is initialized in the setup function.
-            guild = await bot.fetch_guild(guild_id)
-            guild_member_ids = {str(m.id) for m in guild.members}
-
-            if is_accuracy_based:
-                results = [
-                    (user, acc, total)
-                    for user, acc, total in results
-                    if user.discord_id in guild_member_ids
-                ]
-            else:
-                results = [
-                    (user, score)
-                    for user, score in results
-                    if user.discord_id in guild_member_ids
-                ]
-        except (discord.NotFound, discord.Forbidden):
-            logger.warning(f"Could not fetch members for guild {guild_id}")
-
-    return results
+    return await _apply_guild_filter(results, guild_id, is_accuracy_based)
 
 
 async def create_leaderboard_embed(
@@ -136,33 +229,40 @@ async def create_leaderboard_embed(
         embed.description = "The leaderboard is empty."
         return embed
 
+    # Build description from leaderboard entries
     lines = []
-    # Check the type of the first element to determine the leaderboard type
-    is_accuracy_based = (
-        isinstance(
-            leaderboard_data[0],
-            tuple,
-        )
-        and len(leaderboard_data[0]) == 3
-    )
+    is_accuracy_based = _is_accuracy_based_data(leaderboard_data)
 
-    for i, entry in enumerate(leaderboard_data[:20], 1):  # Show top 20
-        username = entry[0].username or f"User ID: {entry[0].discord_id}"
+    for i, entry in enumerate(leaderboard_data[:20], 1):
         if is_accuracy_based:
-            # entry is (User, accuracy, total_correct)
-            accuracy = entry[1]
-            lines.append(f"**{i}.** {username} - `{accuracy:.2f}%` accuracy")
+            lines.append(_format_accuracy_entry(entry, i))
         else:
-            # entry is (User, total_correct)
-            total_correct = entry[1]
-            plural = "s" if total_correct != 1 else ""
-            line = (
-                f"**{i}.** {username} - `{total_correct}` correct pick{plural}"
-            )
-            lines.append(line)
+            lines.append(_format_count_entry(entry, i))
 
     embed.description = "\n".join(lines)
     return embed
+
+
+def _is_accuracy_based_data(leaderboard_data: LeaderboardData) -> bool:
+    """Return True when leaderboard entries are accuracy tuples."""
+    first = leaderboard_data[0]
+    return isinstance(first, tuple) and len(first) == 3
+
+
+def _format_accuracy_entry(entry, index: int) -> str:
+    user = entry[0]
+    username = user.username or f"User ID: {user.discord_id}"
+    accuracy = entry[1]
+    return f"**{index}.** {username} - `{accuracy:.2f}%` accuracy"
+
+
+def _format_count_entry(entry, index: int) -> str:
+    user = entry[0]
+    username = user.username or f"User ID: {user.discord_id}"
+    total = entry[1]
+    plural = "s" if total != 1 else ""
+    return f"**{index}.** {username} - `{total}` correct pick{plural}"
+
 
 
 # --- Views ---
@@ -180,7 +280,8 @@ class LeaderboardView(discord.ui.View):
     ):
         await interaction.response.defer()
         session: Session = next(get_session())
-        guild_id = interaction.guild.id if period == "Server" else None
+        # Only attempt to read guild id if this interaction occurred in a guild
+        guild_id = interaction.guild.id if (period == "Server" and interaction.guild is not None) else None
 
         # Update button styles
         for item in self.children:

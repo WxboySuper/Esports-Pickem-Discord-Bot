@@ -20,6 +20,7 @@ from src.bot_instance import set_bot_instance
 from src.leaguepedia_client import leaguepedia_client
 from src.logging_config import setup_logging
 import aiohttp
+from src.db import init_db
 
 load_dotenv(find_dotenv())
 setup_logging()
@@ -59,6 +60,12 @@ class EsportsBot(commands.Bot):
         logger.info("Executing setup_hook...")
         self.session = aiohttp.ClientSession()
         set_bot_instance(self)
+        # Ensure DB tables exist before the scheduler or commands hit the DB
+        try:
+            logger.info("Ensuring database tables exist...")
+            init_db()
+        except Exception:
+            logger.exception("Failed initializing database tables.")
         logger.info("Logging into Leaguepedia...")
         await leaguepedia_client.login()
         logger.info("Starting scheduler...")

@@ -1,84 +1,292 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Type, Any
 from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
-from src.models import User, Contest, Match, Pick, Result, Team
+from src.models import (
+    User,
+    Contest,
+    Match,
+    Pick,
+    Result,
+    Team,
+)
 from datetime import datetime, timezone
+from dataclasses import dataclass
+
+
+@dataclass
+class MatchCreateParams:
+    contest_id: int
+    team1: str
+    team2: str
+    scheduled_time: datetime
+    leaguepedia_id: str
+
+
+@dataclass
+class MatchUpdateParams:
+    team1: Optional[str] = None
+    team2: Optional[str] = None
+    scheduled_time: Optional[datetime] = None
+
+
+@dataclass
+class PickCreateParams:
+    user_id: int
+    contest_id: int
+    match_id: int
+    chosen_team: str
+    timestamp: Optional[datetime] = None
+
+
+@dataclass
+class ContestUpdateParams:
+    name: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
 
 logger = logging.getLogger(__name__)
+class _DBHelpers:
+    """Grouped synchronous DB helper operations to improve cohesion.
+
+    Module-level wrapper functions delegate to these methods so external
+    callers keep the same API while internal functionality is grouped.
+    """
+
+    @staticmethod
+    def save_and_refresh(session: Session, obj: Any) -> Any:
+        session.add(obj)
+        session.commit()
+        session.refresh(obj)
+        return obj
+
+    @staticmethod
+    def save_all_and_refresh(session: Session, objs: List[Any]) -> List[Any]:
+        session.add_all(objs)
+        session.commit()
+        for o in objs:
+            session.refresh(o)
+        return objs
+
+    @staticmethod
+    def delete_and_commit(session: Session, obj: Any) -> None:
+        session.delete(obj)
+        session.commit()
+
+    @staticmethod
+    def create_model(session: Session, model: Type[Any], **kwargs) -> Any:
+        obj = model(**kwargs)
+        _DBHelpers.save_and_refresh(session, obj)
+        return obj
+
+    @staticmethod
+    def get_model_by_id(session: Session, model: Type[Any], obj_id: int) -> Optional[Any]:
+        return session.get(model, obj_id)
+
+    @staticmethod
+    def update_model_fields(session: Session, model: Type[Any], obj_id: int, **fields) -> Optional[Any]:
+        obj = session.get(model, obj_id)
+        if not obj:
+            return None
+        for k, v in fields.items():
+            if v is not None:
+                setattr(obj, k, v)
+        _DBHelpers.save_and_refresh(session, obj)
+        return obj
+
+    @staticmethod
+    def delete_model_by_id(session: Session, model: Type[Any], obj_id: int) -> bool:
+        obj = session.get(model, obj_id)
+        if not obj:
+            return False
+        _DBHelpers.delete_and_commit(session, obj)
+        return True
+
+
+# Backwards-compatible thin wrappers (preserve module API)
+def _save_and_refresh(session: Session, obj: Any) -> Any:
+    return _DBHelpers.save_and_refresh(session, obj)
+
+
+def _save_all_and_refresh(session: Session, objs: List[Any]) -> List[Any]:
+    return _DBHelpers.save_all_and_refresh(session, objs)
+
+
+def _delete_and_commit(session: Session, obj: Any) -> None:
+    return _DBHelpers.delete_and_commit(session, obj)
+
+
+def _create_model(session: Session, model: Type[Any], **kwargs) -> Any:
+    return _DBHelpers.create_model(session, model, **kwargs)
+
+
+def _get_model_by_id(
+    session: Session,
+    model: Type[Any],
+    obj_id: int,
+) -> Optional[Any]:
+    return _DBHelpers.get_model_by_id(session, model, obj_id)
+
+
+def _update_model_fields(
+    session: Session,
+    model: Type[Any],
+    obj_id: int,
+    **fields,
+) -> Optional[Any]:
+    return _DBHelpers.update_model_fields(session, model, obj_id, **fields)
+
+
+def _delete_model_by_id(
+    session: Session,
+    model: Type[Any],
+    obj_id: int,
+) -> bool:
+    return _DBHelpers.delete_model_by_id(session, model, obj_id)
 
 
 async def upsert_team(
     session: AsyncSession, team_data: dict
 ) -> Optional[Team]:
     """Creates or updates a team based on leaguepedia_id."""
-    leaguepedia_id = team_data.get("leaguepedia_id")
-    if not leaguepedia_id:
-        logger.error("Missing leaguepedia_id in team_data")
-        return None
-
-    try:
-        existing_team = await session.exec(
-            select(Team).where(Team.leaguepedia_id == leaguepedia_id)
-        )
-        team = existing_team.first()
-
-        if team:
-            logger.info(f"Updating existing team: {team.name}")
-            team.name = team_data["name"]
-            team.image_url = team_data.get("image_url")
-            team.roster = team_data.get("roster")
-        else:
-            logger.info(f"Creating new team: {team_data.get('name')}")
-            team = Team(**team_data)
-
-        session.add(team)
-        await session.flush()
-        logger.info(f"Upserted team: {team.name} (ID: {team.id})")
-        return team
-    except KeyError as e:
-        logger.error(f"Missing key in team_data: {e}")
-        return None
-    except Exception:
-        logger.exception(f"Error upserting team with data: {team_data}")
-        return None
+    return await _upsert_by_leaguepedia(
+        session,
+        Team,
+        team_data,
+        update_keys=["name", "image_url", "roster"],
+    )
 
 
 async def upsert_contest(
     session: AsyncSession, contest_data: dict
 ) -> Optional[Contest]:
     """Creates or updates a contest based on leaguepedia_id."""
-    leaguepedia_id = contest_data.get("leaguepedia_id")
+    return await _upsert_by_leaguepedia(
+        session,
+        Contest,
+        contest_data,
+        update_keys=["name", "start_date", "end_date"],
+    )
+
+
+async def _upsert_by_leaguepedia(
+    session: AsyncSession,
+    model: Type[Any],
+    data: dict,
+    update_keys: Optional[List[str]] = None,
+) -> Optional[Any]:
+    """Generic upsert helper for models that have a leaguepedia_id field.
+
+    The implementation delegates the actual DB work to small module-level
+    async helpers to keep this function short and reduce cyclomatic
+    complexity (CodeScene "Bumpy Road" / Complex Method).
+    """
+    leaguepedia_id = data.get("leaguepedia_id")
     if not leaguepedia_id:
-        logger.error("Missing leaguepedia_id in contest_data")
+        logger.error("Missing leaguepedia_id in data for %s", model.__name__)
         return None
 
     try:
-        existing_contest = await session.exec(
-            select(Contest).where(Contest.leaguepedia_id == leaguepedia_id)
+        obj = await _find_existing_by_leaguepedia(session, model, leaguepedia_id)
+        if obj is None:
+            return await _create_new_by_leaguepedia(session, model, data)
+        return await _update_existing_by_leaguepedia(
+            session, obj, data, update_keys
         )
-        contest = existing_contest.first()
-
-        if contest:
-            logger.info(f"Updating existing contest: {contest.name}")
-            contest.name = contest_data["name"]
-            contest.start_date = contest_data["start_date"]
-            contest.end_date = contest_data["end_date"]
-        else:
-            logger.info(f"Creating new contest: {contest_data.get('name')}")
-            contest = Contest(**contest_data)
-
-        session.add(contest)
-        await session.flush()
-        logger.info(f"Upserted contest: {contest.name} (ID: {contest.id})")
-        return contest
-    except KeyError as e:
-        logger.error(f"Missing key in contest_data: {e}")
-        return None
     except Exception:
-        logger.exception(f"Error upserting contest with data: {contest_data}")
+        logger.exception(
+            "Error upserting %s with data: %s",
+            model.__name__,
+            data,
+        )
         return None
+
+
+async def _find_existing_by_leaguepedia(
+    session: AsyncSession, model: Type[Any], leaguepedia_id: str
+) -> Optional[Any]:
+    stmt = select(model).where(
+        getattr(model, "leaguepedia_id") == leaguepedia_id
+    )
+    res = await session.exec(stmt)
+    return res.first()
+
+
+async def _create_new_by_leaguepedia(
+    session: AsyncSession, model: Type[Any], data: dict
+) -> Any:
+    logger.info("Creating new %s: %s", model.__name__, data.get("name"))
+    obj = model(**data)
+    session.add(obj)
+    await session.flush()
+    await session.refresh(obj)
+    logger.info(
+        "Upserted %s: %s (ID: %s)",
+        obj.__class__.__name__,
+        getattr(obj, "name", None),
+        getattr(obj, "id", None),
+    )
+    return obj
+
+
+async def _update_existing_by_leaguepedia(
+    session: AsyncSession,
+    obj: Any,
+    data: dict,
+    update_keys: Optional[List[str]] = None,
+) -> Any:
+    logger.info(
+        "Updating existing %s: %s",
+        obj.__class__.__name__,
+        getattr(obj, "name", None),
+    )
+
+    _apply_updates_to_obj(obj, data, update_keys)
+
+    session.add(obj)
+    await session.flush()
+    await session.refresh(obj)
+    logger.info(
+        "Upserted %s: %s (ID: %s)",
+        obj.__class__.__name__,
+        getattr(obj, "name", None),
+        getattr(obj, "id", None),
+    )
+    return obj
+
+
+def _apply_updates_to_obj(
+    obj: Any, data: dict, update_keys: Optional[List[str]] = None
+) -> None:
+    """Dispatch to a focused updater helper.
+
+    Split into two very small helpers to reduce cyclomatic complexity in
+    the calling code and make each piece trivially testable.
+    """
+    if update_keys is None:
+        _apply_all_updates(obj, data)
+    else:
+        _apply_selected_updates(obj, data, update_keys)
+
+
+def _apply_all_updates(obj: Any, data: dict) -> None:
+    """Apply all values from `data` onto `obj`, skipping the id field."""
+    for k, v in data.items():
+        if k == "leaguepedia_id":
+            continue
+        setattr(obj, k, v)
+
+
+def _apply_selected_updates(
+    obj: Any, data: dict, update_keys: Optional[List[str]]
+) -> None:
+    """Apply only keys listed in `update_keys` from `data` onto `obj`."""
+    if not update_keys:
+        return
+    for k in update_keys:
+        if k in data:
+            setattr(obj, k, data[k])
 
 
 async def upsert_match(
@@ -144,9 +352,7 @@ def create_user(
 ) -> User:
     logger.info(f"Creating user: {username} ({discord_id})")
     user = User(discord_id=discord_id, username=username)
-    session.add(user)
-    session.commit()
-    session.refresh(user)
+    _save_and_refresh(session, user)
     logger.info(f"Created user with ID: {user.id}")
     return user
 
@@ -170,9 +376,7 @@ def update_user(
         return None
     if username is not None:
         user.username = username
-    session.add(user)
-    session.commit()
-    session.refresh(user)
+    _save_and_refresh(session, user)
     logger.info(f"Updated user ID: {user_id}")
     return user
 
@@ -183,20 +387,21 @@ def delete_user(session: Session, user_id: int) -> bool:
     if not user:
         logger.warning(f"User with ID {user_id} not found for deletion.")
         return False
-    session.delete(user)
-    session.commit()
+    _delete_and_commit(session, user)
     logger.info(f"Deleted user ID: {user_id}")
     return True
 
 
 # ---- CONTEST ----
-def create_contest(
-    session: Session,
-    name: str,
-    start_date: datetime,
-    end_date: datetime,
-    leaguepedia_id: str,
-) -> Contest:
+def create_contest(session: Session, contest_data: dict) -> Contest:
+    """Creates a contest from a dict containing keys:
+    name, start_date, end_date, leaguepedia_id.
+    """
+    name = contest_data.get("name")
+    start_date = contest_data.get("start_date")
+    end_date = contest_data.get("end_date")
+    leaguepedia_id = contest_data.get("leaguepedia_id")
+
     logger.info(f"Creating contest: {name}")
     contest = Contest(
         name=name,
@@ -204,9 +409,7 @@ def create_contest(
         end_date=end_date,
         leaguepedia_id=leaguepedia_id,
     )
-    session.add(contest)
-    session.commit()
-    session.refresh(contest)
+    _save_and_refresh(session, contest)
     logger.info(f"Created contest with ID: {contest.id}")
     return contest
 
@@ -222,26 +425,20 @@ def list_contests(session: Session) -> List[Contest]:
 
 
 def update_contest(
-    session: Session,
-    contest_id: int,
-    name: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    session: Session, contest_id: int, params: ContestUpdateParams
 ) -> Optional[Contest]:
     logger.info(f"Updating contest ID: {contest_id}")
     contest = session.get(Contest, contest_id)
     if not contest:
         logger.warning(f"Contest with ID {contest_id} not found for update.")
         return None
-    if name is not None:
-        contest.name = name
-    if start_date is not None:
-        contest.start_date = start_date
-    if end_date is not None:
-        contest.end_date = end_date
-    session.add(contest)
-    session.commit()
-    session.refresh(contest)
+    if params.name is not None:
+        contest.name = params.name
+    if params.start_date is not None:
+        contest.start_date = params.start_date
+    if params.end_date is not None:
+        contest.end_date = params.end_date
+    _save_and_refresh(session, contest)
     logger.info(f"Updated contest ID: {contest_id}")
     return contest
 
@@ -252,32 +449,27 @@ def delete_contest(session: Session, contest_id: int) -> bool:
     if not contest:
         logger.warning(f"Contest with ID {contest_id} not found for deletion.")
         return False
-    session.delete(contest)
-    session.commit()
+    _delete_and_commit(session, contest)
     logger.info(f"Deleted contest ID: {contest_id}")
     return True
 
 
 # ---- MATCH ----
-def create_match(
-    session: Session,
-    contest_id: int,
-    team1: str,
-    team2: str,
-    scheduled_time: datetime,
-    leaguepedia_id: str,
-) -> Match:
-    logger.info(f"Creating match: {team1} vs {team2} for contest {contest_id}")
-    match = Match(
-        contest_id=contest_id,
-        team1=team1,
-        team2=team2,
-        scheduled_time=scheduled_time,
-        leaguepedia_id=leaguepedia_id,
+def create_match(session: Session, params: MatchCreateParams) -> Match:
+    logger.info(
+        "Creating match: %s vs %s for contest %s",
+        params.team1,
+        params.team2,
+        params.contest_id,
     )
-    session.add(match)
-    session.commit()
-    session.refresh(match)
+    match = Match(
+        contest_id=params.contest_id,
+        team1=params.team1,
+        team2=params.team2,
+        scheduled_time=params.scheduled_time,
+        leaguepedia_id=params.leaguepedia_id,
+    )
+    _save_and_refresh(session, match)
     logger.info(f"Created match with ID: {match.id}")
     return match
 
@@ -288,10 +480,7 @@ def bulk_create_matches(
     """Bulk creates matches from a list of dicts."""
     logger.info(f"Bulk creating {len(matches_data)} matches")
     matches = [Match(**data) for data in matches_data]
-    session.add_all(matches)
-    session.commit()
-    for match in matches:
-        session.refresh(match)
+    _save_all_and_refresh(session, matches)
     logger.info("Bulk created matches.")
     return matches
 
@@ -352,26 +541,20 @@ def list_all_matches(session: Session) -> List[Match]:
 
 
 def update_match(
-    session: Session,
-    match_id: int,
-    team1: Optional[str] = None,
-    team2: Optional[str] = None,
-    scheduled_time: Optional[datetime] = None,
+    session: Session, match_id: int, params: MatchUpdateParams
 ) -> Optional[Match]:
     logger.info(f"Updating match ID: {match_id}")
     match = session.get(Match, match_id)
     if not match:
         logger.warning(f"Match with ID {match_id} not found for update.")
         return None
-    if team1 is not None:
-        match.team1 = team1
-    if team2 is not None:
-        match.team2 = team2
-    if scheduled_time is not None:
-        match.scheduled_time = scheduled_time
-    session.add(match)
-    session.commit()
-    session.refresh(match)
+    if params.team1 is not None:
+        match.team1 = params.team1
+    if params.team2 is not None:
+        match.team2 = params.team2
+    if params.scheduled_time is not None:
+        match.scheduled_time = params.scheduled_time
+    _save_and_refresh(session, match)
     logger.info(f"Updated match ID: {match_id}")
     return match
 
@@ -382,37 +565,32 @@ def delete_match(session: Session, match_id: int) -> bool:
     if not match:
         logger.warning(f"Match with ID {match_id} not found for deletion.")
         return False
-    session.delete(match)
-    session.commit()
+    _delete_and_commit(session, match)
     logger.info(f"Deleted match ID: {match_id}")
     return True
 
 
 # ---- PICK ----
-def create_pick(
-    session: Session,
-    user_id: int,
-    contest_id: int,
-    match_id: int,
-    chosen_team: str,
-    timestamp: Optional[datetime] = None,
-) -> Pick:
+# Allow this function to have multiple explicit args for clarity
+# despite lint rules
+# pylint: disable=too-many-arguments
+def create_pick(session: Session, params: PickCreateParams) -> Pick:
     logger.info(
-        f"Creating pick for user {user_id}, match {match_id}, "
-        f"team {chosen_team}"
+        "Creating pick for user %s, match %s, team %s",
+        params.user_id,
+        params.match_id,
+        params.chosen_team,
     )
     pick_args = dict(
-        user_id=user_id,
-        contest_id=contest_id,
-        match_id=match_id,
-        chosen_team=chosen_team,
+        user_id=params.user_id,
+        contest_id=params.contest_id,
+        match_id=params.match_id,
+        chosen_team=params.chosen_team,
     )
-    if timestamp is not None:
-        pick_args["timestamp"] = timestamp
+    if params.timestamp is not None:
+        pick_args["timestamp"] = params.timestamp
     pick = Pick(**pick_args)
-    session.add(pick)
-    session.commit()
-    session.refresh(pick)
+    _save_and_refresh(session, pick)
     logger.info(f"Created pick with ID: {pick.id}")
     return pick
 
@@ -444,9 +622,7 @@ def update_pick(
         return None
     if chosen_team is not None:
         pick.chosen_team = chosen_team
-    session.add(pick)
-    session.commit()
-    session.refresh(pick)
+    _save_and_refresh(session, pick)
     logger.info(f"Updated pick ID: {pick_id}")
     return pick
 
@@ -457,8 +633,7 @@ def delete_pick(session: Session, pick_id: int) -> bool:
     if not pick:
         logger.warning(f"Pick with ID {pick_id} not found for deletion.")
         return False
-    session.delete(pick)
-    session.commit()
+    _delete_and_commit(session, pick)
     logger.info(f"Deleted pick ID: {pick_id}")
     return True
 
@@ -472,9 +647,7 @@ def create_result(
 ) -> Result:
     logger.info(f"Creating result for match ID: {match_id}")
     result = Result(match_id=match_id, winner=winner, score=score)
-    session.add(result)
-    session.commit()
-    session.refresh(result)
+    _save_and_refresh(session, result)
     logger.info(f"Created result with ID: {result.id}")
     return result
 
@@ -505,9 +678,7 @@ def update_result(
         result.winner = winner
     if score is not None:
         result.score = score
-    session.add(result)
-    session.commit()
-    session.refresh(result)
+    _save_and_refresh(session, result)
     logger.info(f"Updated result ID: {result_id}")
     return result
 
@@ -518,7 +689,6 @@ def delete_result(session: Session, result_id: int) -> bool:
     if not result:
         logger.warning(f"Result with ID {result_id} not found for deletion.")
         return False
-    session.delete(result)
-    session.commit()
+    _delete_and_commit(session, result)
     logger.info(f"Deleted result ID: {result_id}")
     return True

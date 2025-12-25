@@ -35,7 +35,7 @@ async def db_setup_teardown():
     """Module-level fixture to set up and tear down the test database."""
     await setup_test_db()
     yield
-    teardown_test_db()
+    await teardown_test_db()
 
 
 @pytest_asyncio.fixture(autouse=True)
