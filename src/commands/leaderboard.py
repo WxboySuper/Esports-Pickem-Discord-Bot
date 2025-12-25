@@ -24,7 +24,7 @@ MIN_PICKS_FOR_ACCURACY_LEADERBOARD = 5
 
 
 LeaderboardData = Union[
-    List[tuple[User, float, int]],  # Accuracy, Total Correct
+    List[tuple[User, float, int, int]],  # Accuracy, Total Correct, Total Picks
     List[tuple[User, int]],  # Total Correct
 ]
 
@@ -68,6 +68,7 @@ def _build_accuracy_query():
             User,
             accuracy.label("accuracy"),
             total_correct.label("total_correct"),
+            total_picks.label("total_picks"),
         )
         .join(Pick, getattr(Pick, "user_id") == User.id)
         .group_by(User.id)
@@ -105,8 +106,8 @@ def _build_count_query(days: int = None, contest_id: int = None):
     # Apply optional filters
     if days is not None:
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        if hasattr(Pick, "created_at"):
-            query = query.where(getattr(Pick, "created_at") >= cutoff)
+        if hasattr(Pick, "timestamp"):
+            query = query.where(getattr(Pick, "timestamp") >= cutoff)
     if contest_id is not None and hasattr(Pick, "contest_id"):
         query = query.where(getattr(Pick, "contest_id") == contest_id)
 
@@ -211,29 +212,41 @@ def _to_int(val, default=0):
 def _parse_accuracy_row(t: tuple):
     """
     Normalize an accuracy-based database row into
-    (User, accuracy, total).
+    (User, accuracy, total_correct, total_picks).
 
-    Converts the raw accuracy to a float percentage in the range
-    0–100 (treating values between 0 and 1 as fractions and
-    multiplying them by 100), clamps out-of-range accuracies to
-    [0, 100], and coerces the total correct value to a non-negative
-    integer.
+    Converts raw accuracy to a float percentage (0-100). If the value
+    appears to be a legacy fraction (0-1) rather than a percentage, it
+    is multiplied by 100. Values are clamped to [0, 100] and integers
+    are coerced.
 
     Parameters:
         t (tuple): Database row expected in the form
-            (User, accuracy, total).
+            (User, accuracy, total_correct, total_picks).
 
     Returns:
-        tuple: (User, accuracy_float, total_correct) where
-            `accuracy_float` is a percentage between 0 and 100 and
-            `total_correct` is an integer >= 0.
+        tuple: (User, accuracy_float, total_correct, total_picks) where
+            `accuracy_float` is a percentage between 0 and 100.
     """
     raw_accuracy = t[1] if len(t) > 1 else None
     accuracy = _to_float(raw_accuracy, default=0.0)
 
-    # Normalize fractions (0-1) to percentage (0-100)
-    if 0.0 <= accuracy <= 1.0:
-        accuracy = accuracy * 100.0
+    total_correct = _to_int(t[2]) if len(t) > 2 and t[2] is not None else 0
+    total_picks = _to_int(t[3]) if len(t) > 3 and t[3] is not None else 0
+
+    # Normalize fractions (0-1) to percentage (0-100) only for legacy values.
+    # We detect legacy fractions by checking if the accuracy matches the
+    # fraction (correct/picks) but is significantly different from the
+    # percentage ((correct*100)/picks).
+    if 0.0 < accuracy <= 1.0 and total_picks > 0:
+        fractional = total_correct / total_picks
+        percentage = (total_correct * 100.0) / total_picks
+        # If it matches the fraction exactly but not the percentage,
+        # it's legacy.
+        if (
+            abs(accuracy - fractional) < 0.0001
+            and abs(accuracy - percentage) > 0.0001
+        ):
+            accuracy = accuracy * 100.0
 
     # Clamp to sensible bounds
     if accuracy < 0.0:
@@ -241,10 +254,9 @@ def _parse_accuracy_row(t: tuple):
     elif accuracy > 100.0:
         accuracy = 100.0
 
-    total = _to_int(t[2]) if len(t) > 2 and t[2] is not None else 0
-    if total < 0:
-        total = 0
-    return (t[0], accuracy, total)
+    if total_correct < 0:
+        total_correct = 0
+    return (t[0], accuracy, total_correct, total_picks)
 
 
 def _parse_count_row(t: tuple):
@@ -279,7 +291,7 @@ def _parse_row(tup, is_accuracy_based: bool):
 
     Returns:
         tuple | None: For accuracy-based rows, returns
-            (User, accuracy: float, total_correct: int).
+            (User, accuracy: float, total_correct: int, total_picks: int).
             For count-based rows, returns (User, total_correct: int).
             Returns `None` if the input is empty or the first element
             (User) is missing.
@@ -315,7 +327,7 @@ async def _apply_guild_filter(results, guild_id: int, is_accuracy_based: bool):
     Returns:
         list: A list of parsed leaderboard entries. For
             accuracy-based data each entry is
-            (User, accuracy: float, total_correct: int). For
+            (User, accuracy: float, total_correct: int, total_picks: int). For
             count-based data each entry is (User, total_correct: int).
             Rows that cannot be parsed or whose users fail the guild
             check are omitted.
@@ -361,7 +373,7 @@ async def get_leaderboard_data(
 
     Returns:
         LeaderboardData: For an accuracy-based leaderboard, a list of
-            tuples (User, accuracy_percent, total_correct). For a
+            tuples (User, accuracy_percent, total_correct, total_picks). For a
             count-based leaderboard, a list of tuples
             (User, total_correct).
     """
@@ -432,14 +444,14 @@ async def create_leaderboard_embed(
 def _is_accuracy_based_data(leaderboard_data: LeaderboardData) -> bool:
     """
     Determine whether the leaderboard data is accuracy-based
-    (entries as 3-tuples).
+    (entries as 4-tuples).
 
     Returns:
-        `True` if the first entry is a tuple of length 3 representing
-            (User, accuracy, total), `False` otherwise.
+        `True` if the first entry is a tuple of length 4 representing
+            (User, accuracy, total, picks), `False` otherwise.
     """
     first = leaderboard_data[0]
-    return isinstance(first, tuple) and len(first) == 3
+    return isinstance(first, tuple) and len(first) == 4
 
 
 def _format_accuracy_entry(entry, index: int) -> str:
@@ -449,7 +461,7 @@ def _format_accuracy_entry(entry, index: int) -> str:
 
     Parameters:
         entry (tuple): A leaderboard row in the form
-            (User, accuracy_percent, total_correct).
+            (User, accuracy_percent, total_correct, total_picks).
             `accuracy_percent` is a numeric value in percent (0–100).
         index (int): 1-based rank position to display.
 
