@@ -920,13 +920,16 @@ def update_match(
     session: Session, match_id: int, params: MatchUpdateParams
 ) -> Optional[Match]:
     """
-    Apply provided match update fields to an existing Match and persist the changes.
+        Apply provided match update fields to an existing Match and persist the
+    changes.
     
     Parameters:
-        params (MatchUpdateParams): Update container whose non-None fields (team1, team2, scheduled_time) will be applied to the match.
+                params (MatchUpdateParams): Update container whose non-None
+        fields (team1, team2, scheduled_time) will be applied to the match.
     
     Returns:
-        Updated Match if a match with the given id was found and updated, `None` if no such match exists.
+                Updated Match if a match with the given id was found and
+        updated, `None` if no such match exists.
     """
     logger.info(f"Updating match ID: {match_id}")
     match = session.get(Match, match_id)
@@ -948,13 +951,15 @@ def delete_match(session: Session, match_id: int) -> bool:
     """
     Delete the Match with the given primary key and commit the change.
     
-    Deletes the matching Match record from the database and commits the transaction.
+        Deletes the matching Match record from the database and commits the
+    transaction.
     
     Parameters:
         match_id (int): Primary key of the Match to delete.
     
     Returns:
-        bool: `True` if the match was deleted, `False` if no match with the given id was found.
+                bool: `True` if the match was deleted, `False` if no match with
+        the given id was found.
     """
     logger.info(f"Deleting match ID: {match_id}")
     match = session.get(Match, match_id)
@@ -975,10 +980,13 @@ def create_pick(session: Session, params: PickCreateParams) -> Pick:
     Create and persist a Pick for a user in a contest match.
     
     Parameters:
-        params (PickCreateParams): Parameter object containing `user_id`, `contest_id`, `match_id`, `chosen_team`, and optional `timestamp`.
+                params (PickCreateParams): Parameter object containing
+        `user_id`, `contest_id`, `match_id`, `chosen_team`, and optional
+        `timestamp`.
     
     Returns:
-        Pick: The persisted Pick instance with database-populated fields (for example, `id`) refreshed.
+                Pick: The persisted Pick instance with database-populated
+        fields (for example, `id`) refreshed.
     """
     logger.info(
         "Creating pick for user %s, match %s, team %s",
@@ -1026,7 +1034,8 @@ def update_pick(
     Parameters:
         session (Session): Database session used for the update.
         pick_id (int): Primary key of the Pick to update.
-        chosen_team (Optional[str]): New team name to set; if None the field is left unchanged.
+                chosen_team (Optional[str]): New team name to set; if None the
+        field is left unchanged.
     
     Returns:
         Optional[Pick]: The updated Pick if found, otherwise None.
@@ -1047,13 +1056,15 @@ def delete_pick(session: Session, pick_id: int) -> bool:
     """
     Delete a Pick record identified by its primary key.
     
-    Attempts to remove the Pick with the given id from the database and commit the change.
+        Attempts to remove the Pick with the given id from the database and
+    commit the change.
     
     Parameters:
         pick_id (int): Primary key of the Pick to delete.
     
     Returns:
-        bool: `True` if the pick was deleted, `False` if no pick with the given id existed.
+                bool: `True` if the pick was deleted, `False` if no pick with
+        the given id existed.
     """
     logger.info(f"Deleting pick ID: {pick_id}")
     pick = session.get(Pick, pick_id)
@@ -1110,7 +1121,8 @@ def update_result(
     """
     Update fields of an existing Result record.
     
-    Only parameters provided (non-None) are applied to the stored Result. If the result with the given id does not exist, nothing is changed.
+        Only parameters provided (non-None) are applied to the stored Result.
+    If the result with the given id does not exist, nothing is changed.
     
     Parameters:
         result_id (int): Primary key of the Result to update.
@@ -1118,7 +1130,8 @@ def update_result(
         score (Optional[str]): New score value to set, if provided.
     
     Returns:
-        Optional[Result]: The updated Result object when found and saved, or `None` if no matching Result exists.
+                Optional[Result]: The updated Result object when found and
+        saved, or `None` if no matching Result exists.
     """
     logger.info(f"Updating result ID: {result_id}")
     result = session.get(Result, result_id)
@@ -1139,7 +1152,8 @@ def delete_result(session: Session, result_id: int) -> bool:
     Delete the Result with the given primary key.
     
     Returns:
-        True if a Result with the given `result_id` was found and deleted, False otherwise.
+                True if a Result with the given `result_id` was found and
+        deleted, False otherwise.
     """
     logger.info(f"Deleting result ID: {result_id}")
     result = session.get(Result, result_id)
