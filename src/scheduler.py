@@ -375,7 +375,7 @@ async def _handle_winner(
 
 
 async def _should_continue_polling(
-    session, match: Match | None, job_id: str
+    match: Match | None, job_id: str
 ) -> bool:
     """
     Decides whether polling should continue for a match and
@@ -437,7 +437,7 @@ async def poll_live_match_job(match_db_id: int):
     async with get_async_session() as session:
         match = await crud.get_match_with_result_by_id(session, match_db_id)
 
-        if not await _should_continue_polling(session, match, job_id):
+        if not await _should_continue_polling(match, job_id):
             return
 
         scoreboard_data = await _fetch_scoreboard_for_match(match)
