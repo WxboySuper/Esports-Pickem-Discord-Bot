@@ -11,6 +11,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
 def _init_config_path(path: Path) -> Path:
     """
     Initialize and validate the tournaments config path.
@@ -23,7 +24,7 @@ def _init_config_path(path: Path) -> Path:
     # project-local `data/` directory so local dev on Windows works.
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
+    except Exception:
         fallback = Path("data")
         try:
             fallback.mkdir(parents=True, exist_ok=True)
@@ -135,18 +136,18 @@ class ConfigureSync(commands.Cog):
             )
             await interaction.response.send_message(
                 "Error reading configuration file: Invalid JSON.",
-                ephemeral=True
+                ephemeral=True,
             )
             return
         except Exception as e:
             logger.error(
                 "Unexpected error reading tournament config: %s",
                 e,
-                exc_info=True
+                exc_info=True,
             )
             await interaction.response.send_message(
                 "An unexpected error occurred reading the configuration.",
-                ephemeral=True
+                ephemeral=True,
             )
             return
 

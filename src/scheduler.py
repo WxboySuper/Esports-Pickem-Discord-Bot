@@ -164,6 +164,7 @@ def _calculate_team_scores(relevant_games, match):
             the number of games won by match.team1 and match.team2,
             respectively.
     """
+
     def _norm(s: str) -> str:
         """
         Normalize a text string for case- and whitespace-insensitive
@@ -325,6 +326,7 @@ def _filter_relevant_games_from_scoreboard(scoreboard_data, match: Match):
             whose Team1/Team2 pair matches the match teams (order-
             insensitive).
     """
+
     def _norm(s: str) -> str:
         return (s or "").strip().lower()
 
@@ -374,9 +376,7 @@ async def _handle_winner(
     _remove_job_if_exists(job_id)
 
 
-async def _should_continue_polling(
-    match: Match | None, job_id: str
-) -> bool:
+async def _should_continue_polling(match: Match | None, job_id: str) -> bool:
     """
     Decides whether polling should continue for a match and
     unschedules the poll job when it should stop.
@@ -443,8 +443,7 @@ async def poll_live_match_job(match_db_id: int):
         scoreboard_data = await _fetch_scoreboard_for_match(match)
         if not scoreboard_data:
             logger.info(
-                "No scoreboard data found for match %s. Will retry.",
-                match.id
+                "No scoreboard data found for match %s. Will retry.", match.id
             )
             return
 
@@ -454,14 +453,14 @@ async def poll_live_match_job(match_db_id: int):
         if not relevant_games:
             logger.info(
                 "No relevant games found in scoreboard data for match %s.",
-                match.id
+                match.id,
             )
             return
 
         logger.debug(
             "Found %d relevant games for match %s.",
             len(relevant_games),
-            match.id
+            match.id,
         )
 
         team1_score, team2_score = _calculate_team_scores(
@@ -478,9 +477,7 @@ async def poll_live_match_job(match_db_id: int):
         )
 
         if winner:
-            await _handle_winner(
-                match, winner, current_score_str, job_id
-            )
+            await _handle_winner(match, winner, current_score_str, job_id)
             return
 
         if match.last_announced_score == current_score_str:
@@ -494,7 +491,7 @@ async def poll_live_match_job(match_db_id: int):
         logger.info(
             "New score for match %s: %s. Announcing update.",
             match.id,
-            current_score_str
+            current_score_str,
         )
         match.last_announced_score = current_score_str
         session.add(match)
@@ -604,8 +601,7 @@ async def send_result_notification(match: Match, result: Result):
             and `score`.
     """
     logger.info(
-        "Broadcasting result notification for match %s "
-        "to all guilds.",
+        "Broadcasting result notification for match %s " "to all guilds.",
         match.id,
     )
     bot = get_bot_instance()
@@ -645,9 +641,7 @@ async def send_result_notification(match: Match, result: Result):
             picks_value = (
                 "**{cp}** of **{tp}** users "
                 "({pc:.2f}%) correctly picked the winner."
-            ).format(
-                cp=correct_picks, tp=total_picks, pc=correct_percentage
-            )
+            ).format(cp=correct_picks, tp=total_picks, pc=correct_percentage)
         else:
             picks_value = "No picks were made for this match."
 
@@ -696,9 +690,7 @@ async def send_mid_series_update(match: Match, score: str):
     embed.timestamp = datetime.now(timezone.utc)
 
     await _broadcast_embed_to_guilds(
-        bot,
-        embed,
-        f"mid-series update for match {match.id} (score: {score})"
+        bot, embed, f"mid-series update for match {match.id} (score: {score})"
     )
 
 
@@ -788,8 +780,7 @@ def _safe_get_jobs():
         return []
     except Exception as e:
         logger.warning(
-            "schedule_live_polling: failed to enumerate scheduler jobs: %s",
-            e
+            "schedule_live_polling: failed to enumerate scheduler jobs: %s", e
         )
         return []
 
@@ -834,9 +825,7 @@ def _schedule_poll_for_match(match):
     job_id = f"poll_match_{match.id}"
     if scheduler.get_job(job_id):
         logger.debug(
-            "Job '%s' for match %s already exists. Skipping.",
-            job_id,
-            match.id
+            "Job '%s' for match %s already exists. Skipping.", job_id, match.id
         )
         return
 
@@ -896,7 +885,7 @@ async def schedule_live_polling():
         poll_jobs_count = _count_poll_jobs(jobs)
         logger.info(
             "schedule_live_polling: %d poll_match jobs in scheduler",
-            poll_jobs_count
+            poll_jobs_count,
         )
 
         if not matches_starting_soon:
@@ -918,6 +907,7 @@ def start_scheduler():
     are made and the function logs that state.
     """
     from src.commands.sync_leaguepedia import perform_leaguepedia_sync
+
     if not getattr(scheduler, "running", False):
         logger.info("Scheduler not running. Starting jobs...")
         scheduler.add_job(

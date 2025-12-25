@@ -96,9 +96,7 @@ def _build_count_query(days: int = None, contest_id: int = None):
             descending.
     """
     correct_attr = _get_pick_correct_attr()
-    total_correct = func.sum(
-        case((correct_attr.is_(True), 1), else_=0)
-    )
+    total_correct = func.sum(case((correct_attr.is_(True), 1), else_=0))
 
     query = select(User, total_correct.label("total_correct")).join(
         Pick, getattr(Pick, "user_id") == User.id

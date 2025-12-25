@@ -15,6 +15,7 @@ def _cleanup_bot_session():
     """
     try:
         from .bot_instance import get_bot_instance
+
         bot = get_bot_instance()
         if bot is None:
             return
@@ -35,6 +36,7 @@ def _shutdown_scheduler():
     """Shutdown any background scheduler if available."""
     try:
         from . import scheduler
+
         if hasattr(scheduler, "shutdown"):
             try:
                 scheduler.shutdown(wait=False)

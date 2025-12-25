@@ -109,9 +109,7 @@ async def _try_create_announcement_channel(
             permitted.
     """
     overwrites = {
-        guild.default_role: discord.PermissionOverwrite(
-            send_messages=False
-        )
+        guild.default_role: discord.PermissionOverwrite(send_messages=False)
     }
     if bot_member:
         overwrites[bot_member] = discord.PermissionOverwrite(
@@ -178,7 +176,9 @@ async def get_announcement_channel(
     return guild.text_channels[0] if guild.text_channels else None
 
 
-async def send_announcement(guild: discord.Guild, embed: discord.Embed) -> bool:
+async def send_announcement(
+    guild: discord.Guild, embed: discord.Embed
+) -> bool:
     """
     Send an embed announcement to an appropriate channel in the given
     guild.
@@ -195,7 +195,7 @@ async def send_announcement(guild: discord.Guild, embed: discord.Embed) -> bool:
     if channel is None:
         logger.error(
             "No available announcement channel in guild %s",
-            getattr(guild, "id", "unknown")
+            getattr(guild, "id", "unknown"),
         )
         return False
 
