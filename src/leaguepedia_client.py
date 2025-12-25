@@ -16,6 +16,16 @@ logger = logging.getLogger(__name__)
 
 class LeaguepediaClient:
     def __init__(self):
+        """
+        Initialize internal state for a LeaguepediaClient instance.
+        
+        Sets up:
+        - client: authenticated or unauthenticated EsportsClient placeholder (None until login).
+        - _cooldowns: mapping from overview_page to UTC datetime until which requests should be skipped.
+        - _backoff_minutes: per-overview_page exponential backoff value in minutes (doubles on rate limits).
+        - _initial_backoff: base backoff in minutes to use when first rate-limited (1 minute).
+        - _max_backoff: maximum backoff cap in minutes (1440 minutes).
+        """
         self.client: EsportsClient | None = None
         # cooldowns per overview_page (UTC datetime until which we should not retry)
         self._cooldowns: dict[str, datetime] = {}
@@ -28,7 +38,11 @@ class LeaguepediaClient:
         self._max_backoff = 24 * 60
 
     async def login(self):
-        """Logs in to the Leaguepedia API and sets the client."""
+        """
+        Ensure self.client is an authenticated Leaguepedia EsportsClient when valid credentials are available.
+        
+        Reads LEAGUEPEDIA_USER and LEAGUEPEDIA_PASS from the environment to create authenticated credentials and verifies them with a meta=userinfo query. If credentials are missing or authentication fails, falls back to creating an unauthenticated EsportsClient(wiki="lol"). If self.client is already set, does nothing. Logs authentication attempts, failures, and fallbacks.
+        """
         if self.client:
             return
 
@@ -82,7 +96,15 @@ class LeaguepediaClient:
 
     async def fetch_upcoming_matches(self, tournament_name_like: str):
         """
-        Fetches upcoming matches for a given tournament using a Cargo query.
+        Retrieve upcoming matches for tournaments whose name starts with the provided pattern.
+        
+        Performs a Cargo query against Leaguepedia's MatchSchedule and Tournaments tables and returns the raw query result. If the fetch fails, an empty list is returned.
+        
+        Parameters:
+            tournament_name_like (str): Prefix used to match tournament names; the function performs a SQL `LIKE` match as `"{tournament_name_like}%"`.
+        
+        Returns:
+            list: The raw list of match records returned by the Cargo client, or an empty list if an error occurred.
         """
         if not self.client:
             await self.login()
@@ -108,11 +130,13 @@ class LeaguepediaClient:
 
     async def get_scoreboard_data(self, overview_page: str) -> Optional[list]:
         """
-        Fetches scoreboard data for a given tournament overview page.
-
-        Implements a simple per-overview_page cooldown/exponential backoff when
-        the API reports rate limiting, to avoid repeatedly hammering the API.
-        Returns None when data couldn't be retrieved (including cooldown).
+        Fetch scoreboard entries for the tournament identified by overview_page.
+        
+        Parameters:
+            overview_page (str): The tournament OverviewPage identifier used to query scoreboard games.
+        
+        Returns:
+            Optional[list]: A list of scoreboard records for the overview page, or `None` if data could not be retrieved (including when a cooldown/backoff is active or a fetch error occurs).
         """
         if not self.client:
             await self.login()

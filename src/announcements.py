@@ -15,12 +15,10 @@ def _find_existing_channel(
     guild: discord.Guild,
 ) -> Optional[discord.TextChannel]:
     """
-    Locate a text channel in the guild whose name matches the
-    announcement channel name (case-insensitive).
-
-    Channels where the channel name cannot be accessed are ignored
-    during the search.
-
+    Finds a text channel in the guild with the announcement channel name (case-insensitive).
+    
+    Ignores channels whose name cannot be accessed during the search.
+    
     Returns:
         The matching discord.TextChannel if found, `None` otherwise.
     """
@@ -185,16 +183,10 @@ async def send_announcement(
     guild: discord.Guild, embed: discord.Embed
 ) -> bool:
     """
-    Send an embed announcement to an appropriate channel in the given
-    guild.
-
-    Resolves a target channel using the module's channel-resolution
-    logic and sends the provided embed. If no suitable channel is
-    available, an error is logged and no message is sent.
-
-    Parameters:
-        guild (discord.Guild): Guild to send the announcement in.
-        embed (discord.Embed): Embed to send as the announcement.
+    Send an embed announcement to an appropriate channel in the guild.
+    
+    Returns:
+        bool: True if the embed was sent successfully, False otherwise.
     """
     channel = await get_announcement_channel(guild)
     if channel is None:
@@ -218,6 +210,14 @@ async def send_announcement(
 
 
 async def get_admin_channel(guild: discord.Guild) -> discord.TextChannel:
+    """
+    Get or create the guild's admin channel named "admin-updates".
+    
+    If an existing text channel with that name is found it is returned. If not, a new text channel named "admin-updates" is created with send_messages denied for the guild's default role and granted for the bot member, and that channel is returned.
+    
+    Returns:
+        discord.TextChannel: The admin text channel for the guild.
+    """
     for channel in guild.text_channels:
         if channel.name == ADMIN_CHANNEL_NAME:
             return channel
@@ -229,9 +229,13 @@ async def get_admin_channel(guild: discord.Guild) -> discord.TextChannel:
 
 
 async def send_admin_update(message: str, mention_user_id: int | None = None):
-    """Sends a plain-text admin update to the developer guild's admin-updates channel.
-
-    If `mention_user_id` is provided it will be mentioned at the start of the message.
+    """
+    Send a plain-text admin update to the developer guild's admin-updates channel.
+    
+    If `mention_user_id` is provided the user will be mentioned at the start of the message. The function looks up the developer guild using the `DEVELOPER_GUILD_ID` environment variable and requires the bot instance to be available; if either is missing or the guild cannot be found, the function returns without sending.
+    Parameters:
+        message (str): The message text to send.
+        mention_user_id (int | None): Optional user ID to mention at the start of the message.
     """
     import os
     from src.bot_instance import get_bot_instance
