@@ -178,7 +178,7 @@ async def get_announcement_channel(
     return guild.text_channels[0] if guild.text_channels else None
 
 
-async def send_announcement(guild: discord.Guild, embed: discord.Embed):
+async def send_announcement(guild: discord.Guild, embed: discord.Embed) -> bool:
     """
     Send an embed announcement to an appropriate channel in the given
     guild.
@@ -197,5 +197,16 @@ async def send_announcement(guild: discord.Guild, embed: discord.Embed):
             "No available announcement channel in guild %s",
             getattr(guild, "id", "unknown")
         )
-        return
-    await channel.send(embed=embed)
+        return False
+
+    try:
+        await channel.send(embed=embed)
+        return True
+    except (discord.Forbidden, discord.HTTPException) as e:
+        logger.error(
+            "Failed to send announcement in guild %s, channel %s: %s",
+            getattr(guild, "id", "unknown"),
+            getattr(channel, "id", "unknown"),
+            e,
+        )
+        return False
