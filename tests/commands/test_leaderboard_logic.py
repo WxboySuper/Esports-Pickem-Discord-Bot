@@ -37,9 +37,9 @@ async def test_get_leaderboard_data_accuracy(mock_session):
     user4 = create_mock_user(4, "UserFour")  # Perfect accuracy
 
     mock_session.exec.return_value.all.return_value = [
-        (user4, 100.0, 5),  # 5/5 correct
-        (user1, 80.0, 8),  # 8/10 correct
-        (user2, 75.0, 6),  # 6/8 correct
+        (user4, 100.0, 5, 5),  # 5/5 correct
+        (user1, 80.0, 8, 10),  # 8/10 correct
+        (user2, 75.0, 6, 8),  # 6/8 correct
     ]
 
     # --- Call the function ---
@@ -83,7 +83,7 @@ async def test_create_leaderboard_embed_accuracy(mock_interaction):
     # --- Test Data ---
     user1 = create_mock_user(1, "UserOne")
     user2 = create_mock_user(2, "UserTwo")
-    leaderboard_data = [(user1, 95.5, 19), (user2, 88.888, 16)]
+    leaderboard_data = [(user1, 95.5, 19, 20), (user2, 88.888, 16, 18)]
 
     # --- Call the function ---
     embed = await create_leaderboard_embed(
