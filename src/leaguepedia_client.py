@@ -1,9 +1,13 @@
 import logging
 import os
+import asyncio
+import random
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 from mwrogue.auth_credentials import AuthCredentials
 from mwrogue.esports_client import EsportsClient
+from typing import Optional
 
 load_dotenv()
 
@@ -13,6 +17,15 @@ logger = logging.getLogger(__name__)
 class LeaguepediaClient:
     def __init__(self):
         self.client: EsportsClient | None = None
+        # cooldowns per overview_page (UTC datetime until which we should not retry)
+        self._cooldowns: dict[str, datetime] = {}
+        # per-overview_page backoff minutes (int), doubles on each ratelimit
+        self._backoff_minutes: dict[str, int] = {}
+        # initial backoff in minutes when ratelimited
+        # start small since documentation doesn't specify a hard limit
+        self._initial_backoff = 1
+        # maximum backoff cap (in minutes)
+        self._max_backoff = 24 * 60
 
     async def login(self):
         """Logs in to the Leaguepedia API and sets the client."""
@@ -93,12 +106,27 @@ class LeaguepediaClient:
             )
             return []
 
-    async def get_scoreboard_data(self, overview_page: str):
+    async def get_scoreboard_data(self, overview_page: str) -> Optional[list]:
         """
         Fetches scoreboard data for a given tournament overview page.
+
+        Implements a simple per-overview_page cooldown/exponential backoff when
+        the API reports rate limiting, to avoid repeatedly hammering the API.
+        Returns None when data couldn't be retrieved (including cooldown).
         """
         if not self.client:
             await self.login()
+
+        now = datetime.utcnow()
+        cooldown_until = self._cooldowns.get(overview_page)
+        if cooldown_until and now < cooldown_until:
+            wait = (cooldown_until - now).total_seconds() / 60.0
+            logger.warning(
+                "Skipping Leaguepedia query for %s due to cooldown (%.1f minutes remaining).",
+                overview_page,
+                wait,
+            )
+            return None
 
         try:
             response = self.client.cargo_client.query(
@@ -112,12 +140,48 @@ class LeaguepediaClient:
                 order_by="SG.DateTime_UTC DESC",
                 limit="100",  # Get all games for the series
             )
+            # On success, clear any backoff state
+            if overview_page in self._backoff_minutes:
+                del self._backoff_minutes[overview_page]
+            if overview_page in self._cooldowns:
+                del self._cooldowns[overview_page]
             return response
         except Exception as e:
+            # Some mwrogue / mediawiki clients sometimes raise structured tuples
+            # or messages that include 'ratelimit'/'ratelimited'. Detect that and
+            # apply an exponential backoff per overview_page.
+            s = repr(e).lower()
+            if "ratelimit" in s or "ratelimited" in s:
+                # brief pause to avoid immediate retry storms from concurrent tasks
+                try:
+                    await asyncio.sleep(5)
+                except Exception:
+                    # Ignore sleep cancellation issues and continue to set backoff
+                    pass
+
+                prev = self._backoff_minutes.get(overview_page, self._initial_backoff)
+                # double the backoff (but at least initial)
+                next_backoff = min(max(prev, self._initial_backoff) * 2, self._max_backoff)
+                self._backoff_minutes[overview_page] = next_backoff
+
+                # add a small random jitter (0-20%) to the cooldown to reduce thundering herd
+                jitter = next_backoff * random.uniform(0, 0.2)
+                cooldown_minutes = next_backoff + jitter
+                cooldown_until = now + timedelta(minutes=cooldown_minutes)
+                self._cooldowns[overview_page] = cooldown_until
+                logger.error(
+                    "Rate limited by Leaguepedia for %s. Backing off for %.1f minutes (base=%d, jitter=%.1f).",
+                    overview_page,
+                    cooldown_minutes,
+                    next_backoff,
+                    jitter,
+                )
+                return None
+
             logger.error(
                 f"Error fetching scoreboard data for {overview_page}: {e}"
             )
-            return []
+            return None
 
 
 # Create a single instance of the client to be used across the application

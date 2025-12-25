@@ -454,11 +454,11 @@ async def schedule_live_polling():
     logger.debug("Running schedule_live_polling job...")
     async with get_async_session() as session:
         now = datetime.now(timezone.utc)
-        one_minute_from_now = now + timedelta(minutes=1)
+        five_minutes_from_now = now + timedelta(minutes=5)
 
         statement = select(Match).where(
             Match.scheduled_time >= now,
-            Match.scheduled_time < one_minute_from_now,
+            Match.scheduled_time < five_minutes_from_now,
             Match.result == None,  # noqa: E711
         )
         matches_starting_soon = (await session.exec(statement)).all()
@@ -479,7 +479,7 @@ async def schedule_live_polling():
             )
         else:
             logger.info(
-                "schedule_live_polling: found 0 candidates in the 1-minute window."
+                "schedule_live_polling: found 0 candidates in the 5-minute window."
             )
 
         # Also log how many poll jobs currently exist in scheduler (quick sanity)
@@ -560,7 +560,7 @@ def start_scheduler():
         scheduler.add_job(
             schedule_live_polling,
             "interval",
-            minutes=1,
+            minutes=5,
             id="schedule_live_polling_job",
             replace_existing=True,
         )
