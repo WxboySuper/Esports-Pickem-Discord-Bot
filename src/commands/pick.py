@@ -84,7 +84,7 @@ class TeamSelect(discord.ui.Select):
         updating the invoking user's Pick for the associated match,
         sending an ephemeral confirmation message, and removing the
         interactive view from the original message.
-        
+
         Parameters:
             interaction (discord.Interaction): The interaction
                 triggered by the user's selection.

@@ -46,7 +46,7 @@ AsyncSessionLocal = sessionmaker(
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Provide an asynchronous context manager for database sessions.
-    
+
     Returns:
         AsyncSession: An asynchronous database session ready for use.
             The session is closed when the context manager exits.

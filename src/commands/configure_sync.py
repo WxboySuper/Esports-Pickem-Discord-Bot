@@ -1,4 +1,5 @@
 import json
+import logging
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -7,6 +8,8 @@ from src.auth import is_admin
 from src.config import DATA_PATH
 
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 CONFIG_PATH = DATA_PATH / "tournaments.json"
 
@@ -30,7 +33,7 @@ class ConfigureSync(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         """
-                Initialize the ConfigureSync cog and retain a reference to the
+        Initialize the ConfigureSync cog and retain a reference to the
         bot for use by the cog's commands and handlers.
         """
         self.bot = bot
@@ -99,8 +102,31 @@ class ConfigureSync(commands.Cog):
     @is_admin()
     async def list_tournaments(self, interaction: discord.Interaction):
         """Lists all configured tournament slugs."""
-        with open(CONFIG_PATH, "r") as f:
-            tournaments = json.load(f)
+        try:
+            with open(CONFIG_PATH, "r") as f:
+                tournaments = json.load(f)
+        except FileNotFoundError:
+            tournaments = []
+        except json.JSONDecodeError:
+            logger.error(
+                "Failed to decode tournament config JSON.", exc_info=True
+            )
+            await interaction.response.send_message(
+                "Error reading configuration file: Invalid JSON.",
+                ephemeral=True
+            )
+            return
+        except Exception as e:
+            logger.error(
+                "Unexpected error reading tournament config: %s",
+                e,
+                exc_info=True
+            )
+            await interaction.response.send_message(
+                "An unexpected error occurred reading the configuration.",
+                ephemeral=True
+            )
+            return
 
         if not tournaments:
             await interaction.response.send_message(

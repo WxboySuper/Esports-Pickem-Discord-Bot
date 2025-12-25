@@ -60,7 +60,7 @@ class EsportsBot(commands.Bot):
         """
         Run asynchronous startup tasks required before the bot
         becomes ready.
-        
+
         Initializes the HTTP session, registers the global bot
         instance, ensures database tables exist, logs into the
         Leaguepedia client, starts the scheduler, loads command

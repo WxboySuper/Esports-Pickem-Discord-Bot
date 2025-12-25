@@ -35,7 +35,7 @@ async def db_setup_teardown():
     """
     Set up the test database for the module and tear it down after
     tests complete.
-    
+
     Pytest async fixture that performs database setup before the
     module's tests run, yields control to execute the tests, and
     performs database teardown after the tests finish. Intended for

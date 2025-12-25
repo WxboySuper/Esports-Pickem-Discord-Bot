@@ -46,7 +46,10 @@ class ContestUpdateParams:
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
 
+
 logger = logging.getLogger(__name__)
+
+
 class _DBHelpers:
     """Grouped synchronous DB helper operations to improve cohesion.
 
@@ -59,11 +62,11 @@ class _DBHelpers:
         """
         Persist an ORM object to the database and refresh its state
         from the session.
-        
+
         Parameters:
             obj (Any): ORM model instance to add, commit, and refresh
                 in the given session.
-        
+
         Returns:
             Any: The same `obj` instance after commit and session
                 refresh, reflecting persisted database state.
@@ -78,11 +81,11 @@ class _DBHelpers:
         """
         Persist multiple ORM objects to the database and refresh them
         from the session.
-        
+
         Parameters:
             objs (List[Any]): Iterable of mapped ORM instances to add
                 and persist.
-        
+
         Returns:
             List[Any]: The same list of instances after being
                 refreshed with the database state.
@@ -98,7 +101,7 @@ class _DBHelpers:
         """
         Delete an ORM mapped instance from the provided session and
         commit the transaction.
-        
+
         Parameters:
             session (Session): SQLAlchemy session used to perform the
                 deletion and commit.
@@ -113,11 +116,11 @@ class _DBHelpers:
         """
         Create and persist a new instance of the given model using
         the provided field values.
-        
+
         Parameters:
             model (Type[Any]): ORM model class to instantiate.
             **kwargs: Field values passed to the model constructor.
-        
+
         Returns:
             Any: The newly created and refreshed model instance.
         """
@@ -126,36 +129,40 @@ class _DBHelpers:
         return obj
 
     @staticmethod
-    def get_model_by_id(session: Session, model: Type[Any], obj_id: int) -> Optional[Any]:
+    def get_model_by_id(
+        session: Session, model: Type[Any], obj_id: int
+    ) -> Optional[Any]:
         """
         Retrieve a mapped model instance by its primary key.
-        
+
         Parameters:
             model (Type[Any]): ORM model class to query.
             obj_id (int): Primary key of the desired object.
-        
+
         Returns:
             The model instance if found, `None` otherwise.
         """
         return session.get(model, obj_id)
 
     @staticmethod
-    def update_model_fields(session: Session, model: Type[Any], obj_id: int, **fields) -> Optional[Any]:
+    def update_model_fields(
+        session: Session, model: Type[Any], obj_id: int, **fields
+    ) -> Optional[Any]:
         """
         Update specified attributes on a model instance identified by
         its primary key.
-        
+
         Only attributes provided in `**fields` whose values are not
         `None` are applied. The instance is persisted and refreshed
         before being returned.
-        
+
         Parameters:
             model (Type[Any]): ORM model class of the object to
                 update.
             obj_id (int): Primary key of the object to update.
             **fields: Attribute names and their new values; attributes
                 with value `None` are ignored.
-        
+
         Returns:
             Optional[Any]: The updated and refreshed model instance,
                 or `None` if no object with `obj_id` exists.
@@ -170,15 +177,17 @@ class _DBHelpers:
         return obj
 
     @staticmethod
-    def delete_model_by_id(session: Session, model: Type[Any], obj_id: int) -> bool:
+    def delete_model_by_id(
+        session: Session, model: Type[Any], obj_id: int
+    ) -> bool:
         """
         Delete the database record of the given model with the
         specified primary key if it exists.
-        
+
         Parameters:
             model (Type[Any]): ORM model class to delete from.
             obj_id (int): Primary key of the object to delete.
-        
+
         Returns:
             bool: `True` if the object was found and deleted, `False`
                 otherwise.
@@ -195,7 +204,7 @@ def _save_and_refresh(session: Session, obj: Any) -> Any:
     """
     Persist the given ORM object, commit the transaction, refresh its
     state from the database, and return it.
-    
+
     Returns:
         The same object after being persisted and refreshed.
     """
@@ -206,11 +215,11 @@ def _save_all_and_refresh(session: Session, objs: List[Any]) -> List[Any]:
     """
     Persist multiple ORM objects in the database, commit the
     transaction, and refresh each instance.
-    
+
     Parameters:
         objs (List[Any]): Iterable of ORM instances to be added and
             refreshed.
-    
+
     Returns:
         List[Any]: The provided objects after being committed and
             refreshed.
@@ -222,7 +231,7 @@ def _delete_and_commit(session: Session, obj: Any) -> None:
     """
     Delete a mapped ORM object from the given session and commit the
     transaction.
-    
+
     Parameters:
         session (Session): Active SQLAlchemy session used for the
             operation.
@@ -235,13 +244,13 @@ def _create_model(session: Session, model: Type[Any], **kwargs) -> Any:
     """
     Create and persist a new instance of the given model using the
     provided field values.
-    
+
     Parameters:
         session (Session): Database session used to persist the
             instance.
         model (Type[Any]): ORM model class to instantiate.
         **kwargs: Field values passed to the model constructor.
-    
+
     Returns:
         Any: The newly created and refreshed model instance.
     """
@@ -255,11 +264,11 @@ def _get_model_by_id(
 ) -> Optional[Any]:
     """
     Retrieve a model instance by its primary key.
-    
+
     Parameters:
         model (Type[Any]): ORM model class to query.
         obj_id (int): Primary key of the desired record.
-    
+
     Returns:
         The model instance if found, otherwise None.
     """
@@ -275,13 +284,13 @@ def _update_model_fields(
     """
     Update the specified fields on a model instance identified by its
     primary key and persist the changes.
-    
+
     Parameters:
         model (Type[Any]): ORM model class of the object to update.
         obj_id (int): Primary key of the object to update.
         **fields: Field names and their new values; only keys with
             non-None values are applied.
-    
+
     Returns:
         Any | None: The updated model instance after persistence, or
             `None` if no object with `obj_id` was found.
@@ -296,11 +305,11 @@ def _delete_model_by_id(
 ) -> bool:
     """
     Remove a single database model instance identified by its primary key.
-    
+
     Parameters:
         model (Type[Any]): ORM model class to delete from.
         obj_id (int): Primary key of the object to remove.
-    
+
     Returns:
         bool: `True` if an object was deleted, `False` if no matching
             object was found.
@@ -313,12 +322,12 @@ async def upsert_team(
 ) -> Optional[Team]:
     """
     Create or update a Team using its `leaguepedia_id`.
-    
+
     Parameters:
         team_data (dict): Mapping containing team fields. Must include
             `leaguepedia_id`; other keys may include `name`,
             `image_url`, `roster`, and any other Team fields to set.
-    
+
     Returns:
         team (Optional[Team]): The created or updated Team instance,
             or `None` if `leaguepedia_id` is missing or an error
@@ -337,16 +346,16 @@ async def upsert_contest(
 ) -> Optional[Contest]:
     """
     Create or update a Contest using its Leaguepedia identifier.
-    
+
     The function upserts a Contest by `leaguepedia_id`, creating a new
     record if none exists or updating the existing record. Only
     `name`, `start_date`, and `end_date` are considered for updates.
-    
+
     Parameters:
         contest_data (dict): Mapping of contest fields. Must include
             `leaguepedia_id`. May include `name`, `start_date`, and
             `end_date`.
-    
+
     Returns:
         Contest or None: The created or updated Contest, or `None` if
             the upsert failed or `leaguepedia_id` was missing.
@@ -368,7 +377,7 @@ async def _upsert_by_leaguepedia(
     """
     Upserts a model instance identified by its `leaguepedia_id` using
     the provided data.
-    
+
     Parameters:
         session (AsyncSession): Database session used for querying
             and persistence.
@@ -380,7 +389,7 @@ async def _upsert_by_leaguepedia(
             keys from `data` will be applied when updating an existing
             object; otherwise all fields (except `leaguepedia_id`) are
             applied.
-    
+
     Returns:
         Optional[Any]: The created or updated model instance, or
             `None` if `leaguepedia_id` is missing or an error occurred
@@ -392,7 +401,9 @@ async def _upsert_by_leaguepedia(
         return None
 
     try:
-        obj = await _find_existing_by_leaguepedia(session, model, leaguepedia_id)
+        obj = await _find_existing_by_leaguepedia(
+            session, model, leaguepedia_id
+        )
         if obj is None:
             return await _create_new_by_leaguepedia(session, model, data)
         return await _update_existing_by_leaguepedia(
@@ -413,12 +424,12 @@ async def _find_existing_by_leaguepedia(
     """
     Retrieve the first instance of the given ORM model with the
     specified Leaguepedia identifier.
-    
+
     Parameters:
         model (Type[Any]): ORM model class that defines a
             `leaguepedia_id` attribute.
         leaguepedia_id (str): Leaguepedia identifier to match.
-    
+
     Returns:
         Optional[Any]: The first matching model instance if found,
             `None` otherwise.
@@ -436,14 +447,14 @@ async def _create_new_by_leaguepedia(
     """
     Create and persist a new model instance initialized from the
     provided Leaguepedia data.
-    
+
     Parameters:
         session (AsyncSession): Async database session used to add
             and flush the new instance.
         model (Type[Any]): ORM model class to instantiate.
         data (dict): Mapping of attributes used to construct the model
             instance.
-    
+
     Returns:
         Any: The newly created and refreshed model instance.
     """
@@ -470,14 +481,14 @@ async def _update_existing_by_leaguepedia(
     """
     Apply fields from `data` to an existing ORM model instance and
     persist the changes.
-    
+
     Parameters:
         obj (Any): The existing model instance to update.
         data (dict): Mapping of field names to new values to apply to
             `obj`.
         update_keys (Optional[List[str]]): If provided, only keys in
             this list will be applied from `data`.
-    
+
     Returns:
         Any: The refreshed model instance after updates have been
             flushed and reloaded from the database.
@@ -508,7 +519,7 @@ def _apply_updates_to_obj(
     """
     Apply fields from `data` to `obj`, optionally restricting updates
     to the keys listed in `update_keys`.
-    
+
     Parameters:
         obj: The target object to receive updates.
         data (dict): Mapping of field names to new values.
@@ -526,11 +537,11 @@ def _apply_all_updates(obj: Any, data: dict) -> None:
     """
     Apply every key/value in `data` to `obj` as attributes,
     excluding the `leaguepedia_id` key.
-    
+
     Parameters:
-    	obj (Any): Target object whose attributes will be set.
-    	data (dict): Mapping of attribute names to values to apply;
-    	    any `leaguepedia_id` entry is ignored.
+        obj (Any): Target object whose attributes will be set.
+        data (dict): Mapping of attribute names to values to apply;
+            any `leaguepedia_id` entry is ignored.
     """
     for k, v in data.items():
         if k == "leaguepedia_id":
@@ -543,13 +554,13 @@ def _apply_selected_updates(
 ) -> None:
     """
     Apply selected fields from a data mapping to an object's attributes.
-    
+
     Parameters:
         obj (Any): Target object whose attributes will be updated.
         data (dict): Mapping of attribute names to values.
         update_keys (Optional[List[str]]): List of keys to apply
             from `data`. If empty or None, no changes are made.
-    
+
     Notes:
         Only keys present in both `update_keys` and `data` are
         applied; keys absent from `data` are ignored.
@@ -566,12 +577,12 @@ async def upsert_match(
 ) -> tuple[Optional[Match], bool]:
     """
     Create or update a Match identified by its `leaguepedia_id`.
-    
+
     Parameters:
         match_data (dict): Mapping with match fields. Must include
             `leaguepedia_id`, `team1`, `team2`, and `scheduled_time`.
             May include `best_of` and other Match fields.
-    
+
     Returns:
         tuple[Optional[Match], bool]: A tuple containing the upserted
             Match (or `None` on failure) and a boolean that is `true`
@@ -633,12 +644,12 @@ def create_user(
 ) -> User:
     """
     Create a new User record with the given Discord ID and optional username.
-    
+
     Parameters:
         discord_id (str): Discord identifier for the user.
         username (Optional[str]): Display name to associate with
             the user; if omitted, the username will be unset.
-    
+
     Returns:
         user (User): The persisted User instance with its
             database-assigned `id` populated.
@@ -664,15 +675,15 @@ def update_user(
 ) -> Optional[User]:
     """
     Update a user's username when a new value is provided.
-    
+
     Fetches the User by id, sets the username if `username` is not
     None, persists the change, and returns the updated User.
-    
+
     Parameters:
         user_id (int): Primary key of the User to update.
         username (Optional[str]): New username to apply; if None,
             the user's username is left unchanged.
-    
+
     Returns:
         User | None: The updated User instance, or `None` if no user
             with the given id exists.
@@ -692,10 +703,10 @@ def update_user(
 def delete_user(session: Session, user_id: int) -> bool:
     """
     Delete a user record by its primary key and persist the change.
-    
+
     Deletes the user with the given ID from the database and commits
     the transaction.
-    
+
     Returns:
         `true` if the user was found and deleted, `false` otherwise.
     """
@@ -713,14 +724,14 @@ def delete_user(session: Session, user_id: int) -> bool:
 def create_contest(session: Session, contest_data: dict) -> Contest:
     """
     Create a Contest record from a dictionary of contest fields.
-    
+
     Parameters:
         contest_data (dict): Dictionary with contest attributes. Expected keys:
             - "name" (str): Contest name.
             - "start_date" (datetime): Contest start date/time.
             - "end_date" (datetime): Contest end date/time.
             - "leaguepedia_id" (str): External leaguepedia identifier.
-    
+
     Returns:
         Contest: The persisted Contest instance with
             database-generated fields (e.g., `id`) populated.
@@ -757,13 +768,13 @@ def update_contest(
 ) -> Optional[Contest]:
     """
     Update fields of an existing Contest using values provided in `params`.
-    
+
     Parameters:
         contest_id (int): Primary key of the Contest to update.
         params (ContestUpdateParams): Dataclass containing optional
             fields (`name`, `start_date`, `end_date`) to apply; only
             non-None fields are written.
-    
+
     Returns:
         Contest | None: The updated Contest if found and modified,
             `None` if no Contest with the given `contest_id` exists.
@@ -787,10 +798,10 @@ def update_contest(
 def delete_contest(session: Session, contest_id: int) -> bool:
     """
     Delete the contest with the given ID from the database.
-    
+
     Parameters:
         contest_id (int): Primary key of the contest to delete.
-    
+
     Returns:
         bool: True if the contest was found and deleted, False otherwise.
     """
@@ -809,12 +820,12 @@ def create_match(session: Session, params: MatchCreateParams) -> Match:
     """
     Create a Match from the given MatchCreateParams and persist it
     to the database.
-    
+
     Parameters:
         params (MatchCreateParams): Parameter object containing
             contest_id, team1, team2, scheduled_time, and
             leaguepedia_id used to construct the Match.
-    
+
     Returns:
         Match: The persisted Match instance with database-generated
             fields (e.g., `id`) populated.
@@ -843,14 +854,14 @@ def bulk_create_matches(
     """
     Create multiple Match records from a list of dictionaries and
     persist them.
-    
+
     Parameters:
         session (Session): Database session used to persist matches.
         matches_data (List[dict]): List of dictionaries with keys
             required to initialize a `Match` (for example:
             `contest_id`, `team1`, `team2`, `scheduled_time`,
             `leaguepedia_id`).
-    
+
     Returns:
         List[Match]: The created and refreshed `Match` instances.
     """
@@ -920,16 +931,16 @@ def update_match(
     session: Session, match_id: int, params: MatchUpdateParams
 ) -> Optional[Match]:
     """
-        Apply provided match update fields to an existing Match and persist the
+    Apply provided match update fields to an existing Match and persist the
     changes.
-    
+
     Parameters:
-                params (MatchUpdateParams): Update container whose non-None
-        fields (team1, team2, scheduled_time) will be applied to the match.
-    
+        params (MatchUpdateParams): Update container whose non-None
+            fields (team1, team2, scheduled_time) will be applied to the match.
+
     Returns:
-                Updated Match if a match with the given id was found and
-        updated, `None` if no such match exists.
+        Updated Match if a match with the given id was found and
+            updated, `None` if no such match exists.
     """
     logger.info(f"Updating match ID: {match_id}")
     match = session.get(Match, match_id)
@@ -950,16 +961,16 @@ def update_match(
 def delete_match(session: Session, match_id: int) -> bool:
     """
     Delete the Match with the given primary key and commit the change.
-    
-        Deletes the matching Match record from the database and commits the
+
+    Deletes the matching Match record from the database and commits the
     transaction.
-    
+
     Parameters:
         match_id (int): Primary key of the Match to delete.
-    
+
     Returns:
-                bool: `True` if the match was deleted, `False` if no match with
-        the given id was found.
+        bool: `True` if the match was deleted, `False` if no match with
+            the given id was found.
     """
     logger.info(f"Deleting match ID: {match_id}")
     match = session.get(Match, match_id)
@@ -978,15 +989,15 @@ def delete_match(session: Session, match_id: int) -> bool:
 def create_pick(session: Session, params: PickCreateParams) -> Pick:
     """
     Create and persist a Pick for a user in a contest match.
-    
+
     Parameters:
-                params (PickCreateParams): Parameter object containing
-        `user_id`, `contest_id`, `match_id`, `chosen_team`, and optional
-        `timestamp`.
-    
+        params (PickCreateParams): Parameter object containing
+            `user_id`, `contest_id`, `match_id`, `chosen_team`, and optional
+            `timestamp`.
+
     Returns:
-                Pick: The persisted Pick instance with database-populated
-        fields (for example, `id`) refreshed.
+        Pick: The persisted Pick instance with database-populated
+            fields (for example, `id`) refreshed.
     """
     logger.info(
         "Creating pick for user %s, match %s, team %s",
@@ -1030,13 +1041,13 @@ def update_pick(
 ) -> Optional[Pick]:
     """
     Update an existing Pick's chosen team.
-    
+
     Parameters:
         session (Session): Database session used for the update.
         pick_id (int): Primary key of the Pick to update.
-                chosen_team (Optional[str]): New team name to set; if None the
-        field is left unchanged.
-    
+        chosen_team (Optional[str]): New team name to set; if None the
+            field is left unchanged.
+
     Returns:
         Optional[Pick]: The updated Pick if found, otherwise None.
     """
@@ -1055,16 +1066,16 @@ def update_pick(
 def delete_pick(session: Session, pick_id: int) -> bool:
     """
     Delete a Pick record identified by its primary key.
-    
-        Attempts to remove the Pick with the given id from the database and
+
+    Attempts to remove the Pick with the given id from the database and
     commit the change.
-    
+
     Parameters:
         pick_id (int): Primary key of the Pick to delete.
-    
+
     Returns:
-                bool: `True` if the pick was deleted, `False` if no pick with
-        the given id existed.
+        bool: `True` if the pick was deleted, `False` if no pick with
+            the given id existed.
     """
     logger.info(f"Deleting pick ID: {pick_id}")
     pick = session.get(Pick, pick_id)
@@ -1085,12 +1096,12 @@ def create_result(
 ) -> Result:
     """
     Create a Result record linking a match to its winner and optional score.
-    
+
     Parameters:
         match_id (int): Primary key of the match the result belongs to.
         winner (str): Identifier or name of the winning team.
         score (Optional[str]): Optional score string (for example "2-1").
-    
+
     Returns:
         Result: The newly created and refreshed Result instance.
     """
@@ -1120,18 +1131,18 @@ def update_result(
 ) -> Optional[Result]:
     """
     Update fields of an existing Result record.
-    
-        Only parameters provided (non-None) are applied to the stored Result.
+
+    Only parameters provided (non-None) are applied to the stored Result.
     If the result with the given id does not exist, nothing is changed.
-    
+
     Parameters:
         result_id (int): Primary key of the Result to update.
         winner (Optional[str]): New winner value to set, if provided.
         score (Optional[str]): New score value to set, if provided.
-    
+
     Returns:
-                Optional[Result]: The updated Result object when found and
-        saved, or `None` if no matching Result exists.
+        Optional[Result]: The updated Result object when found and
+            saved, or `None` if no matching Result exists.
     """
     logger.info(f"Updating result ID: {result_id}")
     result = session.get(Result, result_id)
@@ -1150,9 +1161,9 @@ def update_result(
 def delete_result(session: Session, result_id: int) -> bool:
     """
     Delete the Result with the given primary key.
-    
+
     Returns:
-                True if a Result with the given `result_id` was found and
+        True if a Result with the given `result_id` was found and
         deleted, False otherwise.
     """
     logger.info(f"Deleting result ID: {result_id}")
