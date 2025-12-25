@@ -77,6 +77,7 @@ class EsportsBot(commands.Bot):
             init_db()
         except Exception:
             logger.exception("Failed initializing database tables.")
+            raise
         logger.info("Logging into Leaguepedia...")
         await leaguepedia_client.login()
         logger.info("Starting scheduler...")

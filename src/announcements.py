@@ -172,6 +172,10 @@ async def get_announcement_channel(
         if _can_send(channel, bot_member):
             return channel
 
+    # If we know the bot member and no usable channel was found, return None
+    if bot_member is not None:
+        return None
+
     # As a last resort, return the first text channel or None
     return guild.text_channels[0] if guild.text_channels else None
 
