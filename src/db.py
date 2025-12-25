@@ -1,5 +1,8 @@
+# Temporary/local-friendly DB path handling:
 import os
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -8,13 +11,28 @@ from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 # --- Sync Setup ---
-DB_PATH = os.path.join("/opt", "esports-bot", "data", "esports-pickem.db")
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
-# Workaround: Some deployments may set the database name as 'esports_pickem'
-# instead of 'esports-pickem'. To ensure consistency, we replace the
-# database name only if necessary.
-if "esports_pickem" in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL.replace("esports_pickem", "esports-pickem")
+# Prefer explicit `DATABASE_URL` from the environment. If not set,
+# preserve the historical default of `/opt/esports-bot/data/esports-pickem.db`
+# for compatibility with existing deployments, and fall back to a
+# deterministic project-local SQLite file under
+# `<project_root>/data/esports-pickem.db` for local/dev runs.
+project_root = Path(__file__).resolve().parents[1]
+local_db_path = project_root / "data" / "esports-pickem.db"
+local_db_path.parent.mkdir(parents=True, exist_ok=True)
+env_db_url = os.getenv("DATABASE_URL")
+if env_db_url:
+    raw_db_url = env_db_url
+else:
+    # Legacy default location used by existing deployments.
+    legacy_db_path = Path("/opt/esports-bot/data/esports-pickem.db")
+    if legacy_db_path.parent.exists():
+        raw_db_url = f"sqlite:///{legacy_db_path}"
+    else:
+        # Fallback to project-local path for development / non-legacy layouts.
+        raw_db_url = f"sqlite:///{local_db_path}"
+# Historical normalization: support old paths/URLs that used `esports_pickem`.
+raw_db_url = raw_db_url.replace("esports_pickem", "esports-pickem")
+DATABASE_URL = raw_db_url
 
 _sql_echo = os.getenv("SQL_ECHO", "False").lower() in ("true", "1", "t")
 
@@ -45,7 +63,14 @@ _async_pragma_set = False
 
 
 @asynccontextmanager
-async def get_async_session() -> AsyncSession:
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Provide an asynchronous context manager for database sessions.
+
+    Returns:
+        AsyncSession: An asynchronous database session ready for use.
+            The session is closed when the context manager exits.
+    """
     global _async_pragma_set
     # Ensure WAL journal mode and recommended pragmas are set once for async engine
     if not _async_pragma_set:
