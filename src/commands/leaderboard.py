@@ -30,12 +30,17 @@ LeaderboardData = Union[
 
 def _get_pick_correct_attr():
     """
-    Get the Pick model attribute used to indicate whether a pick was correct.
+    Get the Pick model attribute used to indicate whether a pick was
+    correct.
     
-    Checks common attribute names ("correct", "is_correct", "was_correct") and returns the first matching attribute on the Pick model. Raises AttributeError if no suitable attribute is found.
+    Checks common attribute names ("correct", "is_correct",
+    "was_correct") and returns the first matching attribute on the
+    Pick model. Raises AttributeError if no suitable attribute is
+    found.
     
     Returns:
-        attribute: The Pick model attribute (descriptor) that represents correctness.
+        attribute: The Pick model attribute (descriptor) that
+            represents correctness.
     """
     for name in ("correct", "is_correct", "was_correct"):
         if hasattr(Pick, name):
@@ -44,10 +49,12 @@ def _get_pick_correct_attr():
 
 
 def _build_accuracy_query():
-    """Build a query that returns (User, accuracy_percent, total_correct).
+    """
+    Build a query that returns
+    (User, accuracy_percent, total_correct).
 
-    Accuracy is returned as a percentage (0-100). Only users with at least
-    MIN_PICKS_FOR_ACCURACY_LEADERBOARD picks are included.
+    Accuracy is returned as a percentage (0-100). Only users with at
+    least MIN_PICKS_FOR_ACCURACY_LEADERBOARD picks are included.
     """
     correct_attr = _get_pick_correct_attr()
     total_picks = func.count(getattr(Pick, "id"))
@@ -71,14 +78,21 @@ def _build_accuracy_query():
 
 def _build_count_query(days: int = None, contest_id: int = None):
     """
-    Construct a SQL query selecting each User with their total correct picks, optionally limited to a recent time window or a specific contest.
+    Construct a SQL query selecting each User with their total correct
+    picks, optionally limited to a recent time window or a specific
+    contest.
     
     Parameters:
-        days (int | None): If provided, include only picks created within the last `days` days.
-        contest_id (int | None): If provided, include only picks belonging to the specified contest.
+        days (int | None): If provided, include only picks created
+            within the last `days` days.
+        contest_id (int | None): If provided, include only picks
+            belonging to the specified contest.
     
     Returns:
-        sqlalchemy.sql.selectable.Select: A select query that yields (User, total_correct) where `total_correct` is the count of correct picks per user, ordered by `total_correct` descending.
+        sqlalchemy.sql.selectable.Select: A select query that yields
+            (User, total_correct) where `total_correct` is the count
+            of correct picks per user, ordered by `total_correct`
+            descending.
     """
     correct_attr = _get_pick_correct_attr()
     total_correct = func.sum(
@@ -106,11 +120,15 @@ def _passes_guild(user, guild_id: int) -> bool:
     Determine whether a user passes the specified guild filter.
     
     Parameters:
-        user: An object representing a user that may have `guild_id` or `server_id` attributes.
-        guild_id (int | None): Guild identifier to filter by; when `None`, no filtering is applied.
+        user: An object representing a user that may have `guild_id`
+            or `server_id` attributes.
+        guild_id (int | None): Guild identifier to filter by; when
+            `None`, no filtering is applied.
     
     Returns:
-        bool: `True` if `guild_id` is `None` or the user's `guild_id`/`server_id` equals `guild_id`, `False` otherwise.
+        bool: `True` if `guild_id` is `None` or the user's
+            `guild_id`/`server_id` equals `guild_id`, `False`
+            otherwise.
     """
     if guild_id is None:
         return True
@@ -126,13 +144,17 @@ def _normalize_row(row):
     """
     Normalize a database result row into a tuple.
     
-    Attempts to convert the given row to a tuple. If the input is already a tuple it is returned unchanged. If conversion fails, the original value is wrapped in a single-element tuple.
+    Attempts to convert the given row to a tuple. If the input is
+    already a tuple it is returned unchanged. If conversion fails, the
+    original value is wrapped in a single-element tuple.
     
     Parameters:
         row: The database result row or iterable to normalize.
     
     Returns:
-        tuple: A tuple representation of the input, or a single-element tuple containing the original value when conversion is not possible.
+        tuple: A tuple representation of the input, or a
+            single-element tuple containing the original value when
+            conversion is not possible.
     """
     if isinstance(row, tuple):
         return row
@@ -151,7 +173,8 @@ def _to_float(val, default=0.0):
         default (float): Value returned if conversion fails (defaults to 0.0).
     
     Returns:
-        float: The converted float, or `default` if conversion raises an exception.
+        float: The converted float, or `default` if conversion raises
+            an exception.
     """
     try:
         return float(val)
@@ -466,14 +489,24 @@ class LeaderboardView(discord.ui.View):
         self, interaction: discord.Interaction, period: str, days: int = None
     ):
         """
-        Refresh the leaderboard embed and update the view's button styles to reflect the selected period.
+        Refresh the leaderboard embed and update the view's button
+        styles to reflect the selected period.
         
-        Updates the original interaction message by setting the active button (matching `period`) to primary/disabled, resetting other buttons to secondary/enabled, fetching leaderboard data with optional time or guild filters, and replacing the embed with the newly generated leaderboard.
+        Updates the original interaction message by setting the active
+        button (matching `period`) to primary/disabled, resetting
+        other buttons to secondary/enabled, fetching leaderboard data
+        with optional time or guild filters, and replacing the embed
+        with the newly generated leaderboard.
         
         Parameters:
-            interaction (discord.Interaction): The interaction that triggered the update; used to edit the original response.
-            period (str): The period label to display and mark active (e.g., "Global", "Server", "Daily", "Weekly").
-            days (int, optional): Number of days to limit the leaderboard to (used for time-windowed leaderboards); when omitted, no time filter is applied.
+            interaction (discord.Interaction): The interaction that
+                triggered the update; used to edit the original
+                response.
+            period (str): The period label to display and mark active
+                (e.g., "Global", "Server", "Daily", "Weekly").
+            days (int, optional): Number of days to limit the
+                leaderboard to (used for time-windowed leaderboards);
+                when omitted, no time filter is applied.
         """
         await interaction.response.defer()
         session: Session = next(get_session())

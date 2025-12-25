@@ -302,7 +302,8 @@ def _delete_model_by_id(
         obj_id (int): Primary key of the object to remove.
     
     Returns:
-        bool: `True` if an object was deleted, `False` if no matching object was found.
+        bool: `True` if an object was deleted, `False` if no matching
+            object was found.
     """
     return _DBHelpers.delete_model_by_id(session, model, obj_id)
 
@@ -314,10 +315,14 @@ async def upsert_team(
     Create or update a Team using its `leaguepedia_id`.
     
     Parameters:
-        team_data (dict): Mapping containing team fields. Must include `leaguepedia_id`; other keys may include `name`, `image_url`, `roster`, and any other Team fields to set.
+        team_data (dict): Mapping containing team fields. Must include
+            `leaguepedia_id`; other keys may include `name`,
+            `image_url`, `roster`, and any other Team fields to set.
     
     Returns:
-        team (Optional[Team]): The created or updated Team instance, or `None` if `leaguepedia_id` is missing or an error occurred during upsert.
+        team (Optional[Team]): The created or updated Team instance,
+            or `None` if `leaguepedia_id` is missing or an error
+            occurred during upsert.
     """
     return await _upsert_by_leaguepedia(
         session,
@@ -333,13 +338,18 @@ async def upsert_contest(
     """
     Create or update a Contest using its Leaguepedia identifier.
     
-    The function upserts a Contest by `leaguepedia_id`, creating a new record if none exists or updating the existing record. Only `name`, `start_date`, and `end_date` are considered for updates.
+    The function upserts a Contest by `leaguepedia_id`, creating a new
+    record if none exists or updating the existing record. Only
+    `name`, `start_date`, and `end_date` are considered for updates.
     
     Parameters:
-        contest_data (dict): Mapping of contest fields. Must include `leaguepedia_id`. May include `name`, `start_date`, and `end_date`.
+        contest_data (dict): Mapping of contest fields. Must include
+            `leaguepedia_id`. May include `name`, `start_date`, and
+            `end_date`.
     
     Returns:
-        Contest or None: The created or updated Contest, or `None` if the upsert failed or `leaguepedia_id` was missing.
+        Contest or None: The created or updated Contest, or `None` if
+            the upsert failed or `leaguepedia_id` was missing.
     """
     return await _upsert_by_leaguepedia(
         session,
@@ -356,16 +366,25 @@ async def _upsert_by_leaguepedia(
     update_keys: Optional[List[str]] = None,
 ) -> Optional[Any]:
     """
-    Upserts a model instance identified by its `leaguepedia_id` using the provided data.
+    Upserts a model instance identified by its `leaguepedia_id` using
+    the provided data.
     
     Parameters:
-        session (AsyncSession): Database session used for querying and persistence.
-        model (Type[Any]): ORM model class that contains a `leaguepedia_id` field.
-        data (dict): Mapping of field names to values; must include a `leaguepedia_id` key.
-        update_keys (Optional[List[str]]): If provided, only these keys from `data` will be applied when updating an existing object; otherwise all fields (except `leaguepedia_id`) are applied.
+        session (AsyncSession): Database session used for querying
+            and persistence.
+        model (Type[Any]): ORM model class that contains a
+            `leaguepedia_id` field.
+        data (dict): Mapping of field names to values; must include a
+            `leaguepedia_id` key.
+        update_keys (Optional[List[str]]): If provided, only these
+            keys from `data` will be applied when updating an existing
+            object; otherwise all fields (except `leaguepedia_id`) are
+            applied.
     
     Returns:
-        Optional[Any]: The created or updated model instance, or `None` if `leaguepedia_id` is missing or an error occurred during upsert.
+        Optional[Any]: The created or updated model instance, or
+            `None` if `leaguepedia_id` is missing or an error occurred
+            during upsert.
     """
     leaguepedia_id = data.get("leaguepedia_id")
     if not leaguepedia_id:
@@ -392,14 +411,17 @@ async def _find_existing_by_leaguepedia(
     session: AsyncSession, model: Type[Any], leaguepedia_id: str
 ) -> Optional[Any]:
     """
-    Retrieve the first instance of the given ORM model with the specified Leaguepedia identifier.
+    Retrieve the first instance of the given ORM model with the
+    specified Leaguepedia identifier.
     
     Parameters:
-        model (Type[Any]): ORM model class that defines a `leaguepedia_id` attribute.
+        model (Type[Any]): ORM model class that defines a
+            `leaguepedia_id` attribute.
         leaguepedia_id (str): Leaguepedia identifier to match.
     
     Returns:
-        Optional[Any]: The first matching model instance if found, `None` otherwise.
+        Optional[Any]: The first matching model instance if found,
+            `None` otherwise.
     """
     stmt = select(model).where(
         getattr(model, "leaguepedia_id") == leaguepedia_id
@@ -412,12 +434,15 @@ async def _create_new_by_leaguepedia(
     session: AsyncSession, model: Type[Any], data: dict
 ) -> Any:
     """
-    Create and persist a new model instance initialized from the provided Leaguepedia data.
+    Create and persist a new model instance initialized from the
+    provided Leaguepedia data.
     
     Parameters:
-        session (AsyncSession): Async database session used to add and flush the new instance.
+        session (AsyncSession): Async database session used to add
+            and flush the new instance.
         model (Type[Any]): ORM model class to instantiate.
-        data (dict): Mapping of attributes used to construct the model instance.
+        data (dict): Mapping of attributes used to construct the model
+            instance.
     
     Returns:
         Any: The newly created and refreshed model instance.
@@ -443,15 +468,19 @@ async def _update_existing_by_leaguepedia(
     update_keys: Optional[List[str]] = None,
 ) -> Any:
     """
-    Apply fields from `data` to an existing ORM model instance and persist the changes.
+    Apply fields from `data` to an existing ORM model instance and
+    persist the changes.
     
     Parameters:
         obj (Any): The existing model instance to update.
-        data (dict): Mapping of field names to new values to apply to `obj`.
-        update_keys (Optional[List[str]]): If provided, only keys in this list will be applied from `data`.
+        data (dict): Mapping of field names to new values to apply to
+            `obj`.
+        update_keys (Optional[List[str]]): If provided, only keys in
+            this list will be applied from `data`.
     
     Returns:
-        Any: The refreshed model instance after updates have been flushed and reloaded from the database.
+        Any: The refreshed model instance after updates have been
+            flushed and reloaded from the database.
     """
     logger.info(
         "Updating existing %s: %s",
@@ -477,7 +506,8 @@ def _apply_updates_to_obj(
     obj: Any, data: dict, update_keys: Optional[List[str]] = None
 ) -> None:
     """
-    Apply fields from `data` to `obj`, optionally restricting updates to the keys listed in `update_keys`.
+    Apply fields from `data` to `obj`, optionally restricting updates
+    to the keys listed in `update_keys`.
     
     Parameters:
         obj: The target object to receive updates.
