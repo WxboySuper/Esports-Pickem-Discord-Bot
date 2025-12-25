@@ -61,21 +61,19 @@ async def test_pick_command_no_active_matches(
 
 
 @pytest.mark.asyncio
+@patch("src.commands.picks.crud.get_user_by_discord_id")
 @patch("src.commands.picks.get_session")
 async def test_picks_view_active_no_picks(
-    mock_get_session, mock_interaction, mock_session
+    mock_get_session, mock_get_user, mock_interaction, mock_session
 ):
     """Test /picks view-active when the user has no picks."""
     mock_get_session.return_value = iter([mock_session])
     # Simulate user not found or has no picks
-    with patch(
-        "src.commands.picks.crud.get_user_by_discord_id"
-    ) as mock_get_user:
-        mock_get_user.return_value = None
-        await picks.view_active.callback(mock_interaction)
-        mock_interaction.response.send_message.assert_called_with(
-            "You have no active picks.", ephemeral=True
-        )
+    mock_get_user.return_value = None
+    await picks.view_active.callback(mock_interaction)
+    mock_interaction.response.send_message.assert_called_with(
+        "You have no active picks.", ephemeral=True
+    )
 
 
 @pytest.mark.asyncio
