@@ -510,6 +510,13 @@ class LeaderboardView(discord.ui.View):
                 leaderboard to (used for time-windowed leaderboards);
                 when omitted, no time filter is applied.
         """
+        if period == "Server" and interaction.guild is None:
+            await interaction.response.send_message(
+                "The server leaderboard is only available within a server.",
+                ephemeral=True,
+            )
+            return
+
         await interaction.response.defer()
         session: Session = next(get_session())
         # Only attempt to read guild id if this interaction occurred in a guild
