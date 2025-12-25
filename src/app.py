@@ -32,6 +32,7 @@ logger.info("Starting up bot...")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()
+intents.members = True
 
 
 class EsportsBot(commands.Bot):
@@ -66,7 +67,8 @@ class EsportsBot(commands.Bot):
         Leaguepedia client, starts the scheduler, loads command
         modules (if a commands package is available), and synchronizes
         global application commands. Exceptions raised during database
-        initialization are caught and logged.
+        initialization are logged and re-raised, causing the startup
+        process to abort.
         """
         logger.info("Executing setup_hook...")
         self.session = aiohttp.ClientSession()

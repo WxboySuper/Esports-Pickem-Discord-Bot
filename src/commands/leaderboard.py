@@ -24,8 +24,10 @@ MIN_PICKS_FOR_ACCURACY_LEADERBOARD = 5
 
 
 LeaderboardData = Union[
-    List[tuple[User, float, int, int]],  # Accuracy, Total Correct, Total Picks
-    List[tuple[User, int]],  # Total Correct
+    # User, Accuracy, Total Correct, Total Picks
+    List[tuple[User, float, int, int]],
+    # User, Total Correct
+    List[tuple[User, int]],
 ]
 
 
@@ -117,8 +119,6 @@ def _build_count_query(days: int = None, contest_id: int = None):
     # solely on the is_correct flag.
     if hasattr(Pick, "status"):
         query = query.where(getattr(Pick, "status") == "correct")
-    elif hasattr(Pick, "created_at"):
-        query = query.where(getattr(Pick, "created_at") >= cutoff)
 
     query = query.group_by(User.id).order_by(total_correct.desc())
     return query
