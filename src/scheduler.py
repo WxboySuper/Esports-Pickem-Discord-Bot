@@ -764,7 +764,7 @@ async def _get_matches_starting_soon(session):
     stmt = select(Match).where(
         Match.scheduled_time >= now,
         Match.scheduled_time < one_minute_from_now,
-        Match.result == None,  # noqa: E711
+        Match.result.is_(None),
     )
     matches = (await session.exec(stmt)).all()
     return now, matches
