@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 from src.db import get_session
 from src.models import Contest, Pick, User
 from src import crud
+from src.bot_instance import get_bot_instance
 
 logger = logging.getLogger("esports-bot.commands.leaderboard")
 
@@ -119,25 +120,34 @@ def _passes_guild(user, guild_id: int) -> bool:
     """
     Determine whether a user passes the specified guild filter.
 
+    Checks if the user (by discord_id) is a member of the specified guild.
+    Requires the bot instance to be available and the guild to be cached.
+
     Parameters:
-        user: An object representing a user that may have `guild_id`
-            or `server_id` attributes.
+        user: A User model instance with a `discord_id` attribute.
         guild_id (int | None): Guild identifier to filter by; when
             `None`, no filtering is applied.
 
     Returns:
-        bool: `True` if `guild_id` is `None` or the user's
-            `guild_id`/`server_id` equals `guild_id`, `False`
-            otherwise.
+        bool: `True` if `guild_id` is `None` or the user is found in the
+            guild's member cache; `False` otherwise.
     """
     if guild_id is None:
         return True
-    ug = getattr(user, "guild_id", None) or getattr(user, "server_id", None)
-    # If we're filtering by a specific guild, only include users who
-    # are associated with that guild (i.e. have a guild/server id that
-    # matches). Previously users with no guild_id were incorrectly
-    # included when a guild filter was applied.
-    return ug is not None and ug == guild_id
+
+    bot = get_bot_instance()
+    if not bot:
+        return False
+
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        return False
+
+    try:
+        # User.discord_id is stored as a string
+        return guild.get_member(int(user.discord_id)) is not None
+    except (ValueError, TypeError):
+        return False
 
 
 def _normalize_row(row):
