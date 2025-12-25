@@ -83,30 +83,30 @@ async def test_upload_command_valid_csv(
         (INVALID_CSV_BAD_DATE, "Invalid data or format."),
     ],
 )
-@patch("src.commands.matches.get_session")
-@patch("src.commands.matches.crud")
 async def test_upload_command_invalid_csv(
-    mock_crud,
-    mock_get_session,
     mock_interaction,
     csv_content,
     expected_error_part,
 ):
-    # Arrange
-    attachment = AsyncMock(spec=discord.Attachment)
-    attachment.read.return_value = csv_content.encode("utf-8")
+    # Use context managers for patching to reduce function args
+    with patch("src.commands.matches.crud") as mock_crud, patch(
+        "src.commands.matches.get_session"
+    ) as mock_get_session:
+        # Arrange
+        attachment = AsyncMock(spec=discord.Attachment)
+        attachment.read.return_value = csv_content.encode("utf-8")
 
-    mock_contest = MagicMock()
-    mock_contest.name = "Test Contest"
-    mock_crud.get_contest_by_id.return_value = mock_contest
+        mock_contest = MagicMock()
+        mock_contest.name = "Test Contest"
+        mock_crud.get_contest_by_id.return_value = mock_contest
 
-    # Act
-    await upload.callback(
-        mock_interaction, contest_id=1, attachment=attachment
-    )
+        # Act
+        await upload.callback(
+            mock_interaction, contest_id=1, attachment=attachment
+        )
 
-    # Assert
-    mock_interaction.followup.send.assert_called_once()
-    args, _ = mock_interaction.followup.send.call_args
-    assert expected_error_part in args[0]
-    mock_crud.bulk_create_matches.assert_not_called()
+        # Assert
+        mock_interaction.followup.send.assert_called_once()
+        args, _ = mock_interaction.followup.send.call_args
+        assert expected_error_part in args[0]
+        mock_crud.bulk_create_matches.assert_not_called()
