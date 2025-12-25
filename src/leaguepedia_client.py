@@ -27,6 +27,8 @@ class LeaguepediaClient:
         self._initial_backoff = 1
         # maximum backoff cap (in minutes)
         self._max_backoff = 24 * 60
+        # Background tasks set to prevent garbage collection
+        self._background_tasks = set()
 
     async def login(self):
         """Logs in to the Leaguepedia API and sets the client."""
@@ -107,6 +109,163 @@ class LeaguepediaClient:
             )
             return []
 
+    def _detect_rate_limit(self, exc: Exception) -> tuple[bool, float | None]:
+        """
+        Detect rate limit errors and extract wait time if available.
+        Returns (is_rate_limit, retry_after_seconds).
+        """
+        # 1. Check for HTTP response status and headers
+        resp = getattr(exc, "response", None)
+        if resp:
+            status = getattr(
+                resp, "status", getattr(resp, "status_code", None)
+            )
+            if status == 429:
+                retry_after = None
+                headers = getattr(resp, "headers", {})
+                if "Retry-After" in headers:
+                    try:
+                        retry_after = float(headers["Retry-After"])
+                    except (ValueError, TypeError):
+                        pass
+                return True, retry_after
+
+            # Check JSON body for MediaWiki throttling codes
+            try:
+                # Ensure resp has .json() method
+                if hasattr(resp, "json") and callable(resp.json):
+                    data = resp.json()
+                    if isinstance(data, dict):
+                        code = data.get("error", {}).get("code")
+                        if code in (
+                            "ratelimited",
+                            "maxlag",
+                            "actionthrottledtext",
+                        ):
+                            retry_after = None
+                            if "Retry-After" in getattr(resp, "headers", {}):
+                                try:
+                                    retry_after = float(
+                                        resp.headers["Retry-After"]
+                                    )
+                                except (ValueError, TypeError):
+                                    pass
+                            return True, retry_after
+            except Exception:
+                pass
+
+        # 2. Check for mwclient APIError code or args
+        code = getattr(exc, "code", None)
+        if isinstance(code, str) and code.lower() in (
+            "ratelimit",
+            "ratelimited",
+            "maxlag",
+        ):
+            return True, None
+
+        # Check args for tuple structure ('ratelimited', ...)
+        args = getattr(exc, "args", [])
+        if args and isinstance(args, tuple) and len(args) > 0:
+            first_arg = args[0]
+            if isinstance(first_arg, str) and first_arg.lower() in (
+                "ratelimited",
+                "maxlag",
+            ):
+                return True, None
+
+        return False, None
+
+    def _apply_rate_limit_backoff(
+        self, overview_page: str, retry_seconds: float | None
+    ) -> float:
+        """
+        Calculates and applies the backoff cooldown for a rate-limited page.
+        Returns the cooldown duration in minutes.
+        """
+        # Determine base backoff
+        if retry_seconds is not None:
+            # Use provided retry-after, converted to minutes and capped
+            next_backoff = min(retry_seconds / 60.0, self._max_backoff)
+        else:
+            # Exponential backoff (restore previous logic: prev or
+            # initial, then double)
+            prev = self._backoff_minutes.get(
+                overview_page, self._initial_backoff
+            )
+            next_backoff = min(
+                max(prev, self._initial_backoff) * 2,
+                self._max_backoff,
+            )
+
+        self._backoff_minutes[overview_page] = next_backoff
+
+        # add a small random jitter (0-20%) to the cooldown
+        jitter = next_backoff * random.uniform(0, 0.2)
+        cooldown_minutes = next_backoff + jitter
+        now = datetime.now(timezone.utc)
+        cooldown_until = now + timedelta(minutes=cooldown_minutes)
+        self._cooldowns[overview_page] = cooldown_until
+        logger.error(
+            "Rate limited by Leaguepedia for %s. Backing off for %.1f "
+            "minutes (base=%.1f, jitter=%.1f).",
+            overview_page,
+            cooldown_minutes,
+            next_backoff,
+            jitter,
+        )
+        return cooldown_minutes
+    def _notify_admin_rate_limit(
+        self, overview_page: str, cooldown_minutes: float
+    ):
+        """
+        Schedules a background task to notify admins about the rate limit.
+        """
+        try:
+            from src.bot_instance import get_bot_instance
+            from src.announcements import send_admin_update
+
+            bot = get_bot_instance()
+            dev_user = os.getenv("DEVELOPER_USER_ID")
+            mention_id = (
+                int(dev_user) if dev_user and dev_user.isdigit() else None
+            )
+            if bot:
+                try:
+                    msg = (
+                        f"Leaguepedia rate limit hit for "
+                        f"{overview_page}. Backing off for "
+                        f"{cooldown_minutes:.1f} minutes."
+                    )
+                    task = asyncio.create_task(
+                        send_admin_update(msg, mention_user_id=mention_id)
+                    )
+                    self._background_tasks.add(task)
+
+                    def _on_task_done(t):
+                        self._background_tasks.discard(t)
+                        try:
+                            exc = t.exception()
+                            if exc:
+                                logger.error(
+                                    "Background admin update task "
+                                    "failed: %s",
+                                    exc,
+                                )
+                        except asyncio.CancelledError:
+                            pass
+
+                    task.add_done_callback(_on_task_done)
+                except Exception as task_err:
+                    # If we cannot schedule the task,
+                    # log the error instead of blocking.
+                    logger.error(
+                        "Failed to schedule admin update task for "
+                        "rate limit notification: %s",
+                        task_err,
+                    )
+        except Exception:
+            logger.debug("Could not notify developer guild about rate limit.")
+
     async def get_scoreboard_data(self, overview_page: str) -> Optional[list]:
         """
         Fetches scoreboard data for a given tournament overview page.
@@ -149,82 +308,7 @@ class LeaguepediaClient:
                 del self._cooldowns[overview_page]
             return response
         except Exception as e:
-            # Some mwrogue / mediawiki clients sometimes
-            # raise structured tuples
-            # or messages that include 'ratelimit'/'ratelimited'.
-            # Detect that and apply an exponential
-            # backoff per overview_page.
-            def _get_rate_limit_details(
-                exc: Exception,
-            ) -> tuple[bool, float | None]:
-                """
-                Detect rate limit errors and extract wait time if available.
-                Returns (is_rate_limit, retry_after_seconds).
-                """
-                # 1. Check for HTTP response status and headers
-                resp = getattr(exc, "response", None)
-                if resp:
-                    status = getattr(
-                        resp, "status", getattr(resp, "status_code", None)
-                    )
-                    if status == 429:
-                        retry_after = None
-                        headers = getattr(resp, "headers", {})
-                        if "Retry-After" in headers:
-                            try:
-                                retry_after = float(headers["Retry-After"])
-                            except (ValueError, TypeError):
-                                pass
-                        return True, retry_after
-
-                    # Check JSON body for MediaWiki throttling codes
-                    try:
-                        # Ensure resp has .json() method
-                        if hasattr(resp, "json") and callable(resp.json):
-                            data = resp.json()
-                            if isinstance(data, dict):
-                                code = data.get("error", {}).get("code")
-                                if code in (
-                                    "ratelimited",
-                                    "maxlag",
-                                    "actionthrottledtext",
-                                ):
-                                    retry_after = None
-                                    if "Retry-After" in getattr(
-                                        resp, "headers", {}
-                                    ):
-                                        try:
-                                            retry_after = float(
-                                                resp.headers["Retry-After"]
-                                            )
-                                        except (ValueError, TypeError):
-                                            pass
-                                    return True, retry_after
-                    except Exception:
-                        pass
-
-                # 2. Check for mwclient APIError code or args
-                code = getattr(exc, "code", None)
-                if isinstance(code, str) and code.lower() in (
-                    "ratelimit",
-                    "ratelimited",
-                    "maxlag",
-                ):
-                    return True, None
-
-                # Check args for tuple structure ('ratelimited', ...)
-                args = getattr(exc, "args", [])
-                if args and isinstance(args, tuple) and len(args) > 0:
-                    first_arg = args[0]
-                    if isinstance(first_arg, str) and first_arg.lower() in (
-                        "ratelimited",
-                        "maxlag",
-                    ):
-                        return True, None
-
-                return False, None
-
-            is_limit, retry_seconds = _get_rate_limit_details(e)
+            is_limit, retry_seconds = self._detect_rate_limit(e)
 
             if is_limit:
                 # brief pause to avoid immediate retry storms
@@ -236,74 +320,10 @@ class LeaguepediaClient:
                 except Exception:
                     pass
 
-                # Determine base backoff
-                if retry_seconds is not None:
-                    # Use provided retry-after, converted to minutes
-                    next_backoff = retry_seconds / 60.0
-                else:
-                    # Exponential backoff (restore previous logic: prev or
-                    # initial, then double)
-                    prev = self._backoff_minutes.get(
-                        overview_page, self._initial_backoff
-                    )
-                    next_backoff = min(
-                        max(prev, self._initial_backoff) * 2,
-                        self._max_backoff,
-                    )
-
-                self._backoff_minutes[overview_page] = next_backoff
-
-                # add a small random jitter (0-20%) to the cooldown
-                jitter = next_backoff * random.uniform(0, 0.2)
-                cooldown_minutes = next_backoff + jitter
-                cooldown_until = now + timedelta(minutes=cooldown_minutes)
-                self._cooldowns[overview_page] = cooldown_until
-                logger.error(
-                    "Rate limited by Leaguepedia for %s. Backing off for %.1f "
-                    "minutes (base=%.1f, jitter=%.1f).",
-                    overview_page,
-                    cooldown_minutes,
-                    next_backoff,
-                    jitter,
+                cooldown_minutes = self._apply_rate_limit_backoff(
+                    overview_page, retry_seconds
                 )
-
-                # Notify developer guild/admin channel about the rate limit
-                try:
-                    from src.bot_instance import get_bot_instance
-                    from src.announcements import send_admin_update
-
-                    bot = get_bot_instance()
-                    dev_user = os.getenv("DEVELOPER_USER_ID")
-                    mention_id = (
-                        int(dev_user)
-                        if dev_user and dev_user.isdigit()
-                        else None
-                    )
-                    if bot:
-                        try:
-                            msg = (
-                                f"Leaguepedia rate limit hit for "
-                                f"{overview_page}. Backing off for "
-                                f"{cooldown_minutes:.1f} minutes."
-                            )
-                            asyncio.create_task(
-                                send_admin_update(
-                                    msg, mention_user_id=mention_id
-                                )
-                            )
-                        except Exception as task_err:
-                            # If we cannot schedule the task,
-                            # log the error instead of blocking.
-                            logger.error(
-                                "Failed to schedule admin update task for "
-                                "rate limit notification: %s",
-                                task_err,
-                            )
-                except Exception:
-                    logger.debug(
-                        "Could not notify developer guild about rate limit."
-                    )
-
+                self._notify_admin_rate_limit(overview_page, cooldown_minutes)
                 return None
 
             logger.error(
