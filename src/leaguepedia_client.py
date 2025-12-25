@@ -176,6 +176,44 @@ class LeaguepediaClient:
                     next_backoff,
                     jitter,
                 )
+
+                # Notify developer guild/admin channel about the rate limit
+                try:
+                    from src.bot_instance import get_bot_instance
+                    from src.announcements import send_admin_update
+
+                    bot = get_bot_instance()
+                    dev_user = os.getenv("DEVELOPER_USER_ID")
+                    mention_id = int(dev_user) if dev_user and dev_user.isdigit() else None
+                    if bot and mention_id:
+                        # fire-and-forget notification
+                        try:
+                            asyncio.create_task(
+                                send_admin_update(
+                                    f"Leaguepedia rate limit hit for {overview_page}. Backing off for {cooldown_minutes:.1f} minutes.",
+                                    mention_user_id=mention_id,
+                                )
+                            )
+                        except Exception:
+                            # Last resort: synchronous attempt (best-effort)
+                            await send_admin_update(
+                                f"Leaguepedia rate limit hit for {overview_page}. Backing off for {cooldown_minutes:.1f} minutes.",
+                                mention_user_id=mention_id,
+                            )
+                    else:
+                        # Try to send without mention if user id missing
+                        if bot:
+                            try:
+                                asyncio.create_task(
+                                    send_admin_update(
+                                        f"Leaguepedia rate limit hit for {overview_page}. Backing off for {cooldown_minutes:.1f} minutes.",
+                                    )
+                                )
+                            except Exception:
+                                pass
+                except Exception:
+                    logger.debug("Could not notify developer guild about rate limit.")
+
                 return None
 
             logger.error(
