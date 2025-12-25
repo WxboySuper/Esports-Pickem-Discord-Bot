@@ -89,6 +89,16 @@ async def test_upload_command_invalid_csv(
     expected_error_part,
 ):
     # Use context managers for patching to reduce function args
+    """
+    Verifies that upload.callback responds with an error and does not create matches when given invalid CSV input.
+    
+    This test patches the matches CRUD layer and session provider, supplies a mocked Attachment containing the provided CSV content, invokes upload.callback, and asserts that a follow-up error message containing `expected_error_part` was sent and that no matches were created.
+    
+    Parameters:
+        mock_interaction: Mocked discord.Interaction with deferred and followup behaviors.
+        csv_content (str): CSV text to feed to the attachment; intentionally invalid for the test case.
+        expected_error_part (str): Substring expected to appear in the error message sent to the interaction.
+    """
     with patch("src.commands.matches.crud") as mock_crud, patch(
         "src.commands.matches.get_session"
     ) as mock_get_session:

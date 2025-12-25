@@ -29,6 +29,9 @@ class ConfigureSync(commands.Cog):
     """A cog for managing the tournament sync configuration."""
 
     def __init__(self, bot: commands.Bot):
+        """
+        Initialize the ConfigureSync cog and retain a reference to the bot for use by the cog's commands and handlers.
+        """
         self.bot = bot
 
     configure_group = app_commands.Group(
