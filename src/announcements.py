@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Optional
 
 import discord
@@ -217,7 +218,19 @@ async def send_announcement(
         return False
 
 
-async def get_admin_channel(guild: discord.Guild) -> discord.TextChannel:
+async def get_admin_channel(
+    guild: discord.Guild,
+) -> Optional[discord.TextChannel]:
+    """
+    Locate or create the administrator updates channel in the given guild.
+
+    Requires the 'Manage Channels' permission if the channel does not
+    already exist.
+
+    Returns:
+        discord.TextChannel: The existing or newly created admin channel,
+            or `None` if creation failed or was not permitted.
+    """
     for channel in guild.text_channels:
         if channel.name == ADMIN_CHANNEL_NAME:
             return channel
@@ -225,17 +238,29 @@ async def get_admin_channel(guild: discord.Guild) -> discord.TextChannel:
         guild.default_role: discord.PermissionOverwrite(send_messages=False),
         guild.me: discord.PermissionOverwrite(send_messages=True),
     }
-    return await guild.create_text_channel(ADMIN_CHANNEL_NAME, overwrites=overwrites)
+    try:
+        return await guild.create_text_channel(
+            ADMIN_CHANNEL_NAME, overwrites=overwrites
+        )
+    except (discord.Forbidden, discord.HTTPException) as e:
+        logger.warning(
+            "Could not create admin channel in guild %s: %s",
+            getattr(guild, "id", "unknown"),
+            e,
+        )
+        return None
+    except Exception:
+        return None
 
 
 async def send_admin_update(message: str, mention_user_id: int | None = None):
-    """Sends a plain-text admin update to the developer guild's admin-updates channel.
-
-    If `mention_user_id` is provided it will be mentioned at the start of the message.
     """
-    import os
-    from src.bot_instance import get_bot_instance
+    Sends a plain-text admin update to the developer guild's admin-updates
+    channel.
 
+    If `mention_user_id` is provided it will be mentioned at the start of the
+    message.
+    """
     bot = get_bot_instance()
     if not bot:
         logger.debug("Bot instance not available; cannot send admin update.")
@@ -252,15 +277,24 @@ async def send_admin_update(message: str, mention_user_id: int | None = None):
         guild = None
 
     if not guild:
-        logger.warning("Developer guild id %s not found or bot not in guild.", dev_guild_id)
+        logger.warning(
+            "Developer guild id %s not found or bot not in guild.",
+            dev_guild_id,
+        )
         return
 
     try:
         channel = await get_admin_channel(guild)
+        if channel is None:
+            logger.warning("No admin channel available in guild %s", guild.id)
+            return
+
         body = message
         if mention_user_id:
             body = f"<@{mention_user_id}> {message}"
         await channel.send(body)
-        logger.info("Sent admin update to guild %s channel %s", guild.id, channel.name)
+        logger.info(
+            "Sent admin update to guild %s channel %s", guild.id, channel.name
+        )
     except Exception as e:
         logger.exception("Failed sending admin update: %s", e)
