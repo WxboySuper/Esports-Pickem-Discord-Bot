@@ -10,32 +10,14 @@ from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 # --- Sync Setup ---
-# Default production path (Linux). If unavailable (e.g., on Windows/dev),
-# fall back to a project-local `./data/esports-pickem.db` to make
-# local runs easy.
-DEFAULT_DB_PATH = Path("/opt/esports-bot/data/esports-pickem.db")
+# Prefer explicit `DATABASE_URL` from the environment. If not set,
+# fall back to a deterministic project-local SQLite file under
+# `<project_root>/data/esports-pickem.db` so local/dev runs are easy.
 project_root = Path(__file__).resolve().parents[1]
-local_data_dir = project_root / "data"
-local_data_dir.mkdir(parents=True, exist_ok=True)
-LOCAL_DB_PATH = local_data_dir / "esports-pickem.db"
+local_db_path = project_root / "data" / "esports-pickem.db"
+local_db_path.parent.mkdir(parents=True, exist_ok=True)
 
-# Use env override if provided. Otherwise prefer the default production
-# path when it exists; otherwise use the local DB path (helpful for
-# Windows/dev).
-env_db = os.getenv("DATABASE_URL")
-if env_db:
-    DATABASE_URL = env_db
-else:
-    if os.name == "nt" or not DEFAULT_DB_PATH.parent.exists():
-        DB_PATH = str(LOCAL_DB_PATH)
-    else:
-        DB_PATH = str(DEFAULT_DB_PATH)
-    DATABASE_URL = f"sqlite:///{DB_PATH}"
-# Workaround: Some deployments may set the database name as
-# 'esports_pickem' instead of 'esports-pickem'. To ensure consistency,
-# we replace the database name only if necessary.
-if "esports_pickem" in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL.replace("esports_pickem", "esports-pickem")
+DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{local_db_path}"
 
 _sql_echo = os.getenv("SQL_ECHO", "False").lower() in ("true", "1", "t")
 
