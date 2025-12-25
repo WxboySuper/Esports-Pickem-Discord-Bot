@@ -111,6 +111,15 @@ def _build_count_query(days: int = None, contest_id: int = None):
     if contest_id is not None and hasattr(Pick, "contest_id"):
         query = query.where(getattr(Pick, "contest_id") == contest_id)
 
+    # Only include picks that have been resolved as correct when a
+    # status field is available. This mirrors the previous behaviour
+    # that filtered on Pick.status == "correct", rather than relying
+    # solely on the is_correct flag.
+    if hasattr(Pick, "status"):
+        query = query.where(getattr(Pick, "status") == "correct")
+    elif hasattr(Pick, "created_at"):
+        query = query.where(getattr(Pick, "created_at") >= cutoff)
+
     query = query.group_by(User.id).order_by(total_correct.desc())
     return query
 
@@ -450,6 +459,8 @@ def _is_accuracy_based_data(leaderboard_data: LeaderboardData) -> bool:
         `True` if the first entry is a tuple of length 4 representing
             (User, accuracy, total, picks), `False` otherwise.
     """
+    if not leaderboard_data:
+        return False
     first = leaderboard_data[0]
     return isinstance(first, tuple) and len(first) == 4
 
