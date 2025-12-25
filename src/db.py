@@ -11,13 +11,27 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 # --- Sync Setup ---
 # Prefer explicit `DATABASE_URL` from the environment. If not set,
-# fall back to a deterministic project-local SQLite file under
-# `<project_root>/data/esports-pickem.db` so local/dev runs are easy.
+# preserve the historical default of `/opt/esports-bot/data/esports-pickem.db`
+# for compatibility with existing deployments, and fall back to a
+# deterministic project-local SQLite file under
+# `<project_root>/data/esports-pickem.db` for local/dev runs.
 project_root = Path(__file__).resolve().parents[1]
 local_db_path = project_root / "data" / "esports-pickem.db"
 local_db_path.parent.mkdir(parents=True, exist_ok=True)
-
-DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{local_db_path}"
+env_db_url = os.getenv("DATABASE_URL")
+if env_db_url:
+    raw_db_url = env_db_url
+else:
+    # Legacy default location used by existing deployments.
+    legacy_db_path = Path("/opt/esports-bot/data/esports-pickem.db")
+    if legacy_db_path.parent.exists():
+        raw_db_url = f"sqlite:///{legacy_db_path}"
+    else:
+        # Fallback to project-local path for development / non-legacy layouts.
+        raw_db_url = f"sqlite:///{local_db_path}"
+# Historical normalization: support old paths/URLs that used `esports_pickem`.
+raw_db_url = raw_db_url.replace("esports_pickem", "esports-pickem")
+DATABASE_URL = raw_db_url
 
 _sql_echo = os.getenv("SQL_ECHO", "False").lower() in ("true", "1", "t")
 
