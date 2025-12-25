@@ -24,10 +24,13 @@ async def setup_test_db():
 
 
 async def teardown_test_db():
-    """Asynchronously disposes the test engine and removes the DB file.
-
-    This must be awaited from an async test fixture to ensure all async
-    connections are closed before attempting to delete the file on Windows.
+    """
+    Dispose the test engine and remove the test database file.
+    
+        Attempts to dispose the asynchronous engine and, if present, its
+    underlying sync engine; ignores disposal errors and proceeds to remove
+    TEST_DB_PATH. If the file exists, it will be deleted; PermissionError
+    during removal (commonly on Windows while handles are released) is ignored.
     """
     try:
         await engine.dispose()

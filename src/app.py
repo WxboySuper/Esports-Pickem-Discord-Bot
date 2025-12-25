@@ -57,6 +57,17 @@ class EsportsBot(commands.Bot):
         self.session = None
 
     async def setup_hook(self):
+        """
+        Run asynchronous startup tasks required before the bot
+        becomes ready.
+        
+        Initializes the HTTP session, registers the global bot
+        instance, ensures database tables exist, logs into the
+        Leaguepedia client, starts the scheduler, loads command
+        modules (if a commands package is available), and synchronizes
+        global application commands. Exceptions raised during database
+        initialization are caught and logged.
+        """
         logger.info("Executing setup_hook...")
         self.session = aiohttp.ClientSession()
         set_bot_instance(self)
