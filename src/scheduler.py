@@ -27,7 +27,8 @@ def get_scheduler() -> AsyncIOScheduler:
     Lazily instantiate and return the module-level AsyncIOScheduler.
     
     Returns:
-        AsyncIOScheduler: The shared scheduler instance used by the module; created on first invocation and reused thereafter.
+        AsyncIOScheduler: The shared scheduler instance used by the
+            module; created on first invocation and reused thereafter.
     """
     global _scheduler
     if _scheduler is None:
@@ -42,13 +43,16 @@ def get_scheduler() -> AsyncIOScheduler:
 class _SchedulerProxy:
     def __getattr__(self, item):
         """
-        Delegate attribute lookups to the underlying lazily-instantiated scheduler.
+        Delegate attribute lookups to the underlying
+        lazily-instantiated scheduler.
         
         Parameters:
-            item (str): Name of the attribute being accessed on the proxy.
+            item (str): Name of the attribute being accessed on
+                the proxy.
         
         Returns:
-            Any: The attribute value retrieved from the underlying scheduler instance.
+            Any: The attribute value retrieved from the underlying
+                scheduler instance.
         """
         return getattr(get_scheduler(), item)
 
@@ -141,26 +145,38 @@ def _remove_job_if_exists(job_id: str):
 
 def _calculate_team_scores(relevant_games, match):
     """
-    Compute aggregate series scores for match.team1 and match.team2 from scoreboard game entries.
+    Compute aggregate series scores for match.team1 and match.team2
+    from scoreboard game entries.
     
-    Normalizes team names and counts wins using each game's 'Winner' field (expected values 1 or 2). Games that do not involve both match teams or that contain an invalid/missing winner are ignored.
+    Normalizes team names and counts wins using each game's 'Winner'
+    field (expected values 1 or 2). Games that do not involve both
+    match teams or that contain an invalid/missing winner are ignored.
     
     Parameters:
-        relevant_games (Iterable[dict]): Sequence of scoreboard entries; each entry should provide at least the keys 'Team1', 'Team2', and 'Winner'.
-        match (object): Match object with attributes `team1` and `team2` containing team names.
+        relevant_games (Iterable[dict]): Sequence of scoreboard
+            entries; each entry should provide at least the keys
+            'Team1', 'Team2', and 'Winner'.
+        match (object): Match object with attributes `team1` and
+            `team2` containing team names.
     
     Returns:
-        tuple: (team1_score, team2_score) — integers representing the number of games won by match.team1 and match.team2, respectively.
+        tuple: (team1_score, team2_score) — integers representing
+            the number of games won by match.team1 and match.team2,
+            respectively.
     """
     def _norm(s: str) -> str:
         """
-        Normalize a text string for case- and whitespace-insensitive comparisons.
+        Normalize a text string for case- and whitespace-insensitive
+        comparisons.
         
         Parameters:
-            s (str): Input string to normalize; None or falsy values are treated as empty.
+            s (str): Input string to normalize; None or falsy values
+                are treated as empty.
         
         Returns:
-            normalized (str): The input converted to lowercase with leading/trailing whitespace removed (empty string if input was falsy).
+            normalized (str): The input converted to lowercase with
+                leading/trailing whitespace removed (empty string if
+                input was falsy).
         """
         return (s or "").strip().lower()
 
@@ -170,15 +186,21 @@ def _calculate_team_scores(relevant_games, match):
     def _scores_from_game(game: dict, m1: str, m2: str):
         # Return (delta_team1, delta_team2) for this game
         """
-        Compute the score delta contributed by a single scoreboard game for a match between two teams.
+        Compute the score delta contributed by a single scoreboard
+        game for a match between two teams.
         
         Parameters:
-            game (dict): A scoreboard entry containing at least "Team1", "Team2", and "Winner".
+            game (dict): A scoreboard entry containing at least
+                "Team1", "Team2", and "Winner".
             m1 (str): Normalized identifier for match.team1.
             m2 (str): Normalized identifier for match.team2.
         
         Returns:
-            tuple: (delta_team1, delta_team2) where exactly one value is 1 when the game is won by one of the match teams and 0 otherwise. Returns (0, 0) if the game does not involve the two match teams or the winner is missing/invalid.
+            tuple: (delta_team1, delta_team2) where exactly one value
+                is 1 when the game is won by one of the match teams
+                and 0 otherwise. Returns (0, 0) if the game does not
+                involve the two match teams or the winner is
+                missing/invalid.
         """
         winner_raw = game.get("Winner")
         if winner_raw is None:
@@ -228,16 +250,22 @@ def _determine_winner(team1_score, team2_score, match):
 
 async def _save_result_and_update_picks(session, match, winner, score_str):
     """
-    Persist a match result and mark all picks for that match as correct or incorrect.
+    Persist a match result and mark all picks for that match as
+    correct or incorrect.
     
     Parameters:
-        session: An asynchronous database session used to add the result and update picks.
-        match: The Match model instance for which the result is being recorded.
-        winner: The value stored as the winner on the Result; compared against each Pick.chosen_team to set is_correct.
-        score_str: A human-readable score string to store on the Result.
+        session: An asynchronous database session used to add the
+            result and update picks.
+        match: The Match model instance for which the result is being
+            recorded.
+        winner: The value stored as the winner on the Result;
+            compared against each Pick.chosen_team to set is_correct.
+        score_str: A human-readable score string to store on the
+            Result.
     
     Returns:
-        The created Result instance that was added to the session (not committed).
+        The created Result instance that was added to the session
+            (not committed).
     """
     result = Result(
         match_id=match.id,
@@ -263,13 +291,16 @@ async def _save_result_and_update_picks(session, match, winner, score_str):
 
 async def _fetch_scoreboard_for_match(match: Match):
     """
-    Fetches scoreboard data for the match's contest from Leaguepedia.
+    Fetches scoreboard data for the match's contest from
+    Leaguepedia.
     
     Parameters:
-        match (Match): Match whose contest must include a valid `leaguepedia_id`.
+        match (Match): Match whose contest must include a valid
+            `leaguepedia_id`.
     
     Returns:
-        The scoreboard data object returned by the Leaguepedia client for the contest.
+        The scoreboard data object returned by the Leaguepedia
+            client for the contest.
     """
     logger.debug("Fetching scoreboard data for match %s", match.id)
     return await leaguepedia_client.get_scoreboard_data(
@@ -279,14 +310,20 @@ async def _fetch_scoreboard_for_match(match: Match):
 
 def _filter_relevant_games_from_scoreboard(scoreboard_data, match: Match):
     """
-    Return the subset of scoreboard entries that involve exactly the two teams in the given match.
+    Return the subset of scoreboard entries that involve exactly the
+    two teams in the given match.
     
     Parameters:
-    	scoreboard_data (iterable[dict]): Iterable of scoreboard entries where each entry is expected to have "Team1" and "Team2" keys containing team names.
-    	match (Match): Match whose `team1` and `team2` names are used to identify relevant entries.
+    	scoreboard_data (iterable[dict]): Iterable of scoreboard
+    	    entries where each entry is expected to have "Team1" and
+    	    "Team2" keys containing team names.
+    	match (Match): Match whose `team1` and `team2` names are used
+    	    to identify relevant entries.
     
     Returns:
-    	list[dict]: List of scoreboard entries from `scoreboard_data` whose Team1/Team2 pair matches the match teams (order-insensitive).
+    	list[dict]: List of scoreboard entries from `scoreboard_data`
+    	    whose Team1/Team2 pair matches the match teams (order-
+    	    insensitive).
     """
     def _norm(s: str) -> str:
         return (s or "").strip().lower()
@@ -306,9 +343,13 @@ async def _handle_winner(
     job_id: str | None = None,
 ):
     """
-    Handle a detected series winner by persisting the result, updating picks, notifying guilds, and unscheduling the poll job for the match.
+    Handle a detected series winner by persisting the result,
+    updating picks, notifying guilds, and unscheduling the poll job
+    for the match.
     
-    This function opens and manages its own database session. If `job_id` is not provided, the poll job id `poll_match_{match.id}` will be used to remove the scheduled polling job.
+    This function opens and manages its own database session. If
+    `job_id` is not provided, the poll job id `poll_match_{match.id}`
+    will be used to remove the scheduled polling job.
     """
     logger.info(
         "Series winner found for match %s: %s. Final Score: %s",
@@ -335,9 +376,13 @@ async def _handle_winner(
 
 async def _should_continue_polling(session, match: Match | None, job_id: str) -> bool:
     """
-    Decides whether polling should continue for a match and unschedules the poll job when it should stop.
+    Decides whether polling should continue for a match and
+    unschedules the poll job when it should stop.
     
-    Stops and removes the job when the match is missing, a result already exists, or the match is more than 12 hours past its scheduled time. The job identified by `job_id` will be unscheduled in those cases.
+    Stops and removes the job when the match is missing, a result
+    already exists, or the match is more than 12 hours past its
+    scheduled time. The job identified by `job_id` will be
+    unscheduled in those cases.
     
     Returns:
         `True` if polling should continue, `False` otherwise.
@@ -371,9 +416,15 @@ async def _should_continue_polling(session, match: Match | None, job_id: str) ->
 
 async def poll_live_match_job(match_db_id: int):
     """
-    Polls the live scoreboard for a match, updates match state in the database, and broadcasts score updates or the final result.
+    Polls the live scoreboard for a match, updates match state in
+    the database, and broadcasts score updates or the final result.
     
-    Given a match database ID, attempts to retrieve current scoreboard data for that match, determines the live series score and winner (if any), persists score and result changes, announces mid-series updates or final results to guilds, and unschedules polling when the match is finished or should stop (e.g., timed out or missing). The function performs no return value.
+    Given a match database ID, attempts to retrieve current
+    scoreboard data for that match, determines the live series score
+    and winner (if any), persists score and result changes, announces
+    mid-series updates or final results to guilds, and unschedules
+    polling when the match is finished or should stop (e.g., timed
+    out or missing). The function performs no return value.
     
     Parameters:
         match_db_id (int): The database ID of the match to poll.
@@ -437,7 +488,8 @@ async def send_reminder(match_id: int, minutes: int):
     
     Parameters:
         match_id (int): Database ID of the match to remind about.
-        minutes (int): Number of minutes before the match (e.g., 5 or 30) used in the embed text.
+        minutes (int): Number of minutes before the match (e.g., 5 or
+            30) used in the embed text.
     """
     logger.info(
         "Broadcasting %s-minute reminder for match %s to all guilds.",
@@ -464,13 +516,18 @@ def _create_reminder_embed(match: Match, team1: Team | None, team2: Team | None,
     Builds a Discord embed reminding users of an upcoming match.
     
     Parameters:
-        match (Match): Match instance whose teams and scheduled_time are shown in the embed.
-        team1 (Team | None): Optional team object for team1; used to select a thumbnail if it provides an image_url.
-        team2 (Team | None): Optional team object for team2; used to select a thumbnail if team1 has no image.
-        minutes (int): Minutes before the match (commonly 5 or 30) that determines the embed's title, description, and color.
+        match (Match): Match instance whose teams and scheduled_time
+            are shown in the embed.
+        team1 (Team | None): Optional team object for team1; used to
+            select a thumbnail if it provides an image_url.
+        team2 (Team | None): Optional team object for team2; used to
+            select a thumbnail if team1 has no image.
+        minutes (int): Minutes before the match (commonly 5 or 30)
+            that determines the embed's title, description, and color.
     
     Returns:
-        discord.Embed: A ready-to-send embed containing the match reminder, scheduled time field, and optional thumbnail.
+        discord.Embed: A ready-to-send embed containing the match
+            reminder, scheduled time field, and optional thumbnail.
     """
     scheduled_ts = int(match.scheduled_time.timestamp())
 
@@ -506,13 +563,19 @@ def _create_reminder_embed(match: Match, team1: Team | None, team2: Team | None,
 
 async def send_result_notification(match: Match, result: Result):
     """
-    Broadcast a rich Discord embed with the final result of a match to all guilds.
+    Broadcast a rich Discord embed with the final result of a match
+    to all guilds.
     
-    Builds a gold-colored embed showing the winner, final score, and pick'em statistics (total picks, correct picks, percentage), includes the winner's thumbnail when available, timestamps the embed, and broadcasts it to every guild the bot is in.
+    Builds a gold-colored embed showing the winner, final score, and
+    pick'em statistics (total picks, correct picks, percentage),
+    includes the winner's thumbnail when available, timestamps the
+    embed, and broadcasts it to every guild the bot is in.
     
     Parameters:
-        match (Match): Match model instance for which the result applies.
-        result (Result): Result model instance containing `winner` and `score`.
+        match (Match): Match model instance for which the result
+            applies.
+        result (Result): Result model instance containing `winner`
+            and `score`.
     """
     logger.info(
         "Broadcasting result notification for match %s "
@@ -575,11 +638,14 @@ async def send_result_notification(match: Match, result: Result):
 
 async def send_mid_series_update(match: Match, score: str):
     """
-    Builds and broadcasts a Discord embed announcing a live mid-series score update to all guilds.
+    Builds and broadcasts a Discord embed announcing a live
+    mid-series score update to all guilds.
     
     Parameters:
-        match (Match): Match object containing teams, id, and best_of used in the embed.
-        score (str): Current series score string (for example, "2-1") displayed in the embed.
+        match (Match): Match object containing teams, id, and best_of
+            used in the embed.
+        score (str): Current series score string (for example, "2-1")
+            displayed in the embed.
     """
     logger.info(
         "Broadcasting mid-series update for match %s "
@@ -606,14 +672,17 @@ async def send_mid_series_update(match: Match, score: str):
 
 async def _fetch_teams(session, match: Match):
     """
-    Retrieve the Team objects corresponding to the match's team1 and team2 names.
+    Retrieve the Team objects corresponding to the match's team1 and
+    team2 names.
     
     Parameters:
         session: Database session to execute queries.
-        match (Match): Match instance whose `team1` and `team2` name fields are used to look up teams.
+        match (Match): Match instance whose `team1` and `team2` name
+            fields are used to look up teams.
     
     Returns:
-        tuple: (team1_obj, team2_obj) where each element is the matching Team object or `None` if no match was found.
+        tuple: (team1_obj, team2_obj) where each element is the
+            matching Team object or `None` if no match was found.
     """
     team1_stmt = select(Team).where(Team.name == match.team1)
     team2_stmt = select(Team).where(Team.name == match.team2)
@@ -624,10 +693,12 @@ async def _fetch_teams(session, match: Match):
 
 async def _broadcast_embed_to_guilds(bot: discord.Client, embed: discord.Embed, context: str):
     """
-    Broadcast an embed to every guild the bot is a member of and record success or failure for each delivery.
+    Broadcast an embed to every guild the bot is a member of and
+    record success or failure for each delivery.
     
     Parameters:
-        context (str): Short description included in log messages to identify this broadcast.
+        context (str): Short description included in log messages to
+            identify this broadcast.
     """
     for guild in bot.guilds:
         try:
@@ -639,13 +710,18 @@ async def _broadcast_embed_to_guilds(bot: discord.Client, embed: discord.Embed, 
 
 async def _get_matches_starting_soon(session):
     """
-    Return the current UTC time and all Match records scheduled to start within the next minute that have no result.
+    Return the current UTC time and all Match records scheduled to
+    start within the next minute that have no result.
     
     Parameters:
-        session: A SQLModel/SQLAlchemy session used to query Match records.
+        session: A SQLModel/SQLAlchemy session used to query Match
+            records.
     
     Returns:
-        tuple: (now, matches) where `now` is the current UTC datetime and `matches` is a list of Match objects whose `scheduled_time` is >= `now` and < one minute after `now` and whose `result` is None.
+        tuple: (now, matches) where `now` is the current UTC datetime
+            and `matches` is a list of Match objects whose
+            `scheduled_time` is >= `now` and < one minute after `now`
+            and whose `result` is None.
     """
     now = datetime.now(timezone.utc)
     one_minute_from_now = now + timedelta(minutes=1)
@@ -663,7 +739,9 @@ def _safe_get_jobs():
     Fetch the current scheduled jobs from the scheduler.
     
     Returns:
-        list: A list of scheduled job objects from the scheduler. Returns an empty list if the scheduler does not expose a `get_jobs` method or if job retrieval fails.
+        list: A list of scheduled job objects from the scheduler.
+            Returns an empty list if the scheduler does not expose a
+            `get_jobs` method or if job retrieval fails.
     """
     try:
         return scheduler.get_jobs()
@@ -680,10 +758,12 @@ def _count_poll_jobs(jobs):
     Count how many scheduler jobs are poll jobs for matches.
     
     Parameters:
-        jobs (Iterable): An iterable of job-like objects; each object is expected to have an `id` attribute.
+        jobs (Iterable): An iterable of job-like objects; each object
+            is expected to have an `id` attribute.
     
     Returns:
-        int: Number of jobs whose `id` starts with "poll_match_". Returns 0 if an unexpected job object is encountered.
+        int: Number of jobs whose `id` starts with "poll_match_".
+            Returns 0 if an unexpected job object is encountered.
     """
     try:
         return sum(1 for j in jobs if getattr(j, "id", "").startswith("poll_match_"))
@@ -694,12 +774,17 @@ def _count_poll_jobs(jobs):
 
 def _schedule_poll_for_match(match):
     """
-    Schedule a recurring poll job to monitor a live match if one is not already scheduled.
+    Schedule a recurring poll job to monitor a live match if one is
+    not already scheduled.
     
-    Schedules a job named "poll_match_<match.id>" that calls poll_live_match_job(match.id) every 5 minutes with a 60-second misfire grace period. If a job with the same id already exists, no changes are made.
+    Schedules a job named "poll_match_<match.id>" that calls
+    poll_live_match_job(match.id) every 5 minutes with a 60-second
+    misfire grace period. If a job with the same id already exists,
+    no changes are made.
     
     Parameters:
-        match: Match-like object with at least `id`, `team1`, and `team2` attributes used to name and log the job.
+        match: Match-like object with at least `id`, `team1`, and
+            `team2` attributes used to name and log the job.
     """
     job_id = f"poll_match_{match.id}"
     if scheduler.get_job(job_id):
@@ -726,9 +811,13 @@ def _schedule_poll_for_match(match):
 
 async def schedule_live_polling():
     """
-    Schedule polling jobs for matches that are starting within the next minute.
+    Schedule polling jobs for matches that are starting within the
+    next minute.
     
-    Checks the database for matches scheduled to begin in the immediate one-minute window, logs the number of candidates and current poll job count, and schedules a dedicated polling job for each candidate match. Does not return a value.
+    Checks the database for matches scheduled to begin in the
+    immediate one-minute window, logs the number of candidates and
+    current poll job count, and schedules a dedicated polling job for
+    each candidate match. Does not return a value.
     """
     logger.debug("Running schedule_live_polling job...")
 
@@ -761,9 +850,13 @@ async def schedule_live_polling():
 def start_scheduler():
     # Local import to avoid circular dependency
     """
-    Ensure the module scheduler has required recurring jobs registered and start it if it is not already running.
+    Ensure the module scheduler has required recurring jobs
+    registered and start it if it is not already running.
     
-    Registers a 6-hour interval job to sync Leaguepedia data and a 1-minute interval job to schedule live match polling, then starts the scheduler. If the scheduler is already running, no changes are made and the function logs that state.
+    Registers a 6-hour interval job to sync Leaguepedia data and a
+    1-minute interval job to schedule live match polling, then starts
+    the scheduler. If the scheduler is already running, no changes
+    are made and the function logs that state.
     """
     from src.commands.sync_leaguepedia import perform_leaguepedia_sync
     if not getattr(scheduler, "running", False):

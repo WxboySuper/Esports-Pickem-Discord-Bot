@@ -165,7 +165,8 @@ def _to_int(val, default=0):
     
     Parameters:
     	val (Any): The value to convert to int.
-    	default (int): Integer to return if conversion raises an exception (defaults to 0).
+    	default (int): Integer to return if conversion raises an
+    	    exception (defaults to 0).
     
     Returns:
     	int: The converted integer, or `default` if conversion fails.
@@ -178,15 +179,23 @@ def _to_int(val, default=0):
 
 def _parse_accuracy_row(t: tuple):
     """
-    Normalize an accuracy-based database row into (User, accuracy, total).
+    Normalize an accuracy-based database row into
+    (User, accuracy, total).
     
-    Converts the raw accuracy to a float percentage in the range 0–100 (treating values between 0 and 1 as fractions and multiplying them by 100), clamps out-of-range accuracies to [0, 100], and coerces the total correct value to a non-negative integer.
+    Converts the raw accuracy to a float percentage in the range
+    0–100 (treating values between 0 and 1 as fractions and
+    multiplying them by 100), clamps out-of-range accuracies to
+    [0, 100], and coerces the total correct value to a non-negative
+    integer.
     
     Parameters:
-        t (tuple): Database row expected in the form (User, accuracy, total).
+        t (tuple): Database row expected in the form
+            (User, accuracy, total).
     
     Returns:
-        tuple: (User, accuracy_float, total_correct) where `accuracy_float` is a percentage between 0 and 100 and `total_correct` is an integer >= 0.
+        tuple: (User, accuracy_float, total_correct) where
+            `accuracy_float` is a percentage between 0 and 100 and
+            `total_correct` is an integer >= 0.
     """
     raw_accuracy = t[1] if len(t) > 1 else None
     accuracy = _to_float(raw_accuracy, default=0.0)
@@ -209,13 +218,16 @@ def _parse_accuracy_row(t: tuple):
 
 def _parse_count_row(t: tuple):
     """
-    Parse a count-based leaderboard row into a (User, total_correct) tuple.
+    Parse a count-based leaderboard row into a
+    (User, total_correct) tuple.
     
     Parameters:
-        t (tuple): Row or tuple where index 0 is a User and index 1 is the total correct picks (may be None).
+        t (tuple): Row or tuple where index 0 is a User and index 1
+            is the total correct picks (may be None).
     
     Returns:
-        tuple: (User, total_correct) where total_correct is an int greater than or equal to 0.
+        tuple: (User, total_correct) where total_correct is an int
+            greater than or equal to 0.
     """
     total = _to_int(t[1]) if len(t) > 1 and t[1] is not None else 0
     if total < 0:
@@ -225,16 +237,21 @@ def _parse_count_row(t: tuple):
 
 def _parse_row(tup, is_accuracy_based: bool):
     """
-    Normalize a database result row into a leaderboard tuple or return None on parse failure.
+    Normalize a database result row into a leaderboard tuple or
+    return None on parse failure.
     
     Parameters:
-        tup (tuple | Any): The raw database row; expected to have a User as the first element.
-        is_accuracy_based (bool): If true, parse as an accuracy-based row; otherwise parse as a count-based row.
+        tup (tuple | Any): The raw database row; expected to have a
+            User as the first element.
+        is_accuracy_based (bool): If true, parse as an accuracy-based
+            row; otherwise parse as a count-based row.
     
     Returns:
-        tuple | None: For accuracy-based rows, returns (User, accuracy: float, total_correct: int).
-                      For count-based rows, returns (User, total_correct: int).
-                      Returns `None` if the input is empty or the first element (User) is missing.
+        tuple | None: For accuracy-based rows, returns
+            (User, accuracy: float, total_correct: int).
+            For count-based rows, returns (User, total_correct: int).
+            Returns `None` if the input is empty or the first element
+            (User) is missing.
     """
     if not tup:
         return None
@@ -247,15 +264,26 @@ def _parse_row(tup, is_accuracy_based: bool):
 
 async def _apply_guild_filter(results, guild_id: int, is_accuracy_based: bool):
     """
-    Normalize database result rows into leaderboard entries and filter them by guild membership.
+    Normalize database result rows into leaderboard entries and
+    filter them by guild membership.
     
     Parameters:
-        results: An iterable of database result rows produced by the leaderboard queries.
-        guild_id (int | None): Guild/server identifier used to include only users belonging to that guild. A falsy value disables guild filtering.
-        is_accuracy_based (bool): If True, parse rows as accuracy-based entries; otherwise parse as count-based entries.
+        results: An iterable of database result rows produced by the
+            leaderboard queries.
+        guild_id (int | None): Guild/server identifier used to
+            include only users belonging to that guild. A falsy value
+            disables guild filtering.
+        is_accuracy_based (bool): If True, parse rows as
+            accuracy-based entries; otherwise parse as count-based
+            entries.
     
     Returns:
-        list: A list of parsed leaderboard entries. For accuracy-based data each entry is (User, accuracy: float, total_correct: int). For count-based data each entry is (User, total_correct: int). Rows that cannot be parsed or whose users fail the guild check are omitted.
+        list: A list of parsed leaderboard entries. For
+            accuracy-based data each entry is
+            (User, accuracy: float, total_correct: int). For
+            count-based data each entry is (User, total_correct: int).
+            Rows that cannot be parsed or whose users fail the guild
+            check are omitted.
     """
     processed = []
     for row in results:
@@ -281,15 +309,27 @@ async def get_leaderboard_data(
 ) -> LeaderboardData:
     # Decide leaderboard type
     """
-    Retrieve leaderboard entries, selecting an accuracy-based leaderboard when neither `days` nor `contest_id` are provided, otherwise selecting a count-based leaderboard.
+    Retrieve leaderboard entries, selecting an accuracy-based
+    leaderboard when neither `days` nor `contest_id` are provided,
+    otherwise selecting a count-based leaderboard.
     
     Parameters:
-    	days (int | None): Optional time window in days to limit picks for a count-based leaderboard. If omitted and `contest_id` is also omitted, an accuracy-based leaderboard is used.
-    	guild_id (int | None): Optional guild/server ID to filter users by their associated guild; if omitted no guild filtering is applied.
-    	contest_id (int | None): Optional contest identifier to restrict results to a specific contest; if provided, a count-based leaderboard is used.
+    	days (int | None): Optional time window in days to limit
+    	    picks for a count-based leaderboard. If omitted and
+    	    `contest_id` is also omitted, an accuracy-based
+    	    leaderboard is used.
+    	guild_id (int | None): Optional guild/server ID to filter
+    	    users by their associated guild; if omitted no guild
+    	    filtering is applied.
+    	contest_id (int | None): Optional contest identifier to
+    	    restrict results to a specific contest; if provided, a
+    	    count-based leaderboard is used.
     
     Returns:
-    	LeaderboardData: For an accuracy-based leaderboard, a list of tuples (User, accuracy_percent, total_correct). For a count-based leaderboard, a list of tuples (User, total_correct).
+    	LeaderboardData: For an accuracy-based leaderboard, a list of
+    	    tuples (User, accuracy_percent, total_correct). For a
+    	    count-based leaderboard, a list of tuples
+    	    (User, total_correct).
     """
     is_accuracy_based = not days and not contest_id
 
@@ -311,15 +351,23 @@ async def create_leaderboard_embed(
     """
     Create a standardized Discord embed representing a leaderboard.
     
-    The embed's author is set from the interaction user (display name and avatar). If `leaderboard_data` is empty the embed description will state that the leaderboard is empty; otherwise the description contains up to the top 20 formatted entries. The function detects whether `leaderboard_data` is accuracy-based or count-based and formats each entry accordingly.
+    The embed's author is set from the interaction user (display name
+    and avatar). If `leaderboard_data` is empty the embed description
+    will state that the leaderboard is empty; otherwise the
+    description contains up to the top 20 formatted entries. The
+    function detects whether `leaderboard_data` is accuracy-based or
+    count-based and formats each entry accordingly.
     
     Parameters:
         title (str): Title to display at the top of the embed.
-        leaderboard_data (LeaderboardData): Parsed leaderboard rows (accuracy-based or count-based) to include in the embed.
-        interaction (discord.Interaction): Interaction whose user provides the embed author information.
+        leaderboard_data (LeaderboardData): Parsed leaderboard rows
+            (accuracy-based or count-based) to include in the embed.
+        interaction (discord.Interaction): Interaction whose user
+            provides the embed author information.
     
     Returns:
-        discord.Embed: A populated embed ready to be sent or edited into a message.
+        discord.Embed: A populated embed ready to be sent or edited
+            into a message.
     """
     embed = discord.Embed(
         title=title,
@@ -349,10 +397,12 @@ async def create_leaderboard_embed(
 
 def _is_accuracy_based_data(leaderboard_data: LeaderboardData) -> bool:
     """
-    Determine whether the leaderboard data is accuracy-based (entries as 3-tuples).
+    Determine whether the leaderboard data is accuracy-based
+    (entries as 3-tuples).
     
     Returns:
-        `True` if the first entry is a tuple of length 3 representing (User, accuracy, total), `False` otherwise.
+        `True` if the first entry is a tuple of length 3 representing
+            (User, accuracy, total), `False` otherwise.
     """
     first = leaderboard_data[0]
     return isinstance(first, tuple) and len(first) == 3
@@ -360,14 +410,20 @@ def _is_accuracy_based_data(leaderboard_data: LeaderboardData) -> bool:
 
 def _format_accuracy_entry(entry, index: int) -> str:
     """
-    Format an accuracy-based leaderboard entry into a single display string.
+    Format an accuracy-based leaderboard entry into a single display
+    string.
     
     Parameters:
-    	entry (tuple): A leaderboard row in the form (User, accuracy_percent, total_correct). `accuracy_percent` is a numeric value in percent (0–100).
+    	entry (tuple): A leaderboard row in the form
+    	    (User, accuracy_percent, total_correct).
+    	    `accuracy_percent` is a numeric value in percent (0–100).
     	index (int): 1-based rank position to display.
     
     Returns:
-    	str: A single-line string like "**{index}.** {username} - `{accuracy:.2f}%` accuracy", where `username` falls back to "User ID: {discord_id}" when unavailable.
+    	str: A single-line string like
+    	    "**{index}.** {username} - `{accuracy:.2f}%` accuracy",
+    	    where `username` falls back to "User ID: {discord_id}"
+    	    when unavailable.
     """
     user = entry[0]
     username = user.username or f"User ID: {user.discord_id}"
@@ -380,11 +436,13 @@ def _format_count_entry(entry, index: int) -> str:
     Format a count-based leaderboard entry line for display.
     
     Parameters:
-        entry (tuple): A (User, total_correct) tuple where `User` provides `.username` and `.discord_id`.
+        entry (tuple): A (User, total_correct) tuple where `User`
+            provides `.username` and `.discord_id`.
         index (int): 1-based rank position to display.
     
     Returns:
-        str: A single-line markdown string like "**1.** username - `5` correct picks".
+        str: A single-line markdown string like
+            "**1.** username - `5` correct picks".
     """
     user = entry[0]
     username = user.username or f"User ID: {user.discord_id}"

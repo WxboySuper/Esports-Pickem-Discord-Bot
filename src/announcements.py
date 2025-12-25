@@ -14,9 +14,11 @@ def _find_existing_channel(
     guild: discord.Guild,
 ) -> Optional[discord.TextChannel]:
     """
-    Locate a text channel in the guild whose name matches the announcement channel name (case-insensitive).
+    Locate a text channel in the guild whose name matches the
+    announcement channel name (case-insensitive).
     
-    Channels where the channel name cannot be accessed are ignored during the search.
+    Channels where the channel name cannot be accessed are ignored
+    during the search.
     
     Returns:
         The matching discord.TextChannel if found, `None` otherwise.
@@ -37,7 +39,8 @@ def _get_bot_member(guild: discord.Guild) -> Optional[discord.Member]:
     Resolve the bot's Member object for the given guild.
     
     Returns:
-        discord.Member: The bot's member in the guild, or `None` if the bot's member or user information is unavailable.
+        discord.Member: The bot's member in the guild, or `None` if
+            the bot's member or user information is unavailable.
     """
     bot = get_bot_instance()
     bot_member = getattr(guild, "me", None)
@@ -56,15 +59,20 @@ def _can_send(
     bot_member: Optional[discord.Member],
 ) -> bool:
     """
-    Determine whether the bot can send messages in the given text channel.
+    Determine whether the bot can send messages in the given text
+    channel.
     
-    If `bot_member` is provided, evaluate the channel permissions for that member. If `bot_member` is `None`, the function treats the channel as usable.
+    If `bot_member` is provided, evaluate the channel permissions for
+    that member. If `bot_member` is `None`, the function treats the
+    channel as usable.
     
     Parameters:
-        bot_member (discord.Member | None): The guild-specific Member object for the bot; may be `None` if unavailable.
+        bot_member (discord.Member | None): The guild-specific Member
+            object for the bot; may be `None` if unavailable.
     
     Returns:
-        True if the bot can send messages in the channel, False otherwise.
+        True if the bot can send messages in the channel, False
+            otherwise.
     """
     try:
         if bot_member is None:
@@ -81,16 +89,24 @@ async def _try_create_announcement_channel(
     bot_member: Optional[discord.Member],
 ) -> Optional[discord.TextChannel]:
     """
-    Attempt to create the dedicated announcement text channel with restricted send permissions.
+    Attempt to create the dedicated announcement text channel with
+    restricted send permissions.
     
-    If creation succeeds, returns the newly created TextChannel. The channel is created so that the default role is denied the ability to send messages; if `bot_member` is provided it is granted send permission.
+    If creation succeeds, returns the newly created TextChannel. The
+    channel is created so that the default role is denied the ability
+    to send messages; if `bot_member` is provided it is granted send
+    permission.
     
     Parameters:
-        guild (discord.Guild): The guild in which to create the channel.
-        bot_member (Optional[discord.Member]): The bot's Member object in the guild, or None if unavailable.
+        guild (discord.Guild): The guild in which to create the
+            channel.
+        bot_member (Optional[discord.Member]): The bot's Member object
+            in the guild, or None if unavailable.
     
     Returns:
-        discord.TextChannel or None: The created announcement channel on success, or `None` if creation failed or was not permitted.
+        discord.TextChannel or None: The created announcement channel
+            on success, or `None` if creation failed or was not
+            permitted.
     """
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(
@@ -124,15 +140,23 @@ async def get_announcement_channel(
 ) -> Optional[discord.TextChannel]:
     # Prefer exact-match channel if it already exists (case-insensitive)
     """
-    Resolve a suitable text channel in a guild for posting announcements.
+    Resolve a suitable text channel in a guild for posting
+    announcements.
     
-    The selection prefers an existing channel named "pickem-announcements" (case-insensitive), attempts to create that dedicated channel, falls back to the first channel the bot can send messages in, and finally returns the guild's first text channel if available.
+    The selection prefers an existing channel named
+    "pickem-announcements" (case-insensitive), attempts to create that
+    dedicated channel, falls back to the first channel the bot can
+    send messages in, and finally returns the guild's first text
+    channel if available.
     
     Parameters:
-        guild (discord.Guild): Guild to search or create the announcement channel in.
+        guild (discord.Guild): Guild to search or create the
+            announcement channel in.
     
     Returns:
-        discord.TextChannel or None: The chosen text channel for announcements, or `None` if the guild has no text channels.
+        discord.TextChannel or None: The chosen text channel for
+            announcements, or `None` if the guild has no text
+            channels.
     """
     existing = _find_existing_channel(guild)
     if existing:
@@ -157,9 +181,12 @@ async def get_announcement_channel(
 
 async def send_announcement(guild: discord.Guild, embed: discord.Embed):
     """
-    Send an embed announcement to an appropriate channel in the given guild.
+    Send an embed announcement to an appropriate channel in the given
+    guild.
     
-    Resolves a target channel using the module's channel-resolution logic and sends the provided embed. If no suitable channel is available, an error is logged and no message is sent.
+    Resolves a target channel using the module's channel-resolution
+    logic and sends the provided embed. If no suitable channel is
+    available, an error is logged and no message is sent.
     
     Parameters:
         guild (discord.Guild): Guild to send the announcement in.

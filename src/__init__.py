@@ -8,7 +8,10 @@ def _cleanup_bot_session():
 	"""
 	Close the bot's HTTP session if one exists.
 	
-	Performs a lazy import to obtain the bot instance and, if the instance exposes a `session` attribute, calls its `close()` method. Any exceptions raised during lookup or closing are swallowed and logged at debug level.
+	Performs a lazy import to obtain the bot instance and, if the
+	instance exposes a `session` attribute, calls its `close()`
+	method. Any exceptions raised during lookup or closing are
+	swallowed and logged at debug level.
 	"""
 	try:
 		from .bot_instance import get_bot_instance

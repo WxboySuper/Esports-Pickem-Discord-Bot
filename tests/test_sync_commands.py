@@ -33,9 +33,13 @@ class MockInteraction:
 @pytest_asyncio.fixture(scope="module", autouse=True)
 async def db_setup_teardown():
     """
-    Set up the test database for the module and tear it down after tests complete.
+    Set up the test database for the module and tear it down after
+    tests complete.
     
-    Pytest async fixture that performs database setup before the module's tests run, yields control to execute the tests, and performs database teardown after the tests finish. Intended for module-scoped, autouse usage.
+    Pytest async fixture that performs database setup before the
+    module's tests run, yields control to execute the tests, and
+    performs database teardown after the tests finish. Intended for
+    module-scoped, autouse usage.
     """
     await setup_test_db()
     yield
