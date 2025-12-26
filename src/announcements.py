@@ -16,10 +16,11 @@ def _find_existing_channel(
     guild: discord.Guild,
 ) -> Optional[discord.TextChannel]:
     """
-    Finds a text channel in the guild with the announcement channel name (case-insensitive).
-    
+    Finds a text channel in the guild with the announcement channel name
+    (case-insensitive).
+
     Ignores channels whose name cannot be accessed during the search.
-    
+
     Returns:
         The matching discord.TextChannel if found, `None` otherwise.
     """
@@ -185,7 +186,7 @@ async def send_announcement(
 ) -> bool:
     """
     Send an embed announcement to an appropriate channel in the guild.
-    
+
     Returns:
         bool: True if the embed was sent successfully, False otherwise.
     """
@@ -247,18 +248,22 @@ async def get_admin_channel(
 
 async def send_admin_update(message: str, mention_user_id: int | None = None):
     """
-    Send a plain-text admin update to the developer guild's admin-updates channel.
-    
-    If `mention_user_id` is provided the user will be mentioned at the start of the message. The function looks up the developer guild using the `DEVELOPER_GUILD_ID` environment variable and requires the bot instance to be available; if either is missing or the guild cannot be found, the function returns without sending.
+    Send a plain-text admin update to the developer guild's
+    "admin-updates" channel.
+
     Parameters:
         message (str): The message text to send.
-        mention_user_id (int | None): Optional user ID to mention at the start of the message.
-    """
-    Sends a plain-text admin update to the developer guild's admin-updates
-    channel.
+        mention_user_id (int | None): Optional user ID to mention at the
+            start of the message.
 
-    If `mention_user_id` is provided it will be mentioned at the start of the
-    message.
+    Behavior:
+        - Looks up the developer guild using the `DEVELOPER_GUILD_ID`
+          environment variable and requires the bot instance to be
+          available. If the env var is missing, the bot instance is not
+          available, or the guild cannot be found, the function returns
+          early without sending.
+        - Attempts to locate or create the admin-updates channel and will
+          log and return early on failures.
     """
     bot = get_bot_instance()
     if not bot:

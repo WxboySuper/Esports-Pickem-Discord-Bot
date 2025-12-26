@@ -741,13 +741,16 @@ async def _broadcast_embed_to_guilds(
 
 async def _get_matches_starting_soon(session):
     """
-    Get the current UTC time and the Match records scheduled to start within the next 5 minutes that have no result.
-    
+    Get the current UTC time and the Match records scheduled to start
+    within the next 5 minutes that have no result.
+
     Parameters:
         session: A SQLModel/SQLAlchemy session used to query Match records.
-    
+
     Returns:
-        tuple: (now, matches) where `now` is the current UTC datetime and `matches` is a list of Match objects with `scheduled_time` >= `now`, < 5 minutes after `now`, and `result` is None.
+        tuple: (now, matches) where `now` is the current UTC datetime and
+            `matches` is a list of Match objects with `scheduled_time` >=
+            `now`, < 5 minutes after `now`, and `result` is None.
     """
     now = datetime.now(timezone.utc)
     five_minutes_from_now = now + timedelta(minutes=5)
@@ -847,9 +850,13 @@ def _schedule_poll_for_match(match):
 
 async def schedule_live_polling():
     """
-    Schedule recurring live-polling jobs for matches starting within the next 5 minutes.
-    
-    Scans the database for matches with no result that are scheduled to begin within the upcoming 5-minute window, logs candidate and currently scheduled poll job counts, and schedules a recurring poll job for each candidate match. Does not return a value.
+    Schedule recurring live-polling jobs for matches starting within the
+    next 5 minutes.
+
+    Scans the database for matches with no result that are scheduled to
+    begin within the upcoming 5-minute window, logs candidate and
+    currently scheduled poll job counts, and schedules a recurring poll
+    job for each candidate match. Does not return a value.
     """
     logger.debug("Running schedule_live_polling job...")
 
@@ -892,9 +899,13 @@ async def schedule_live_polling():
 def start_scheduler():
     # Local import to avoid circular dependency
     """
-    Ensure the module scheduler has the required recurring jobs and start it if not already running.
-    
-    Registers a 6-hour interval job to sync Leaguepedia data and a 5-minute interval job to schedule live match polling, then starts the scheduler if it is not running. If the scheduler is already running, the function leaves it unchanged.
+    Ensure the module scheduler has the required recurring jobs and start
+    it if not already running.
+
+    Registers a 6-hour interval job to sync Leaguepedia data and a
+    5-minute interval job to schedule live match polling, then starts the
+    scheduler if it is not running. If the scheduler is already running,
+    the function leaves it unchanged.
     """
     from src.commands.sync_leaguepedia import perform_leaguepedia_sync
 

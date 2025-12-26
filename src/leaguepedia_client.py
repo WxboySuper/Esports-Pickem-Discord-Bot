@@ -19,12 +19,16 @@ class LeaguepediaClient:
     def __init__(self):
         """
         Initialize internal state for a LeaguepediaClient instance.
-        
+
         Sets up:
-        - client: authenticated or unauthenticated EsportsClient placeholder (None until login).
-        - _cooldowns: mapping from overview_page to UTC datetime until which requests should be skipped.
-        - _backoff_minutes: per-overview_page exponential backoff value in minutes (doubles on rate limits).
-        - _initial_backoff: base backoff in minutes to use when first rate-limited (1 minute).
+        - client: authenticated or unauthenticated EsportsClient
+          placeholder (None until login).
+        - _cooldowns: mapping from overview_page to UTC datetime until
+          which requests should be skipped.
+        - _backoff_minutes: per-overview_page exponential backoff value
+          in minutes (doubles on rate limits).
+        - _initial_backoff: base backoff in minutes to use when first
+          rate-limited (1 minute).
         - _max_backoff: maximum backoff cap in minutes (1440 minutes).
         """
         self.client: EsportsClient | None = None
@@ -43,9 +47,15 @@ class LeaguepediaClient:
 
     async def login(self):
         """
-        Ensure self.client is an authenticated Leaguepedia EsportsClient when valid credentials are available.
-        
-        Reads LEAGUEPEDIA_USER and LEAGUEPEDIA_PASS from the environment to create authenticated credentials and verifies them with a meta=userinfo query. If credentials are missing or authentication fails, falls back to creating an unauthenticated EsportsClient(wiki="lol"). If self.client is already set, does nothing. Logs authentication attempts, failures, and fallbacks.
+        Ensure self.client is an authenticated Leaguepedia EsportsClient
+        when valid credentials are available.
+
+        Reads LEAGUEPEDIA_USER and LEAGUEPEDIA_PASS from the environment
+        to create authenticated credentials and verifies them with a
+        meta=userinfo query. If credentials are missing or authentication
+        fails, falls back to creating an unauthenticated
+        EsportsClient(wiki="lol"). If self.client is already set, does
+        nothing. Logs authentication attempts, failures, and fallbacks.
         """
         if self.client:
             return
@@ -100,15 +110,21 @@ class LeaguepediaClient:
 
     async def fetch_upcoming_matches(self, tournament_name_like: str):
         """
-        Retrieve upcoming matches for tournaments whose name starts with the provided pattern.
-        
-        Performs a Cargo query against Leaguepedia's MatchSchedule and Tournaments tables and returns the raw query result. If the fetch fails, an empty list is returned.
-        
+        Retrieve upcoming matches for tournaments whose name starts with
+        the provided pattern.
+
+        Performs a Cargo query against Leaguepedia's MatchSchedule and
+        Tournaments tables and returns the raw query result. If the fetch
+        fails, an empty list is returned.
+
         Parameters:
-            tournament_name_like (str): Prefix used to match tournament names; the function performs a SQL `LIKE` match as `"{tournament_name_like}%"`.
-        
+            tournament_name_like (str): Prefix used to match tournament
+                names; the function performs a SQL `LIKE` match as
+                `"{tournament_name_like}%"`.
+
         Returns:
-            list: The raw list of match records returned by the Cargo client, or an empty list if an error occurred.
+            list: The raw list of match records returned by the Cargo
+                client, or an empty list if an error occurred.
         """
         if not self.client:
             await self.login()
@@ -352,13 +368,17 @@ class LeaguepediaClient:
 
     async def get_scoreboard_data(self, overview_page: str) -> Optional[list]:
         """
-        Fetch scoreboard entries for the tournament identified by overview_page.
-        
+        Fetch scoreboard entries for the tournament identified by
+        overview_page.
+
         Parameters:
-            overview_page (str): The tournament OverviewPage identifier used to query scoreboard games.
-        
+            overview_page (str): The tournament OverviewPage identifier used
+                to query scoreboard games.
+
         Returns:
-            Optional[list]: A list of scoreboard records for the overview page, or `None` if data could not be retrieved (including when a cooldown/backoff is active or a fetch error occurs).
+            Optional[list]: A list of scoreboard records for the overview
+                page, or `None` if data could not be retrieved (including
+                when a cooldown/backoff is active or a fetch error occurs).
         """
         if not self.client:
             await self.login()

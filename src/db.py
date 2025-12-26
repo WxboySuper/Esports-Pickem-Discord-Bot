@@ -55,11 +55,13 @@ engine = create_engine(
 def get_session():
     """
     Provide a synchronous SQLModel Session within a context-managed scope.
-    
-    The yielded Session is open for use by the caller and is automatically closed when the context exits.
-    
+
+    The yielded Session is open for use by the caller and is automatically
+    closed when the context exits.
+
     Returns:
-        Session: an active SQLModel Session that will be closed on context exit.
+        Session: an active SQLModel Session that will be closed on context
+            exit.
     """
     with Session(engine) as session:
         yield session
@@ -102,12 +104,17 @@ event.listen(async_engine.sync_engine, "connect", _set_sqlite_pragma)
 @asynccontextmanager
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """
-    Provide an async context manager that yields a database AsyncSession and ensures SQLite PRAGMA settings are applied once.
-    
-    On first invocation this function attempts to set `PRAGMA journal_mode=WAL` and `PRAGMA foreign_keys=ON` on the async engine; failures are non-fatal and the function will not retry the pragma setup on subsequent calls. The yielded session is closed when the context manager exits.
-    
+    Provide an async context manager that yields a database AsyncSession.
+
+    SQLite PRAGMA settings (for example, `PRAGMA journal_mode=WAL` and
+    `PRAGMA foreign_keys=ON`) are applied automatically on every new
+    connection by the engine event listeners registered earlier in this
+    module. This function yields an `AsyncSession` for use by callers and
+    ensures the session is closed when the context manager exits.
+
     Returns:
-        AsyncSession: An AsyncSession instance; the session is closed when the context manager exits.
+        AsyncSession: An AsyncSession instance; the session is closed when
+            the context manager exits.
     """
     async with AsyncSessionLocal() as session:
         yield session
@@ -115,8 +122,10 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
 
 async def close_engine():
     """
-    Dispose the module's asynchronous SQLAlchemy engine and release its resources.
-    
-    This closes any open connections and cleans up the engine so it can no longer be used for new sessions.
+    Dispose the module's asynchronous SQLAlchemy engine and release its
+    resources.
+
+    This closes any open connections and cleans up the engine so it can no
+    longer be used for new sessions.
     """
     await async_engine.dispose()
