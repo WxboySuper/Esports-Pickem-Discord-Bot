@@ -315,7 +315,7 @@ def _filter_relevant_games_from_scoreboard(scoreboard_data, match: Match):
     two teams in the given match.
 
     Parameters:
-        scoreboard_data (iterable[dict]): Iterable of scoreboard
+        scoreboard_data (iterable[dict] | None): Iterable of scoreboard
             entries where each entry is expected to have "Team1" and
             "Team2" keys containing team names.
         match (Match): Match whose `team1` and `team2` names are used
@@ -324,8 +324,11 @@ def _filter_relevant_games_from_scoreboard(scoreboard_data, match: Match):
     Returns:
         list[dict]: List of scoreboard entries from `scoreboard_data`
             whose Team1/Team2 pair matches the match teams (order-
-            insensitive).
+            insensitive). Returns an empty list if scoreboard_data is
+            None.
     """
+    if scoreboard_data is None:
+        return []
 
     def _norm(s: str) -> str:
         return (s or "").strip().lower()
