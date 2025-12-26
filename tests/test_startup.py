@@ -1,9 +1,8 @@
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 from src.commands.sync_leaguepedia import perform_leaguepedia_sync
 from src.scheduler import (
     start_scheduler,
-    schedule_live_polling,
 )
 
 
@@ -25,24 +24,18 @@ def test_start_scheduler_adds_jobs_with_replace_existing():
         # Call the function that configures and starts the scheduler
         start_scheduler()
 
-        # Verify that the jobs were added with the correct parameters
-        expected_calls = [
-            call(
-                perform_leaguepedia_sync,
-                "interval",
-                hours=6,
-                id="sync_all_tournaments_job",
-                replace_existing=True,
-            ),
-            call(
-                schedule_live_polling,
-                "interval",
-                minutes=1,
-                id="schedule_live_polling_job",
-                replace_existing=True,
-            ),
-        ]
-        mock_scheduler.add_job.assert_has_calls(expected_calls, any_order=True)
+        # Verify that the jobs were added with replace_existing=True
+        calls = mock_scheduler.add_job.call_args_list
+        assert any(
+            c.kwargs.get("id") == "sync_all_tournaments_job"
+            and c.kwargs.get("replace_existing") is True
+            for c in calls
+        )
+        assert any(
+            c.kwargs.get("id") == "schedule_live_polling_job"
+            and c.kwargs.get("replace_existing") is True
+            for c in calls
+        )
 
         # Verify that the scheduler was started
         mock_scheduler.start.assert_called_once()

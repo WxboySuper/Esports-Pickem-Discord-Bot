@@ -79,6 +79,16 @@ class TeamSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
+        """
+        Handle a team selection from the TeamSelect UI by creating or
+        updating the invoking user's Pick for the associated match,
+        sending an ephemeral confirmation message, and removing the
+        interactive view from the original message.
+
+        Parameters:
+            interaction (discord.Interaction): The interaction
+                triggered by the user's selection.
+        """
         chosen_team = self.values[0]
         session: Session = next(get_session())
 
@@ -112,11 +122,13 @@ class TeamSelect(discord.ui.Select):
         else:
             # Create a new pick
             crud.create_pick(
-                session=session,
-                user_id=db_user.id,
-                contest_id=self.match.contest_id,
-                match_id=self.match.id,
-                chosen_team=chosen_team,
+                session,
+                crud.PickCreateParams(
+                    user_id=db_user.id,
+                    contest_id=self.match.contest_id,
+                    match_id=self.match.id,
+                    chosen_team=chosen_team,
+                ),
             )
             message = (
                 f"You have picked **{chosen_team}** to win the match: "
