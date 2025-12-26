@@ -11,13 +11,12 @@ from src.config import DATA_PATH
 from src.leaguepedia_client import leaguepedia_client
 from src.db import get_async_session
 from src.crud import upsert_contest, upsert_match, upsert_team
-from src.scheduler import (
-    schedule_reminders,
-    _filter_relevant_games_from_scoreboard,
-    _calculate_team_scores,
-    _determine_winner,
-    _save_result_and_update_picks,
-    send_result_notification,
+from src.scheduler import schedule_reminders, send_result_notification
+from src.match_result_utils import (
+    filter_relevant_games_from_scoreboard,
+    calculate_team_scores,
+    determine_winner,
+    save_result_and_update_picks,
 )
 from src import crud
 from dataclasses import dataclass, field
@@ -203,11 +202,11 @@ def _calculate_match_outcome(scoreboard, match):
     Analyzes scoreboard to determine if there is a winner.
     Returns (winner, score_str) or (None, None).
     """
-    relevant_games = _filter_relevant_games_from_scoreboard(scoreboard, match)
+    relevant_games = filter_relevant_games_from_scoreboard(scoreboard, match)
     if not relevant_games:
         return None, None
 
-    team1_score, team2_score = _calculate_team_scores(relevant_games, match)
+    team1_score, team2_score = calculate_team_scores(relevant_games, match)
 
     if getattr(match, "best_of", None) is None:
         logger.warning(
@@ -216,7 +215,7 @@ def _calculate_match_outcome(scoreboard, match):
         )
         return None, None
 
-    winner = _determine_winner(team1_score, team2_score, match)
+    winner = determine_winner(team1_score, team2_score, match)
     if not winner:
         return None, None
 
@@ -242,7 +241,7 @@ async def _persist_match_outcome(ctx, match, winner, score_str):
         if getattr(match_in_session, "result", None):
             return None
 
-        result = await _save_result_and_update_picks(
+        result = await save_result_and_update_picks(
             ctx.db_session, match, winner, score_str
         )
 
@@ -268,7 +267,7 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
     """
     Inspect `ctx.scoreboard` for `match`. If the series is complete and no
     local `Result` exists, persist the Result using the provided
-    `ctx.db_session` (do NOT commit here) and append the `(match, result)`
+    `ctx.db_session` (do NOT commit here) and append the `(match.id, result.id)`
     tuple to `ctx.notifications` so callers can notify after the outer
     transaction commits. Errors are logged and do not raise.
     """
@@ -294,7 +293,10 @@ async def _sync_single_tournament(
 ) -> tuple:
     """
     Helper to sync data for a single tournament.
-    Returns a list of matches that need reminders scheduled.
+    Returns a tuple (matches_to_schedule, notifications) where
+    matches_to_schedule is a list of matches needing reminders and
+    notifications is a list of (match_id, result_id) tuples for result
+    notifications.
     """
     logger.info(
         "Fetching upcoming matches for tournament pattern: '%s'",
@@ -381,9 +383,12 @@ async def perform_leaguepedia_sync() -> dict | None:
     for match_id, result_id in all_notifications:
         try:
             await send_result_notification(match_id, result_id)
-        except Exception:
+        except Exception as exc:
             logger.exception(
-                "Failed to send result notification for match %s", match_id
+                "Failed to send result notification for match %s (result %s, %s)",
+                match_id,
+                result_id,
+                type(exc).__name__,
             )
 
     logger.info(
