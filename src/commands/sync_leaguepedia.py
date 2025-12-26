@@ -267,8 +267,9 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
     """
     Inspect `ctx.scoreboard` for `match`. If the series is complete and no
     local `Result` exists, persist the Result using the provided
-    `ctx.db_session` (do NOT commit here) and append the `(match.id, result.id)`
-    tuple to `ctx.notifications` so callers can notify after the outer
+    `ctx.db_session` (do NOT commit here) and append the
+    `(match.id, result.id)` tuple to `ctx.notifications` so callers can
+    notify after the outer
     transaction commits. Errors are logged and do not raise.
     """
     scoreboard = ctx.scoreboard
@@ -385,7 +386,8 @@ async def perform_leaguepedia_sync() -> dict | None:
             await send_result_notification(match_id, result_id)
         except Exception as exc:
             logger.exception(
-                "Failed to send result notification for match %s (result %s, %s)",
+                "Failed to send result notification for match %s "
+                "(result %s, %s)",
                 match_id,
                 result_id,
                 type(exc).__name__,

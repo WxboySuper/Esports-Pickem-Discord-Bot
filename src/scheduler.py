@@ -234,6 +234,14 @@ def _calculate_team_scores(relevant_games, match):
     return team1_score, team2_score
 
 
+def calculate_team_scores(relevant_games, match):
+    """
+    Public wrapper for `_calculate_team_scores` to expose a non-underscore
+    API for external callers.
+    """
+    return _calculate_team_scores(relevant_games, match)
+
+
 def _determine_winner(team1_score, team2_score, match):
     """
     Determine if there's a winner based on the current scores.
@@ -245,6 +253,13 @@ def _determine_winner(team1_score, team2_score, match):
     elif team2_score >= games_to_win:
         return match.team2
     return None
+
+
+def determine_winner(team1_score, team2_score, match):
+    """
+    Public wrapper for `_determine_winner`.
+    """
+    return _determine_winner(team1_score, team2_score, match)
 
 
 async def _save_result_and_update_picks(session, match, winner, score_str):
@@ -286,6 +301,15 @@ async def _save_result_and_update_picks(session, match, winner, score_str):
     logger.info("Updated %d picks for match %s.", updated_count, match.id)
 
     return result
+
+
+async def save_result_and_update_picks(session, match, winner, score_str):
+    """
+    Public async wrapper for `_save_result_and_update_picks`.
+    """
+    return await _save_result_and_update_picks(
+        session, match, winner, score_str
+    )
 
 
 async def _fetch_scoreboard_for_match(match: Match):
@@ -337,6 +361,13 @@ def _filter_relevant_games_from_scoreboard(scoreboard_data, match: Match):
         for g in scoreboard_data
         if {_norm(g.get("Team1")), _norm(g.get("Team2"))} == match_teams
     ]
+
+
+def filter_relevant_games_from_scoreboard(scoreboard_data, match: Match):
+    """
+    Public wrapper for `_filter_relevant_games_from_scoreboard`.
+    """
+    return _filter_relevant_games_from_scoreboard(scoreboard_data, match)
 
 
 async def _handle_winner(
