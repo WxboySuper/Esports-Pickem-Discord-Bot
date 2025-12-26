@@ -366,6 +366,68 @@ class LeaguepediaClient:
         except Exception:
             logger.debug("Could not notify developer guild about rate limit.")
 
+    def _should_skip_due_to_cooldown(
+        self, overview_page: str
+    ) -> tuple[bool, float]:
+        """
+        Check if a request should be skipped due to active cooldown.
+
+        Returns (should_skip, wait_minutes) where wait_minutes is the
+        number of minutes remaining until cooldown expires (or 0 if no
+        cooldown is active).
+        """
+        now = datetime.now(timezone.utc)
+        cooldown_until = self._cooldowns.get(overview_page)
+        if cooldown_until and now < cooldown_until:
+            wait = (cooldown_until - now).total_seconds() / 60.0
+            return True, wait
+        return False, 0.0
+
+    def _query_scoreboard_games(self, overview_page: str) -> Optional[list]:
+        """
+        Execute Cargo query to fetch scoreboard games for an overview page.
+
+        Returns the raw query result, or raises an exception on failure.
+        """
+        return self.client.cargo_client.query(
+            tables="ScoreboardGames=SG, Tournaments=T",
+            fields=(
+                "T.Name, SG.DateTime_UTC, SG.Team1, SG.Team2, SG.Winner, "
+                "SG.Team1Score, SG.Team2Score"
+            ),
+            where=f'T.OverviewPage="{overview_page}"',
+            join_on="SG.OverviewPage=T.OverviewPage",
+            order_by="SG.DateTime_UTC DESC",
+            limit="100",  # Get all games for the series
+        )
+
+    def _clear_backoff_state(self, overview_page: str) -> None:
+        """Clear cached backoff and cooldown state after successful query."""
+        if overview_page in self._backoff_minutes:
+            del self._backoff_minutes[overview_page]
+        if overview_page in self._cooldowns:
+            del self._cooldowns[overview_page]
+
+    async def _handle_rate_limit_error(
+        self, overview_page: str, retry_seconds: float | None
+    ) -> None:
+        """
+        Handle a rate-limit exception by applying backoff and notifying.
+
+        Pauses briefly to avoid retry storms, applies exponential backoff,
+        and schedules an admin notification.
+        """
+        # Brief pause to avoid immediate retry storms from concurrent tasks
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            raise
+
+        cooldown_minutes = self._apply_rate_limit_backoff(
+            overview_page, retry_seconds
+        )
+        self._notify_admin_rate_limit(overview_page, cooldown_minutes)
+
     async def get_scoreboard_data(self, overview_page: str) -> Optional[list]:
         """
         Fetch scoreboard entries for the tournament identified by
@@ -383,10 +445,9 @@ class LeaguepediaClient:
         if not self.client:
             await self.login()
 
-        now = datetime.now(timezone.utc)
-        cooldown_until = self._cooldowns.get(overview_page)
-        if cooldown_until and now < cooldown_until:
-            wait = (cooldown_until - now).total_seconds() / 60.0
+        # Check if cooldown is active
+        should_skip, wait = self._should_skip_due_to_cooldown(overview_page)
+        if should_skip:
             logger.warning(
                 "Skipping Leaguepedia query for %s due to cooldown (%.1f "
                 "minutes remaining).",
@@ -396,40 +457,15 @@ class LeaguepediaClient:
             return None
 
         try:
-            response = self.client.cargo_client.query(
-                tables="ScoreboardGames=SG, Tournaments=T",
-                fields=(
-                    "T.Name, SG.DateTime_UTC, SG.Team1, SG.Team2, SG.Winner, "
-                    "SG.Team1Score, SG.Team2Score"
-                ),
-                where=f'T.OverviewPage="{overview_page}"',
-                join_on="SG.OverviewPage=T.OverviewPage",
-                order_by="SG.DateTime_UTC DESC",
-                limit="100",  # Get all games for the series
-            )
+            response = self._query_scoreboard_games(overview_page)
             # On success, clear any backoff state
-            if overview_page in self._backoff_minutes:
-                del self._backoff_minutes[overview_page]
-            if overview_page in self._cooldowns:
-                del self._cooldowns[overview_page]
+            self._clear_backoff_state(overview_page)
             return response
         except Exception as e:
             is_limit, retry_seconds = self._detect_rate_limit(e)
 
             if is_limit:
-                # brief pause to avoid immediate retry storms
-                # from concurrent tasks
-                try:
-                    await asyncio.sleep(5)
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    pass
-
-                cooldown_minutes = self._apply_rate_limit_backoff(
-                    overview_page, retry_seconds
-                )
-                self._notify_admin_rate_limit(overview_page, cooldown_minutes)
+                await self._handle_rate_limit_error(overview_page, retry_seconds)
                 return None
 
             logger.error(
