@@ -754,10 +754,10 @@ async def _get_matches_starting_soon(session):
     """
     now = datetime.now(timezone.utc)
     five_minutes_from_now = now + timedelta(minutes=5)
-    stmt = select(Match).where(
+    stmt = select(Match).outerjoin(Result).where(
         Match.scheduled_time >= now,
         Match.scheduled_time < five_minutes_from_now,
-        Match.result.is_(None),
+        Result.id == None,
     )
     matches = (await session.exec(stmt)).all()
     return now, matches
