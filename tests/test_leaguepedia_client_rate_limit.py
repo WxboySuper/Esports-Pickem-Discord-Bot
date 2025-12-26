@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import datetime, timezone
 from src.leaguepedia_client import LeaguepediaClient
 
@@ -41,8 +41,8 @@ async def test_rate_limit_http_429_with_retry_after():
         429, retry_after="120"
     )
 
-    with patch("asyncio.sleep", new_callable=MagicMock), patch(
-        "src.announcements.send_admin_update", new_callable=MagicMock
+    with patch("asyncio.sleep", new_callable=AsyncMock), patch(
+        "src.leaguepedia_client.send_admin_update", new_callable=MagicMock
     ):
 
         await client.get_scoreboard_data("TestPage")
@@ -71,8 +71,8 @@ async def test_rate_limit_tuple_args():
         "ratelimited", "You've exceeded...", "See https://..."
     )
 
-    with patch("asyncio.sleep", new_callable=MagicMock), patch(
-        "src.announcements.send_admin_update", new_callable=MagicMock
+    with patch("asyncio.sleep", new_callable=AsyncMock), patch(
+        "src.leaguepedia_client.send_admin_update", new_callable=MagicMock
     ):
 
         await client.get_scoreboard_data("TestPageTuple")
@@ -94,8 +94,8 @@ async def test_rate_limit_json_code():
         200, json_data={"error": {"code": "maxlag"}}
     )
 
-    with patch("asyncio.sleep", new_callable=MagicMock), patch(
-        "src.announcements.send_admin_update", new_callable=MagicMock
+    with patch("asyncio.sleep", new_callable=AsyncMock), patch(
+        "src.leaguepedia_client.send_admin_update", new_callable=MagicMock
     ):
 
         await client.get_scoreboard_data("TestPageJSON")
@@ -113,8 +113,8 @@ async def test_rate_limit_attribute_code():
     # Mock an error with a .code attribute (common in mwclient)
     client.client.cargo_client.query.side_effect = MockAPIError("ratelimited")
 
-    with patch("asyncio.sleep", new_callable=MagicMock), patch(
-        "src.announcements.send_admin_update", new_callable=MagicMock
+    with patch("asyncio.sleep", new_callable=AsyncMock), patch(
+        "src.leaguepedia_client.send_admin_update", new_callable=MagicMock
     ):
 
         await client.get_scoreboard_data("TestPageCode")
@@ -138,8 +138,8 @@ async def test_rate_limit_avoid_false_positive():
         "Some unknown error: ratelimited by upstream"
     )
 
-    with patch("asyncio.sleep", new_callable=MagicMock), patch(
-        "src.announcements.send_admin_update", new_callable=MagicMock
+    with patch("asyncio.sleep", new_callable=AsyncMock), patch(
+        "src.leaguepedia_client.send_admin_update", new_callable=MagicMock
     ), patch("src.leaguepedia_client.logger") as mock_logger:
 
         await client.get_scoreboard_data("TestPageString")

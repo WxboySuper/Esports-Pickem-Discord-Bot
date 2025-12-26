@@ -13,6 +13,13 @@ from typing import Optional
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+# Expose send_admin_update symbol at module level so tests can patch it.
+# Importing at module level may create a circular import in some runtime
+# scenarios, so this is a best-effort import that falls back to `None`.
+try:
+    from src.announcements import send_admin_update  # type: ignore
+except Exception:
+    send_admin_update = None  # type: ignore
 
 
 class LeaguepediaClient:
@@ -418,10 +425,7 @@ class LeaguepediaClient:
         and schedules an admin notification.
         """
         # Brief pause to avoid immediate retry storms from concurrent tasks
-        try:
-            await asyncio.sleep(5)
-        except asyncio.CancelledError:
-            raise
+        await asyncio.sleep(5)
 
         cooldown_minutes = self._apply_rate_limit_backoff(
             overview_page, retry_seconds
