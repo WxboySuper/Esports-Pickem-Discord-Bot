@@ -11,7 +11,15 @@ from src.config import DATA_PATH
 from src.leaguepedia_client import leaguepedia_client
 from src.db import get_async_session
 from src.crud import upsert_contest, upsert_match, upsert_team
-from src.scheduler import schedule_reminders
+from src.models import Match
+from src.scheduler import (
+    schedule_reminders,
+    _filter_relevant_games_from_scoreboard,
+    _calculate_team_scores,
+    _determine_winner,
+    _save_result_and_update_picks,
+    send_result_notification,
+)
 
 logger = logging.getLogger(__name__)
 CONFIG_PATH = DATA_PATH / "tournaments.json"
@@ -48,7 +56,11 @@ async def _process_teams_for_match(
 
 
 async def _process_match(
-    match_data: dict, contest, db_session, summary: dict
+    match_data: dict,
+    contest,
+    db_session,
+    summary: dict,
+    scoreboard: list | None = None,
 ) -> tuple | None:
     """
     Process and upsert a single match.
@@ -78,6 +90,52 @@ async def _process_match(
         },
     )
     summary["matches"] += 1
+
+    # If the external scoreboard already contains finished games for this
+    # match and we don't have a Result recorded locally, persist the
+    # result and send the same notification that live polling would.
+    try:
+        # If a scoreboard was provided for the contest, use it; otherwise
+        # skip scoreboard-based result detection.
+        if scoreboard:
+            relevant_games = _filter_relevant_games_from_scoreboard(
+                scoreboard, match
+            )
+            if relevant_games:
+                team1_score, team2_score = _calculate_team_scores(
+                    relevant_games, match
+                )
+                winner = _determine_winner(team1_score, team2_score, match)
+                # Only act if a winner is determined and we don't already
+                # have a result recorded for this match.
+                if winner and not getattr(match, "result", None):
+                    score_str = f"{team1_score}-{team2_score}"
+                    # Persist result and picks in a separate short-lived
+                    # session/transaction so the main sync transaction
+                    # remains atomic. This allows the notification flow to
+                    # see the new result without committing the outer
+                    # sync transaction.
+                    try:
+                        async with get_async_session() as notify_sess:
+                            # Re-fetch the match in the notification session
+                            match_in_notify = await notify_sess.get(
+                                Match, match.id
+                            )
+                            result = await _save_result_and_update_picks(
+                                notify_sess, match_in_notify, winner, score_str
+                            )
+                            await notify_sess.commit()
+                        await send_result_notification(match, result)
+                    except Exception:
+                        logger.exception(
+                            "Failed to persist/notify result for match %s",
+                            match_id,
+                        )
+    except Exception:
+        logger.exception(
+            "Error checking/recording result for match %s", match_id
+        )
+
     return (match, time_changed)
 
 
@@ -119,10 +177,26 @@ async def _process_contest(
     summary["contests"] += 1
     await db_session.flush()
 
+    # Fetch the contest scoreboard once to avoid repeating API calls per
+    # match. If the fetch fails or returns None, we'll proceed without
+    # scoreboard-based result detection.
+    try:
+        scoreboard = await leaguepedia_client.get_scoreboard_data(
+            overview_page
+        )
+    except Exception:
+        logger.exception(
+            "Failed to fetch scoreboard for contest %s; continuing without",
+            overview_page,
+        )
+        scoreboard = None
+
     for match_data in contest_matches:
         await _process_teams_for_match(match_data, db_session, summary)
 
-        result = await _process_match(match_data, contest, db_session, summary)
+        result = await _process_match(
+            match_data, contest, db_session, summary, scoreboard
+        )
         if result:
             match, time_changed = result
             if match and time_changed:
