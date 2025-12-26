@@ -369,7 +369,9 @@ async def _handle_winner(
         await session.commit()
     logger.info("Saved result and updated picks for match %s.", match.id)
 
-    await send_result_notification(match, result)
+    # Notify using IDs so the notification handler can load fresh
+    # objects within its own session and avoid detached-instance issues.
+    await send_result_notification(match.id, result.id)
 
     if job_id is None:
         job_id = f"poll_match_{match.id}"
@@ -585,29 +587,35 @@ def _create_reminder_embed(
     return embed
 
 
-async def send_result_notification(match: Match, result: Result):
+async def send_result_notification(match_id: int, result_id: int):
     """
-    Broadcast a rich Discord embed with the final result of a match
-    to all guilds.
-
-    Builds a gold-colored embed showing the winner, final score, and
-    pick'em statistics (total picks, correct picks, percentage),
-    includes the winner's thumbnail when available, timestamps the
-    embed, and broadcasts it to every guild the bot is in.
+    Load fresh `Match` and `Result` objects in a new session and broadcast
+    the result notification to all guilds. Accepting IDs ensures the
+    notification code always works with session-bound instances and avoids
+    detached-instance pitfalls.
 
     Parameters:
-        match (Match): Match model instance for which the result
-            applies.
-        result (Result): Result model instance containing `winner`
-            and `score`.
+        match_id (int): Database ID of the match.
+        result_id (int): Database ID of the result.
     """
     logger.info(
-        "Broadcasting result notification for match %s " "to all guilds.",
-        match.id,
+        "Broadcasting result notification for match %s to all guilds.",
+        match_id,
     )
     bot = get_bot_instance()
 
     async with get_async_session() as session:
+        match = await session.get(Match, match_id)
+        result = await session.get(Result, result_id)
+
+        if not match or not result:
+            logger.error(
+                "Could not load match/result for notification: %s / %s",
+                match_id,
+                result_id,
+            )
+            return
+
         logger.debug("Fetching teams and picks for match %s", match.id)
         team1, team2 = await _fetch_teams(session, match)
 

@@ -11,7 +11,6 @@ from src.config import DATA_PATH
 from src.leaguepedia_client import leaguepedia_client
 from src.db import get_async_session
 from src.crud import upsert_contest, upsert_match, upsert_team
-from src.models import Match
 from src.scheduler import (
     schedule_reminders,
     _filter_relevant_games_from_scoreboard,
@@ -20,6 +19,7 @@ from src.scheduler import (
     _save_result_and_update_picks,
     send_result_notification,
 )
+from src import crud
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -193,28 +193,68 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
         return None
 
     try:
-        relevant_games = _filter_relevant_games_from_scoreboard(scoreboard, match)
+        relevant_games = _filter_relevant_games_from_scoreboard(
+            scoreboard, match
+        )
         if not relevant_games:
             return None
 
-        team1_score, team2_score = _calculate_team_scores(relevant_games, match)
+        team1_score, team2_score = _calculate_team_scores(
+            relevant_games, match
+        )
+        # Guard against missing `best_of` which would cause a TypeError
+        # inside `_determine_winner` when it attempts integer division.
+        if getattr(match, "best_of", None) is None:
+            logger.warning(
+                "Skipping result detection for match %s: missing best_of",
+                match.id,
+            )
+            return None
         winner = _determine_winner(team1_score, team2_score, match)
         if not winner:
-            return None
-        if getattr(match, "result", None):
             return None
 
         score_str = f"{team1_score}-{team2_score}"
 
         try:
-            # Use the caller's session to persist changes; do not commit
-            # here so the outer transaction remains atomic.
-            match_in_session = await ctx.db_session.get(Match, match.id)
-            result = await _save_result_and_update_picks(
-                ctx.db_session, match_in_session, winner, score_str
+            # Fetch the match with its result relationship eagerly loaded
+            # to avoid relying on in-memory attributes that may be
+            # detached or stale.
+            match_in_session = await crud.get_match_with_result_by_id(
+                ctx.db_session, match.id
             )
-            # Record for later notification after commit
-            ctx.notifications.append((match, result))
+
+            if match_in_session is None:
+                logger.warning(
+                    "Match %s disappeared before result persistence; skipping",
+                    match.id,
+                )
+                return None
+
+            # If a Result already exists, bail out to avoid duplicates.
+            if getattr(match_in_session, "result", None):
+                return None
+
+            # Use the caller's session to persist changes; do not commit
+            # here so the outer transaction remains atomic. The helper
+            # only requires `match.id`, so pass the original `match`
+            # to avoid unnecessary re-fetching.
+            result = await _save_result_and_update_picks(
+                ctx.db_session, match, winner, score_str
+            )
+            # Ensure IDs are populated before we leave the transaction
+            try:
+                await ctx.db_session.flush()
+            except Exception:
+                # If flush fails, log and skip notification for safety
+                logger.exception(
+                    "Failed to flush session after saving result for match %s",
+                    match.id,
+                )
+                return None
+
+            # Record IDs for later notification after commit
+            ctx.notifications.append((match.id, result.id))
             return result
         except Exception:
             logger.exception(
@@ -222,7 +262,9 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
             )
             return None
     except Exception:
-        logger.exception("Error checking/recording result for match %s", match_id)
+        logger.exception(
+            "Error checking/recording result for match %s", match_id
+        )
         return None
 
 
@@ -315,12 +357,12 @@ async def perform_leaguepedia_sync() -> dict | None:
 
     # Send result notifications after the commit so the persisted
     # Result and Pick updates are visible to notification handlers.
-    for match, result in all_notifications:
+    for match_id, result_id in all_notifications:
         try:
-            await send_result_notification(match, result)
+            await send_result_notification(match_id, result_id)
         except Exception:
             logger.exception(
-                "Failed to send result notification for match %s", getattr(match, "id", "<unknown>")
+                "Failed to send result notification for match %s", match_id
             )
 
     logger.info(
