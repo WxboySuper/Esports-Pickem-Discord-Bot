@@ -43,9 +43,11 @@ class ContestModal(discord.ui.Modal, title="Create New Contest"):
 
             contest = create_contest(
                 session,
-                name=self.name.value,
-                start_date=start_date_val,
-                end_date=end_date_val,
+                {
+                    "name": self.name.value,
+                    "start_date": start_date_val,
+                    "end_date": end_date_val,
+                },
             )
             await interaction.response.send_message(
                 f"Contest '{contest.name}' created with ID {contest.id}",

@@ -65,7 +65,12 @@ async def test_contest_modal_on_submit(
 
     # Assert
     mock_create_contest.assert_called_once_with(
-        mock_session, name="Test Contest", start_date=ANY, end_date=ANY
+        mock_session,
+        {
+            "name": "Test Contest",
+            "start_date": ANY,
+            "end_date": ANY,
+        },
     )
     mock_interaction.response.send_message.assert_called_once_with(
         "Contest 'Test Contest' created with ID 1",

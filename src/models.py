@@ -88,6 +88,7 @@ class Pick(SQLModel, table=True):
     match_id: int = Field(foreign_key="match.id", index=True)
     chosen_team: str
     status: Optional[str] = Field(default="pending", index=True)
+    is_correct: Optional[bool] = Field(default=None)
     score: Optional[int] = Field(default=0)
     timestamp: datetime = Field(
         default_factory=_now_utc,

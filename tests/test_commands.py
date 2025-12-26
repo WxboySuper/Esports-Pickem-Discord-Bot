@@ -83,30 +83,47 @@ async def test_upload_command_valid_csv(
         (INVALID_CSV_BAD_DATE, "Invalid data or format."),
     ],
 )
-@patch("src.commands.matches.get_session")
-@patch("src.commands.matches.crud")
 async def test_upload_command_invalid_csv(
-    mock_crud,
-    mock_get_session,
     mock_interaction,
     csv_content,
     expected_error_part,
 ):
-    # Arrange
-    attachment = AsyncMock(spec=discord.Attachment)
-    attachment.read.return_value = csv_content.encode("utf-8")
+    # Use context managers for patching to reduce function args
+    """
+        Verifies that upload.callback responds with an error and does not
+    create matches when given invalid CSV input.
 
-    mock_contest = MagicMock()
-    mock_contest.name = "Test Contest"
-    mock_crud.get_contest_by_id.return_value = mock_contest
+        This test patches the matches CRUD layer and session provider, supplies
+    a mocked Attachment containing the provided CSV content, invokes
+    upload.callback, and asserts that a follow-up error message containing
+    `expected_error_part` was sent and that no matches were created.
 
-    # Act
-    await upload.callback(
-        mock_interaction, contest_id=1, attachment=attachment
-    )
+    Parameters:
+                mock_interaction: Mocked discord.Interaction with deferred and
+        followup behaviors.
+                csv_content (str): CSV text to feed to the attachment;
+        intentionally invalid for the test case.
+                expected_error_part (str): Substring expected to appear in the
+        error message sent to the interaction.
+    """
+    with patch("src.commands.matches.crud") as mock_crud, patch(
+        "src.commands.matches.get_session"
+    ):
+        # Arrange
+        attachment = AsyncMock(spec=discord.Attachment)
+        attachment.read.return_value = csv_content.encode("utf-8")
 
-    # Assert
-    mock_interaction.followup.send.assert_called_once()
-    args, _ = mock_interaction.followup.send.call_args
-    assert expected_error_part in args[0]
-    mock_crud.bulk_create_matches.assert_not_called()
+        mock_contest = MagicMock()
+        mock_contest.name = "Test Contest"
+        mock_crud.get_contest_by_id.return_value = mock_contest
+
+        # Act
+        await upload.callback(
+            mock_interaction, contest_id=1, attachment=attachment
+        )
+
+        # Assert
+        mock_interaction.followup.send.assert_called_once()
+        args, _ = mock_interaction.followup.send.call_args
+        assert expected_error_part in args[0]
+        mock_crud.bulk_create_matches.assert_not_called()

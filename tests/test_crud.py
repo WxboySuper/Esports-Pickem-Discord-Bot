@@ -56,17 +56,21 @@ def test_contest_crud_and_listing(session: Session):
 
     c1 = crud.create_contest(
         session,
-        name="Spring Split",
-        start_date=start,
-        end_date=end,
-        leaguepedia_id="s-split",
+        {
+            "name": "Spring Split",
+            "start_date": start,
+            "end_date": end,
+            "leaguepedia_id": "s-split",
+        },
     )
     c2 = crud.create_contest(
         session,
-        name="Summer Split",
-        start_date=start,
-        end_date=end,
-        leaguepedia_id="su-split",
+        {
+            "name": "Summer Split",
+            "start_date": start,
+            "end_date": end,
+            "leaguepedia_id": "su-split",
+        },
     )
 
     # get
@@ -79,7 +83,9 @@ def test_contest_crud_and_listing(session: Session):
     assert names == ["Spring Split", "Summer Split"]
 
     # update
-    upd = crud.update_contest(session, c2.id, name="Summer Finals")
+    upd = crud.update_contest(
+        session, c2.id, crud.ContestUpdateParams(name="Summer Finals")
+    )
     assert upd is not None and upd.name == "Summer Finals"
 
     # delete
@@ -88,7 +94,10 @@ def test_contest_crud_and_listing(session: Session):
 
 
 def test_contest_update_delete_missing(session: Session):
-    assert crud.update_contest(session, 4242, name="X") is None
+    assert (
+        crud.update_contest(session, 4242, crud.ContestUpdateParams(name="X"))
+        is None
+    )
     assert crud.delete_contest(session, 4242) is False
 
 
@@ -96,10 +105,12 @@ def test_contest_update_delete_missing(session: Session):
 def _mk_contest(session: Session) -> Contest:
     return crud.create_contest(
         session,
-        name="Main",
-        start_date=datetime(2025, 5, 1, 0, 0, 0),
-        end_date=datetime(2025, 5, 31, 23, 59, 59),
-        leaguepedia_id="main-contest",
+        {
+            "name": "Main",
+            "start_date": datetime(2025, 5, 1, 0, 0, 0),
+            "end_date": datetime(2025, 5, 31, 23, 59, 59),
+            "leaguepedia_id": "main-contest",
+        },
     )
 
 
@@ -109,23 +120,35 @@ def test_match_crud_and_queries(session: Session):
     # Create matches across different times
     day = datetime(2025, 5, 10, tzinfo=timezone.utc)
     m1 = crud.create_match(
-        session, contest.id, "A", "B", scheduled_time=day, leaguepedia_id="m1"
+        session,
+        crud.MatchCreateParams(
+            contest_id=contest.id,
+            team1="A",
+            team2="B",
+            scheduled_time=day,
+            leaguepedia_id="m1",
+        ),
     )
     m2 = crud.create_match(
         session,
-        contest.id,
-        "C",
-        "D",
-        scheduled_time=day.replace(hour=23, minute=59, second=59),
-        leaguepedia_id="m2",
+        crud.MatchCreateParams(
+            contest_id=contest.id,
+            team1="C",
+            team2="D",
+            scheduled_time=day.replace(hour=23, minute=59, second=59),
+            leaguepedia_id="m2",
+        ),
     )
+
     m3 = crud.create_match(
         session,
-        contest.id,
-        "E",
-        "F",
-        scheduled_time=day + timedelta(days=1),
-        leaguepedia_id="m3",
+        crud.MatchCreateParams(
+            contest_id=contest.id,
+            team1="E",
+            team2="F",
+            scheduled_time=day + timedelta(days=2),
+            leaguepedia_id="m3",
+        ),
     )
 
     # get by id
@@ -141,7 +164,7 @@ def test_match_crud_and_queries(session: Session):
     assert {m.id for m in on_day} == {m1.id, m2.id}
 
     # update
-    upd = crud.update_match(session, m1.id, team1="AA")
+    upd = crud.update_match(session, m1.id, crud.MatchUpdateParams(team1="AA"))
     assert upd is not None and upd.team1 == "AA"
 
     # delete
@@ -150,7 +173,10 @@ def test_match_crud_and_queries(session: Session):
 
 
 def test_match_update_delete_missing(session: Session):
-    assert crud.update_match(session, 5555, team1="GG") is None
+    assert (
+        crud.update_match(session, 5555, crud.MatchUpdateParams(team1="GG"))
+        is None
+    )
     assert crud.delete_match(session, 5555) is False
 
 
@@ -187,11 +213,13 @@ def _mk_user_contest_match(session: Session):
     contest = _mk_contest(session)
     match = crud.create_match(
         session,
-        contest.id,
-        "A",
-        "B",
-        scheduled_time=datetime(2025, 5, 12, 12, 0, 0),
-        leaguepedia_id="m-h",
+        crud.MatchCreateParams(
+            contest_id=contest.id,
+            team1="A",
+            team2="B",
+            scheduled_time=datetime(2025, 5, 12, 12, 0, 0),
+            leaguepedia_id="m-h",
+        ),
     )
     return user, contest, match
 
@@ -202,10 +230,12 @@ def test_pick_crud_and_queries_timestamp_default(session: Session):
     # create (no timestamp provided -> default_factory should set aware UTC)
     pick = crud.create_pick(
         session,
-        user.id,
-        contest.id,
-        match.id,
-        chosen_team="A",
+        crud.PickCreateParams(
+            user_id=user.id,
+            contest_id=contest.id,
+            match_id=match.id,
+            chosen_team="A",
+        ),
     )
     assert isinstance(pick, Pick)
     assert pick.id is not None
@@ -237,11 +267,13 @@ def test_pick_create_with_explicit_timestamp(session: Session):
     ts = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     pick = crud.create_pick(
         session,
-        user.id,
-        contest.id,
-        match.id,
-        chosen_team="A",
-        timestamp=ts,
+        crud.PickCreateParams(
+            user_id=user.id,
+            contest_id=contest.id,
+            match_id=match.id,
+            chosen_team="A",
+            timestamp=ts,
+        ),
     )
     assert pick.timestamp == ts
 
@@ -256,11 +288,13 @@ def test_result_crud_and_queries(session: Session):
     contest = _mk_contest(session)
     match = crud.create_match(
         session,
-        contest.id,
-        "A",
-        "B",
-        scheduled_time=datetime(2025, 5, 20, 10, 0, 0),
-        leaguepedia_id="m-r",
+        crud.MatchCreateParams(
+            contest_id=contest.id,
+            team1="A",
+            team2="B",
+            scheduled_time=datetime(2025, 5, 20, 10, 0, 0),
+            leaguepedia_id="m-r",
+        ),
     )
 
     # create
