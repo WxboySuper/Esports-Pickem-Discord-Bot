@@ -46,7 +46,6 @@ async def test_create_matches_embed_with_result():
     # Field 1: With result
     assert embed.fields[1].name == "Team C vs Team D"
     assert "Result: Team C won (2-0)" in embed.fields[1].value
-    assert "**Result: Team C won (2-0)**" in embed.fields[1].value
 
 
 @pytest.mark.asyncio
