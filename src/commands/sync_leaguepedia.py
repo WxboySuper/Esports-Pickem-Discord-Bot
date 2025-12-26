@@ -11,7 +11,15 @@ from src.config import DATA_PATH
 from src.leaguepedia_client import leaguepedia_client
 from src.db import get_async_session
 from src.crud import upsert_contest, upsert_match, upsert_team
-from src.scheduler import schedule_reminders
+from src.scheduler import schedule_reminders, send_result_notification
+from src.match_result_utils import (
+    filter_relevant_games_from_scoreboard,
+    calculate_team_scores,
+    determine_winner,
+    save_result_and_update_picks,
+)
+from src import crud
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 CONFIG_PATH = DATA_PATH / "tournaments.json"
@@ -47,8 +55,18 @@ async def _process_teams_for_match(
         summary["teams"] += 1
 
 
+@dataclass
+class SyncContext:
+    contest: object
+    db_session: object
+    summary: dict
+    scoreboard: list | None = None
+    notifications: list = field(default_factory=list)
+
+
 async def _process_match(
-    match_data: dict, contest, db_session, summary: dict
+    match_data: dict,
+    ctx: SyncContext,
 ) -> tuple | None:
     """
     Process and upsert a single match.
@@ -63,12 +81,11 @@ async def _process_match(
     if not scheduled_time:
         logger.warning("Match %s has no scheduled time. Skipping.", match_id)
         return None
-
     match, time_changed = await upsert_match(
-        db_session,
+        ctx.db_session,
         {
             "leaguepedia_id": match_id,
-            "contest_id": contest.id,
+            "contest_id": ctx.contest.id,
             "team1": match_data.get("Team1"),
             "team2": match_data.get("Team2"),
             "best_of": (
@@ -77,18 +94,18 @@ async def _process_match(
             "scheduled_time": scheduled_time,
         },
     )
-    summary["matches"] += 1
+    ctx.summary["matches"] += 1
+
+    # Delegate scoreboard-based detection/handling to a helper to keep
+    # this function focused and easier to test. The helper may append
+    # created Result objects to `ctx.notifications` for later
+    # notification (after the outer transaction commits).
+    await _detect_and_handle_result(match, ctx, match_id)
+
     return (match, time_changed)
 
 
-async def _process_contest(
-    overview_page: str, contest_matches: list, db_session, summary: dict
-) -> list:
-    """
-    Process a single contest and its matches.
-    Returns a list of matches that need reminders scheduled.
-    """
-    matches_to_schedule = []
+async def _upsert_contest_data(overview_page, contest_matches, db_session):
     match_times = [_parse_date(m.get("DateTime UTC")) for m in contest_matches]
     valid_times = [t for t in match_times if t is not None]
 
@@ -97,7 +114,7 @@ async def _process_contest(
             "No valid match times for contest '%s'. Skipping.",
             overview_page,
         )
-        return matches_to_schedule
+        return None
 
     start_date = min(valid_times)
     end_date = max(valid_times)
@@ -114,35 +131,180 @@ async def _process_contest(
     )
     if not contest:
         logger.warning("Failed to upsert contest '%s'.", tournament_name)
-        return matches_to_schedule
+
+    return contest
+
+
+async def _fetch_contest_scoreboard(overview_page):
+    try:
+        return await leaguepedia_client.get_scoreboard_data(overview_page)
+    except Exception:
+        logger.exception(
+            "Failed to fetch scoreboard for contest %s; continuing without",
+            overview_page,
+        )
+        return None
+
+
+async def _process_contest(
+    overview_page: str, contest_matches: list, db_session, summary: dict
+) -> tuple:
+    """
+    Process a single contest and its matches.
+    Returns a tuple `(matches_to_schedule, notifications)` where
+    `matches_to_schedule` is a list of matches that need reminders
+    scheduled and `notifications` is a list of result notifications to
+    send after the outer transaction commits.
+    """
+    matches_to_schedule = []
+
+    contest = await _upsert_contest_data(
+        overview_page, contest_matches, db_session
+    )
+    if not contest:
+        # Ensure we always return the same tuple shape so callers can
+        # reliably unpack the result. There are no notifications in
+        # this early-exit case.
+        return matches_to_schedule, []
 
     summary["contests"] += 1
     await db_session.flush()
 
+    # Fetch the contest scoreboard once to avoid repeating API calls per
+    # match. If the fetch fails or returns None, we'll proceed without
+    # scoreboard-based result detection.
+    scoreboard = await _fetch_contest_scoreboard(overview_page)
+
+    # Build a small context object to avoid long argument lists.
+    ctx = SyncContext(
+        contest=contest,
+        db_session=db_session,
+        summary=summary,
+        scoreboard=scoreboard,
+    )
+
     for match_data in contest_matches:
         await _process_teams_for_match(match_data, db_session, summary)
 
-        result = await _process_match(match_data, contest, db_session, summary)
+        result = await _process_match(match_data, ctx)
         if result:
             match, time_changed = result
             if match and time_changed:
                 matches_to_schedule.append(match)
 
-    return matches_to_schedule
+    # Return matches to schedule and any notifications that need to be
+    # sent after the outer transaction commits.
+    return matches_to_schedule, ctx.notifications
+
+
+def _calculate_match_outcome(scoreboard, match):
+    """
+    Analyzes scoreboard to determine if there is a winner.
+    Returns (winner, score_str) or (None, None).
+    """
+    relevant_games = filter_relevant_games_from_scoreboard(scoreboard, match)
+    if not relevant_games:
+        return None, None
+
+    team1_score, team2_score = calculate_team_scores(relevant_games, match)
+
+    if getattr(match, "best_of", None) is None:
+        logger.warning(
+            "Skipping result detection for match %s: missing best_of",
+            match.id,
+        )
+        return None, None
+
+    winner = determine_winner(team1_score, team2_score, match)
+    if not winner:
+        return None, None
+
+    return winner, f"{team1_score}-{team2_score}"
+
+
+async def _persist_match_outcome(ctx, match, winner, score_str):
+    """
+    Persists the result if it doesn't already exist.
+    """
+    try:
+        match_in_session = await crud.get_match_with_result_by_id(
+            ctx.db_session, match.id
+        )
+
+        if match_in_session is None:
+            logger.warning(
+                "Match %s disappeared before result persistence; skipping",
+                match.id,
+            )
+            return None
+
+        if getattr(match_in_session, "result", None):
+            return None
+
+        result = await save_result_and_update_picks(
+            ctx.db_session, match, winner, score_str
+        )
+
+        try:
+            await ctx.db_session.flush()
+        except Exception:
+            logger.exception(
+                "Failed to flush session after saving result for match %s",
+                match.id,
+            )
+            return None
+
+        ctx.notifications.append((match.id, result.id))
+        return result
+    except Exception:
+        logger.exception(
+            "Failed to persist result in session for match %s", match.id
+        )
+        return None
+
+
+async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
+    """
+    Inspect `ctx.scoreboard` for `match`. If the series is complete and no
+    local `Result` exists, persist the Result using the provided
+    `ctx.db_session` (do NOT commit here) and append the
+    `(match.id, result.id)` tuple to `ctx.notifications` so callers can
+    notify after the outer
+    transaction commits. Errors are logged and do not raise.
+    """
+    scoreboard = ctx.scoreboard
+    if not scoreboard:
+        return None
+
+    try:
+        winner, score_str = _calculate_match_outcome(scoreboard, match)
+        if not winner:
+            return None
+
+        return await _persist_match_outcome(ctx, match, winner, score_str)
+    except Exception:
+        logger.exception(
+            "Error checking/recording result for match %s", match_id
+        )
+        return None
 
 
 async def _sync_single_tournament(
     tournament_name_like: str, db_session, summary: dict
-) -> list:
+) -> tuple:
     """
     Helper to sync data for a single tournament.
-    Returns a list of matches that need reminders scheduled.
+    Returns a tuple (matches_to_schedule, notifications) where
+    matches_to_schedule is a list of matches needing reminders and
+    notifications is a list of (match_id, result_id) tuples for result
+    notifications.
     """
     logger.info(
         "Fetching upcoming matches for tournament pattern: '%s'",
         tournament_name_like,
     )
     matches_to_schedule = []
+    notifications = []
     matches_data = await leaguepedia_client.fetch_upcoming_matches(
         tournament_name_like
     )
@@ -171,13 +333,14 @@ async def _sync_single_tournament(
         contests[overview_page].append(match_data)
 
     for overview_page, contest_matches in contests.items():
-        contest_schedule = await _process_contest(
+        contest_schedule, contest_notifications = await _process_contest(
             overview_page, contest_matches, db_session, summary
         )
         matches_to_schedule.extend(contest_schedule)
+        notifications.extend(contest_notifications)
 
     logger.info("Finished processing matches for '%s'", tournament_name_like)
-    return matches_to_schedule
+    return matches_to_schedule, notifications
 
 
 async def perform_leaguepedia_sync() -> dict | None:
@@ -201,18 +364,34 @@ async def perform_leaguepedia_sync() -> dict | None:
 
     summary = {"contests": 0, "matches": 0, "teams": 0}
     all_matches_to_schedule = []
+    all_notifications = []
 
     async with get_async_session() as db_session:
         for slug in tournament_slugs:
-            matches_to_schedule = await _sync_single_tournament(
+            matches_to_schedule, notifications = await _sync_single_tournament(
                 slug, db_session, summary
             )
             all_matches_to_schedule.extend(matches_to_schedule)
+            all_notifications.extend(notifications)
         await db_session.commit()
 
     # Schedule reminders after the main transaction is committed
     for match in all_matches_to_schedule:
         await schedule_reminders(match)
+
+    # Send result notifications after the commit so the persisted
+    # Result and Pick updates are visible to notification handlers.
+    for match_id, result_id in all_notifications:
+        try:
+            await send_result_notification(match_id, result_id)
+        except Exception as exc:
+            logger.exception(
+                "Failed to send result notification for match %s "
+                "(result %s, %s)",
+                match_id,
+                result_id,
+                type(exc).__name__,
+            )
 
     logger.info(
         "Sync complete: %d contests, %d matches, %d teams upserted.",

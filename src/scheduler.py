@@ -234,6 +234,14 @@ def _calculate_team_scores(relevant_games, match):
     return team1_score, team2_score
 
 
+def calculate_team_scores(relevant_games, match):
+    """
+    Public wrapper for `_calculate_team_scores` to expose a non-underscore
+    API for external callers.
+    """
+    return _calculate_team_scores(relevant_games, match)
+
+
 def _determine_winner(team1_score, team2_score, match):
     """
     Determine if there's a winner based on the current scores.
@@ -245,6 +253,13 @@ def _determine_winner(team1_score, team2_score, match):
     elif team2_score >= games_to_win:
         return match.team2
     return None
+
+
+def determine_winner(team1_score, team2_score, match):
+    """
+    Public wrapper for `_determine_winner`.
+    """
+    return _determine_winner(team1_score, team2_score, match)
 
 
 async def _save_result_and_update_picks(session, match, winner, score_str):
@@ -286,6 +301,15 @@ async def _save_result_and_update_picks(session, match, winner, score_str):
     logger.info("Updated %d picks for match %s.", updated_count, match.id)
 
     return result
+
+
+async def save_result_and_update_picks(session, match, winner, score_str):
+    """
+    Public async wrapper for `_save_result_and_update_picks`.
+    """
+    return await _save_result_and_update_picks(
+        session, match, winner, score_str
+    )
 
 
 async def _fetch_scoreboard_for_match(match: Match):
@@ -339,6 +363,13 @@ def _filter_relevant_games_from_scoreboard(scoreboard_data, match: Match):
     ]
 
 
+def filter_relevant_games_from_scoreboard(scoreboard_data, match: Match):
+    """
+    Public wrapper for `_filter_relevant_games_from_scoreboard`.
+    """
+    return _filter_relevant_games_from_scoreboard(scoreboard_data, match)
+
+
 async def _handle_winner(
     match: Match,
     winner: str,
@@ -369,7 +400,9 @@ async def _handle_winner(
         await session.commit()
     logger.info("Saved result and updated picks for match %s.", match.id)
 
-    await send_result_notification(match, result)
+    # Notify using IDs so the notification handler can load fresh
+    # objects within its own session and avoid detached-instance issues.
+    await send_result_notification(match.id, result.id)
 
     if job_id is None:
         job_id = f"poll_match_{match.id}"
@@ -585,29 +618,35 @@ def _create_reminder_embed(
     return embed
 
 
-async def send_result_notification(match: Match, result: Result):
+async def send_result_notification(match_id: int, result_id: int):
     """
-    Broadcast a rich Discord embed with the final result of a match
-    to all guilds.
-
-    Builds a gold-colored embed showing the winner, final score, and
-    pick'em statistics (total picks, correct picks, percentage),
-    includes the winner's thumbnail when available, timestamps the
-    embed, and broadcasts it to every guild the bot is in.
+    Load fresh `Match` and `Result` objects in a new session and broadcast
+    the result notification to all guilds. Accepting IDs ensures the
+    notification code always works with session-bound instances and avoids
+    detached-instance pitfalls.
 
     Parameters:
-        match (Match): Match model instance for which the result
-            applies.
-        result (Result): Result model instance containing `winner`
-            and `score`.
+        match_id (int): Database ID of the match.
+        result_id (int): Database ID of the result.
     """
     logger.info(
-        "Broadcasting result notification for match %s " "to all guilds.",
-        match.id,
+        "Broadcasting result notification for match %s to all guilds.",
+        match_id,
     )
     bot = get_bot_instance()
 
     async with get_async_session() as session:
+        match = await session.get(Match, match_id)
+        result = await session.get(Result, result_id)
+
+        if not match or not result:
+            logger.error(
+                "Could not load match/result for notification: %s / %s",
+                match_id,
+                result_id,
+            )
+            return
+
         logger.debug("Fetching teams and picks for match %s", match.id)
         team1, team2 = await _fetch_teams(session, match)
 
