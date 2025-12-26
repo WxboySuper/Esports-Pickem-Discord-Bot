@@ -30,8 +30,9 @@ def get_scheduler() -> AsyncIOScheduler:
         AsyncIOScheduler: The shared scheduler instance used by the
             module; created on first invocation and reused thereafter.
     """
-    global _scheduler  # skipcq: PYL-W0603     if _scheduler is None:
-    _scheduler = AsyncIOScheduler(jobstores=jobstores)
+    global _scheduler  # skipcq: PYL-W0603
+    if _scheduler is None:
+        _scheduler = AsyncIOScheduler(jobstores=jobstores)
     return _scheduler
 
 
@@ -79,8 +80,6 @@ async def schedule_reminders(match: Match):
         scheduler.remove_job(job_id_5)
     except JobLookupError:
         pass
-
-    # Calculate reminder times
     reminder_time_30 = match.scheduled_time - timedelta(minutes=30)
     reminder_time_5 = match.scheduled_time - timedelta(minutes=5)
 
@@ -862,7 +861,7 @@ async def schedule_live_polling():
     logger.debug("Running schedule_live_polling job...")
 
     async with get_async_session() as session:
-        matches_starting_soon = await _get_matches_starting_soon(session)
+        _, matches_starting_soon = await _get_matches_starting_soon(session)
 
         if matches_starting_soon:
             times = [

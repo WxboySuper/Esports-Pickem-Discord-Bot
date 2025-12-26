@@ -64,7 +64,7 @@ async def test_get_matches_starting_soon_query_no_result(session):
 
     # Execute the function under test
     # This should NOT raise NotImplementedError or any other exception
-    fetched_now, matches = await _get_matches_starting_soon(session)
+    _fetched_now, matches = await _get_matches_starting_soon(session)
 
     assert len(matches) == 1
     assert matches[0].id == match.id
@@ -107,7 +107,7 @@ async def test_get_matches_starting_soon_query_with_result(session):
     await session.commit()
 
     # Execute the function under test
-    fetched_now, matches = await _get_matches_starting_soon(session)
+    _fetched_now, matches = await _get_matches_starting_soon(session)
 
     # Should be empty because the match has a result
     assert len(matches) == 0
