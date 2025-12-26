@@ -106,14 +106,7 @@ async def _process_match(
     return (match, time_changed)
 
 
-async def _process_contest(
-    overview_page: str, contest_matches: list, db_session, summary: dict
-) -> tuple:
-    """
-    Process a single contest and its matches.
-    Returns a list of matches that need reminders scheduled.
-    """
-    matches_to_schedule = []
+async def _upsert_contest_data(overview_page, contest_matches, db_session):
     match_times = [_parse_date(m.get("DateTime UTC")) for m in contest_matches]
     valid_times = [t for t in match_times if t is not None]
 
@@ -122,7 +115,7 @@ async def _process_contest(
             "No valid match times for contest '%s'. Skipping.",
             overview_page,
         )
-        return matches_to_schedule
+        return None
 
     start_date = min(valid_times)
     end_date = max(valid_times)
@@ -139,7 +132,41 @@ async def _process_contest(
     )
     if not contest:
         logger.warning("Failed to upsert contest '%s'.", tournament_name)
-        return matches_to_schedule
+
+    return contest
+
+
+async def _fetch_contest_scoreboard(overview_page):
+    try:
+        return await leaguepedia_client.get_scoreboard_data(overview_page)
+    except Exception:
+        logger.exception(
+            "Failed to fetch scoreboard for contest %s; continuing without",
+            overview_page,
+        )
+        return None
+
+
+async def _process_contest(
+    overview_page: str, contest_matches: list, db_session, summary: dict
+) -> tuple:
+    """
+    Process a single contest and its matches.
+    Returns a tuple `(matches_to_schedule, notifications)` where
+    `matches_to_schedule` is a list of matches that need reminders
+    scheduled and `notifications` is a list of result notifications to
+    send after the outer transaction commits.
+    """
+    matches_to_schedule = []
+
+    contest = await _upsert_contest_data(
+        overview_page, contest_matches, db_session
+    )
+    if not contest:
+        # Ensure we always return the same tuple shape so callers can
+        # reliably unpack the result. There are no notifications in
+        # this early-exit case.
+        return matches_to_schedule, []
 
     summary["contests"] += 1
     await db_session.flush()
@@ -147,16 +174,7 @@ async def _process_contest(
     # Fetch the contest scoreboard once to avoid repeating API calls per
     # match. If the fetch fails or returns None, we'll proceed without
     # scoreboard-based result detection.
-    try:
-        scoreboard = await leaguepedia_client.get_scoreboard_data(
-            overview_page
-        )
-    except Exception:
-        logger.exception(
-            "Failed to fetch scoreboard for contest %s; continuing without",
-            overview_page,
-        )
-        scoreboard = None
+    scoreboard = await _fetch_contest_scoreboard(overview_page)
 
     # Build a small context object to avoid long argument lists.
     ctx = SyncContext(
@@ -180,6 +198,72 @@ async def _process_contest(
     return matches_to_schedule, ctx.notifications
 
 
+def _calculate_match_outcome(scoreboard, match):
+    """
+    Analyzes scoreboard to determine if there is a winner.
+    Returns (winner, score_str) or (None, None).
+    """
+    relevant_games = _filter_relevant_games_from_scoreboard(scoreboard, match)
+    if not relevant_games:
+        return None, None
+
+    team1_score, team2_score = _calculate_team_scores(relevant_games, match)
+
+    if getattr(match, "best_of", None) is None:
+        logger.warning(
+            "Skipping result detection for match %s: missing best_of",
+            match.id,
+        )
+        return None, None
+
+    winner = _determine_winner(team1_score, team2_score, match)
+    if not winner:
+        return None, None
+
+    return winner, f"{team1_score}-{team2_score}"
+
+
+async def _persist_match_outcome(ctx, match, winner, score_str):
+    """
+    Persists the result if it doesn't already exist.
+    """
+    try:
+        match_in_session = await crud.get_match_with_result_by_id(
+            ctx.db_session, match.id
+        )
+
+        if match_in_session is None:
+            logger.warning(
+                "Match %s disappeared before result persistence; skipping",
+                match.id,
+            )
+            return None
+
+        if getattr(match_in_session, "result", None):
+            return None
+
+        result = await _save_result_and_update_picks(
+            ctx.db_session, match, winner, score_str
+        )
+
+        try:
+            await ctx.db_session.flush()
+        except Exception:
+            logger.exception(
+                "Failed to flush session after saving result for match %s",
+                match.id,
+            )
+            return None
+
+        ctx.notifications.append((match.id, result.id))
+        return result
+    except Exception:
+        logger.exception(
+            "Failed to persist result in session for match %s", match.id
+        )
+        return None
+
+
 async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
     """
     Inspect `ctx.scoreboard` for `match`. If the series is complete and no
@@ -193,74 +277,11 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
         return None
 
     try:
-        relevant_games = _filter_relevant_games_from_scoreboard(
-            scoreboard, match
-        )
-        if not relevant_games:
-            return None
-
-        team1_score, team2_score = _calculate_team_scores(
-            relevant_games, match
-        )
-        # Guard against missing `best_of` which would cause a TypeError
-        # inside `_determine_winner` when it attempts integer division.
-        if getattr(match, "best_of", None) is None:
-            logger.warning(
-                "Skipping result detection for match %s: missing best_of",
-                match.id,
-            )
-            return None
-        winner = _determine_winner(team1_score, team2_score, match)
+        winner, score_str = _calculate_match_outcome(scoreboard, match)
         if not winner:
             return None
 
-        score_str = f"{team1_score}-{team2_score}"
-
-        try:
-            # Fetch the match with its result relationship eagerly loaded
-            # to avoid relying on in-memory attributes that may be
-            # detached or stale.
-            match_in_session = await crud.get_match_with_result_by_id(
-                ctx.db_session, match.id
-            )
-
-            if match_in_session is None:
-                logger.warning(
-                    "Match %s disappeared before result persistence; skipping",
-                    match.id,
-                )
-                return None
-
-            # If a Result already exists, bail out to avoid duplicates.
-            if getattr(match_in_session, "result", None):
-                return None
-
-            # Use the caller's session to persist changes; do not commit
-            # here so the outer transaction remains atomic. The helper
-            # only requires `match.id`, so pass the original `match`
-            # to avoid unnecessary re-fetching.
-            result = await _save_result_and_update_picks(
-                ctx.db_session, match, winner, score_str
-            )
-            # Ensure IDs are populated before we leave the transaction
-            try:
-                await ctx.db_session.flush()
-            except Exception:
-                # If flush fails, log and skip notification for safety
-                logger.exception(
-                    "Failed to flush session after saving result for match %s",
-                    match.id,
-                )
-                return None
-
-            # Record IDs for later notification after commit
-            ctx.notifications.append((match.id, result.id))
-            return result
-        except Exception:
-            logger.exception(
-                "Failed to persist result in session for match %s", match_id
-            )
-            return None
+        return await _persist_match_outcome(ctx, match, winner, score_str)
     except Exception:
         logger.exception(
             "Error checking/recording result for match %s", match_id
