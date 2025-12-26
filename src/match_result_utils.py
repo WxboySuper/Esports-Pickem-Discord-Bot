@@ -43,10 +43,10 @@ def determine_winner(
         Optional[str]: The winning team name if a winner is determined,
             otherwise `None` when the series is not yet decided.
     """
-    return scheduler._determine_winner(team1_score, team2_score, match)
+    return scheduler.determine_winner(team1_score, team2_score, match)
 
 
 async def save_result_and_update_picks(session, match, winner, score_str):
-    return await scheduler._save_result_and_update_picks(
+    return await scheduler.save_result_and_update_picks(
         session, match, winner, score_str
     )
