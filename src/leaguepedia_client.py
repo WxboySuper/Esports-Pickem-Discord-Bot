@@ -3,6 +3,7 @@ import os
 import asyncio
 import random
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 
 from dotenv import load_dotenv
 from mwrogue.auth_credentials import AuthCredentials
@@ -109,52 +110,82 @@ class LeaguepediaClient:
             )
             return []
 
-    def _detect_rate_limit(self, exc: Exception) -> tuple[bool, float | None]:
+    def _extract_retry_after(self, resp) -> float | None:
         """
-        Detect rate limit errors and extract wait time if available.
+        Safely extract Retry-After header from response.
+        Returns retry_after in seconds as float, or None if not
+        present/invalid.
+
+        Per RFC 7231, Retry-After can be either:
+        - delay-seconds (numeric)
+        - HTTP-date (e.g., "Wed, 21 Oct 2015 07:28:00 GMT")
+        """
+        headers = getattr(resp, "headers", {})
+        if "Retry-After" not in headers:
+            return None
+
+        retry_value = headers["Retry-After"]
+
+        # Try parsing as numeric delay-seconds
+        try:
+            return float(retry_value)
+        except (ValueError, TypeError):
+            pass
+
+        # Try parsing as HTTP-date
+        try:
+            retry_date = parsedate_to_datetime(retry_value)
+            now = datetime.now(timezone.utc)
+            delta = (retry_date - now).total_seconds()
+            # Return positive delay or 0 if date is in the past
+            return max(0.0, delta)
+        except (ValueError, TypeError, OverflowError):
+            pass
+
+        return None
+
+    def _check_http_status_for_rate_limit(
+        self, exc: Exception
+    ) -> tuple[bool, float | None]:
+        """
+        Check HTTP status code and MediaWiki error codes in response body.
         Returns (is_rate_limit, retry_after_seconds).
         """
-        # 1. Check for HTTP response status and headers
         resp = getattr(exc, "response", None)
-        if resp:
-            status = getattr(
-                resp, "status", getattr(resp, "status_code", None)
-            )
-            if status == 429:
-                retry_after = None
-                headers = getattr(resp, "headers", {})
-                if "Retry-After" in headers:
-                    try:
-                        retry_after = float(headers["Retry-After"])
-                    except (ValueError, TypeError):
-                        pass
-                return True, retry_after
+        if not resp:
+            return False, None
 
-            # Check JSON body for MediaWiki throttling codes
-            try:
-                # Ensure resp has .json() method
-                if hasattr(resp, "json") and callable(resp.json):
-                    data = resp.json()
-                    if isinstance(data, dict):
-                        code = data.get("error", {}).get("code")
-                        if code in (
-                            "ratelimited",
-                            "maxlag",
-                            "actionthrottledtext",
-                        ):
-                            retry_after = None
-                            if "Retry-After" in getattr(resp, "headers", {}):
-                                try:
-                                    retry_after = float(
-                                        resp.headers["Retry-After"]
-                                    )
-                                except (ValueError, TypeError):
-                                    pass
-                            return True, retry_after
-            except Exception:
-                pass
+        # Check HTTP 429 status
+        status = getattr(resp, "status", getattr(resp, "status_code", None))
+        if status == 429:
+            retry_after = self._extract_retry_after(resp)
+            return True, retry_after
 
-        # 2. Check for mwclient APIError code or args
+        # Check JSON body for MediaWiki throttling codes
+        try:
+            if hasattr(resp, "json") and callable(resp.json):
+                data = resp.json()
+                if isinstance(data, dict):
+                    code = data.get("error", {}).get("code")
+                    if code in (
+                        "ratelimited",
+                        "maxlag",
+                        "actionthrottledtext",
+                    ):
+                        retry_after = self._extract_retry_after(resp)
+                        return True, retry_after
+        except Exception:
+            pass
+
+        return False, None
+
+    def _check_api_error_for_rate_limit(
+        self, exc: Exception
+    ) -> tuple[bool, float | None]:
+        """
+        Check exception code attribute for rate limit indicators.
+        Returns (is_rate_limit, retry_after_seconds).
+        """
         code = getattr(exc, "code", None)
         if isinstance(code, str) and code.lower() in (
             "ratelimit",
@@ -162,8 +193,15 @@ class LeaguepediaClient:
             "maxlag",
         ):
             return True, None
+        return False, None
 
-        # Check args for tuple structure ('ratelimited', ...)
+    def _check_exception_attributes_for_rate_limit(
+        self, exc: Exception
+    ) -> tuple[bool, float | None]:
+        """
+        Check exception args for rate limit indicators.
+        Returns (is_rate_limit, retry_after_seconds).
+        """
         args = getattr(exc, "args", [])
         if args and isinstance(args, tuple) and len(args) > 0:
             first_arg = args[0]
@@ -172,6 +210,29 @@ class LeaguepediaClient:
                 "maxlag",
             ):
                 return True, None
+        return False, None
+
+    def _detect_rate_limit(self, exc: Exception) -> tuple[bool, float | None]:
+        """
+        Detect rate limit errors and extract wait time if available.
+        Returns (is_rate_limit, retry_after_seconds).
+        """
+        # Check HTTP status and JSON body
+        is_limited, retry_after = self._check_http_status_for_rate_limit(exc)
+        if is_limited:
+            return True, retry_after
+
+        # Check API error code attribute
+        is_limited, retry_after = self._check_api_error_for_rate_limit(exc)
+        if is_limited:
+            return True, retry_after
+
+        # Check exception args
+        is_limited, retry_after = (
+            self._check_exception_attributes_for_rate_limit(exc)
+        )
+        if is_limited:
+            return True, retry_after
 
         return False, None
 
@@ -214,6 +275,7 @@ class LeaguepediaClient:
             jitter,
         )
         return cooldown_minutes
+
     def _notify_admin_rate_limit(
         self, overview_page: str, cooldown_minutes: float
     ):
