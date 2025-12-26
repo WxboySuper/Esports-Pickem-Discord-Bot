@@ -13,22 +13,29 @@ async def test_create_matches_embed_with_result():
     interaction.user.display_name = "TestUser"
     interaction.user.avatar = None
 
-    contest = Contest(name="Test Tournament")
+    # Use MagicMock with `spec` to avoid SQLModel validation/construct
+    contest = MagicMock(spec=Contest)
+    contest.name = "Test Tournament"
 
-    match_no_result = Match(
-        team1="Team A",
-        team2="Team B",
-        scheduled_time=datetime(2025, 12, 26, 12, 0, tzinfo=timezone.utc),
-        contest=contest,
+    match_no_result = MagicMock(spec=Match)
+    match_no_result.team1 = "Team A"
+    match_no_result.team2 = "Team B"
+    match_no_result.scheduled_time = datetime(
+        2025, 12, 26, 12, 0, tzinfo=timezone.utc
     )
+    match_no_result.contest = contest
+    match_no_result.result = None
 
-    match_with_result = Match(
-        team1="Team C",
-        team2="Team D",
-        scheduled_time=datetime(2025, 12, 26, 15, 0, tzinfo=timezone.utc),
-        contest=contest,
+    match_with_result = MagicMock(spec=Match)
+    match_with_result.team1 = "Team C"
+    match_with_result.team2 = "Team D"
+    match_with_result.scheduled_time = datetime(
+        2025, 12, 26, 15, 0, tzinfo=timezone.utc
     )
-    result = Result(winner="Team C", score="2-0")
+    match_with_result.contest = contest
+    result = MagicMock(spec=Result)
+    result.winner = "Team C"
+    result.score = "2-0"
     match_with_result.result = result
 
     matches = [match_no_result, match_with_result]
