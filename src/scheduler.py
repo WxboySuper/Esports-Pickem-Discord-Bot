@@ -30,7 +30,7 @@ def get_scheduler() -> AsyncIOScheduler:
         AsyncIOScheduler: The shared scheduler instance used by the
             module; created on first invocation and reused thereafter.
     """
-    global _scheduler
+    global _scheduler  # skipcq: PYL-W0603
     if _scheduler is None:
         _scheduler = AsyncIOScheduler(jobstores=jobstores)
     return _scheduler
@@ -80,8 +80,6 @@ async def schedule_reminders(match: Match):
         scheduler.remove_job(job_id_5)
     except JobLookupError:
         pass
-
-    # Calculate reminder times
     reminder_time_30 = match.scheduled_time - timedelta(minutes=30)
     reminder_time_5 = match.scheduled_time - timedelta(minutes=5)
 
@@ -651,9 +649,7 @@ async def send_result_notification(match: Match, result: Result):
         embed.add_field(
             name="📊 Pick'em Stats", value=picks_value, inline=False
         )
-        embed.set_footer(
-            text="Leaguepedia Match ID: %s" % match.leaguepedia_id
-        )
+        embed.set_footer(text=f"Leaguepedia Match ID: {match.leaguepedia_id}")
         embed.timestamp = datetime.now(timezone.utc)
 
         await _broadcast_embed_to_guilds(
@@ -689,7 +685,7 @@ async def send_mid_series_update(match: Match, score: str):
         description=description,
         color=discord.Color.orange(),
     )
-    embed.set_footer(text="Match ID: %s" % match.id)
+    embed.set_footer(text=f"Match ID: {match.id}")
     embed.timestamp = datetime.now(timezone.utc)
 
     await _broadcast_embed_to_guilds(
@@ -754,10 +750,14 @@ async def _get_matches_starting_soon(session):
     """
     now = datetime.now(timezone.utc)
     five_minutes_from_now = now + timedelta(minutes=5)
-    stmt = select(Match).where(
-        Match.scheduled_time >= now,
-        Match.scheduled_time < five_minutes_from_now,
-        Match.result.is_(None),
+    stmt = (
+        select(Match)
+        .outerjoin(Result)
+        .where(
+            Match.scheduled_time >= now,
+            Match.scheduled_time < five_minutes_from_now,
+            Result.id.is_(None),
+        )
     )
     matches = (await session.exec(stmt)).all()
     return now, matches
@@ -861,7 +861,7 @@ async def schedule_live_polling():
     logger.debug("Running schedule_live_polling job...")
 
     async with get_async_session() as session:
-        now, matches_starting_soon = await _get_matches_starting_soon(session)
+        _, matches_starting_soon = await _get_matches_starting_soon(session)
 
         if matches_starting_soon:
             times = [
