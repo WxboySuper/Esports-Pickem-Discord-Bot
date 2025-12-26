@@ -465,7 +465,9 @@ class LeaguepediaClient:
             is_limit, retry_seconds = self._detect_rate_limit(e)
 
             if is_limit:
-                await self._handle_rate_limit_error(overview_page, retry_seconds)
+                await self._handle_rate_limit_error(
+                    overview_page, retry_seconds
+                )
                 return None
 
             logger.error(
