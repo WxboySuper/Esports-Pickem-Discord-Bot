@@ -884,6 +884,7 @@ def get_matches_by_date(session: Session, date: datetime) -> List[Match]:
         .where(Match.scheduled_time <= end)
         .where(Match.team1 != "TBD")
         .where(Match.team2 != "TBD")
+        .options(selectinload(Match.result), selectinload(Match.contest))
     )
     return list(session.exec(statement))
 
@@ -895,6 +896,7 @@ def list_matches_for_contest(session: Session, contest_id: int) -> List[Match]:
         .where(Match.contest_id == contest_id)
         .where(Match.team1 != "TBD")
         .where(Match.team2 != "TBD")
+        .options(selectinload(Match.result), selectinload(Match.contest))
     )
     return list(session.exec(stmt))
 

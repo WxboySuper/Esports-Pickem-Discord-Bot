@@ -102,9 +102,17 @@ async def create_matches_embed(
     else:
         for match in matches:
             time_str = match.scheduled_time.strftime("%H:%M UTC")
+            value = f"Time: {time_str}\nContest: {match.contest.name}"
+
+            if match.result:
+                score_str = (
+                    f" ({match.result.score})" if match.result.score else ""
+                )
+                value += f"\n**Result: {match.result.winner} won{score_str}**"
+
             embed.add_field(
                 name=f"{match.team1} vs {match.team2}",
-                value=f"Time: {time_str}\nContest: {match.contest.name}",
+                value=value,
                 inline=False,
             )
     return embed
