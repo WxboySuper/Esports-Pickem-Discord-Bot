@@ -58,20 +58,30 @@ async def test_view_history_with_picks(
     mock_get_user.return_value = user
 
     # Create mock data
-    contest = Contest(name="Test Tournament")
+    contest = Contest(
+        id=1,
+        leaguepedia_id="contest-1",
+        name="Test Tournament",
+        start_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        end_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
 
     # Match 1: User picked Team A, Team A won (Correct)
     match1 = Match(
+        id=1,
+        leaguepedia_id="match-1",
+        contest_id=contest.id,
         team1="Team A",
         team2="Team B",
         scheduled_time=datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc),
-        contest=contest,
     )
-    result1 = Result(winner="Team A", score="2-0")
+    result1 = Result(match_id=match1.id, winner="Team A", score="2-0")
     match1.result = result1
 
     pick1 = Pick(
         user_id=user.id,
+        contest_id=contest.id,
+        match_id=match1.id,
         chosen_team="Team A",
         is_correct=True,
         status="correct",
@@ -80,16 +90,20 @@ async def test_view_history_with_picks(
 
     # Match 2: User picked Team C, Team D won (Incorrect)
     match2 = Match(
+        id=2,
+        leaguepedia_id="match-2",
+        contest_id=contest.id,
         team1="Team C",
         team2="Team D",
         scheduled_time=datetime(2025, 1, 2, 12, 0, tzinfo=timezone.utc),
-        contest=contest,
     )
-    result2 = Result(winner="Team D", score="1-2")
+    result2 = Result(match_id=match2.id, winner="Team D", score="1-2")
     match2.result = result2
 
     pick2 = Pick(
         user_id=user.id,
+        contest_id=contest.id,
+        match_id=match2.id,
         chosen_team="Team C",
         is_correct=False,
         status="incorrect",
@@ -106,7 +120,7 @@ async def test_view_history_with_picks(
 
     # Verify response
     assert mock_interaction.response.send_message.called
-    args, kwargs = mock_interaction.response.send_message.call_args
+    _, kwargs = mock_interaction.response.send_message.call_args
     embed = kwargs["embed"]
 
     assert embed.title == "Your Pick History"

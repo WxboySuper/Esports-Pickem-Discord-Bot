@@ -25,12 +25,19 @@ picks_group = app_commands.Group(
 )
 async def view_active(interaction: discord.Interaction):
     """Shows a user their own upcoming/active picks."""
-    log_msg = (
-        f"'{interaction.user.name}' ({interaction.user.id}) requested "
-        "their active picks."
+    logger.info(
+        "'%s' (%s) requested their active picks.",
+        interaction.user.name,
+        interaction.user.id,
     )
-    logger.info(log_msg)
-    session: Session = next(get_session())
+    try:
+        session: Session = next(get_session())
+    except StopIteration:
+        logger.error("Failed to acquire DB session generator for view_active")
+        await interaction.response.send_message(
+            "Internal server error: cannot access database.", ephemeral=True
+        )
+        return
 
     db_user = crud.get_user_by_discord_id(session, str(interaction.user.id))
     if not db_user:
@@ -83,10 +90,18 @@ async def view_active(interaction: discord.Interaction):
 async def view_history(interaction: discord.Interaction):
     """Shows a user their resolved picks history."""
     logger.info(
-        f"'{interaction.user.name}' ({interaction.user.id}) requested "
-        "their pick history."
+        "'%s' (%s) requested their pick history.",
+        interaction.user.name,
+        interaction.user.id,
     )
-    session: Session = next(get_session())
+    try:
+        session: Session = next(get_session())
+    except StopIteration:
+        logger.error("Failed to acquire DB session generator for view_history")
+        await interaction.response.send_message(
+            "Internal server error: cannot access database.", ephemeral=True
+        )
+        return
 
     db_user = crud.get_user_by_discord_id(session, str(interaction.user.id))
     if not db_user:
@@ -172,7 +187,18 @@ class MatchSelectForPicks(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
         match_id = int(self.values[0])
-        session: Session = next(get_session())
+        try:
+            session: Session = next(get_session())
+        except StopIteration:
+            logger.error(
+                "Failed to acquire DB session generator for "
+                "MatchSelectForPicks.callback"
+            )
+            await interaction.followup.send(
+                "Internal server error: cannot access database.",
+                ephemeral=True,
+            )
+            return
         match = crud.get_match_by_id(session, match_id)
 
         if not match:
@@ -196,7 +222,8 @@ class MatchSelectForPicks(discord.ui.Select):
             team2_picks = []
             for pick in picks:
                 user_name = (
-                    pick.user.username or f"User ID: {pick.user.discord_id}"
+                    pick.user.username
+                    or f"User ID: {pick.user.discord_id}"
                 )
                 if pick.chosen_team == match.team1:
                     team1_picks.append(user_name)
@@ -205,13 +232,19 @@ class MatchSelectForPicks(discord.ui.Select):
 
             if team1_picks:
                 embed.add_field(
-                    name=f"Picks for {match.team1} ({len(team1_picks)})",
+                    name=(
+                        f"Picks for {match.team1} "
+                        f"({len(team1_picks)})"
+                    ),
                     value="\n".join(team1_picks),
                     inline=True,
                 )
             if team2_picks:
                 embed.add_field(
-                    name=f"Picks for {match.team2} ({len(team2_picks)})",
+                    name=(
+                        f"Picks for {match.team2} "
+                        f"({len(team2_picks)})"
+                    ),
                     value="\n".join(team2_picks),
                     inline=True,
                 )
@@ -225,12 +258,20 @@ class MatchSelectForPicks(discord.ui.Select):
 )
 async def view_match(interaction: discord.Interaction):
     """Shows all picks for a selected match."""
-    log_msg = (
-        f"'{interaction.user.name}' ({interaction.user.id}) requested to "
-        "view match picks."
+    logger.info(
+        "'%s' (%s) requested to view match picks.",
+        interaction.user.name,
+        interaction.user.id,
     )
-    logger.info(log_msg)
-    session: Session = next(get_session())
+    try:
+        session: Session = next(get_session())
+    except StopIteration:
+        logger.error("Failed to acquire DB session generator for view_match")
+        await interaction.response.send_message(
+            "Internal server error: cannot access database.",
+            ephemeral=True,
+        )
+        return
 
     matches = session.exec(select(Match).order_by(Match.scheduled_time)).all()
 
