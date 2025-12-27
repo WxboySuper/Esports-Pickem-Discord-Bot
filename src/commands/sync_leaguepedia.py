@@ -295,7 +295,14 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
 
     # Log if the match already has a persisted result
     try:
-        existing_result = getattr(match, "result", None)
+        # Fetch the match using a select that eagerly loads the result to
+        # avoid triggering sync lazy-loading on an async session-bound
+        # instance. This ensures reliable inspection of any existing
+        # persisted Result.
+        match_with_result = await crud.get_match_with_result_by_id(
+            ctx.db_session, match.id
+        )
+        existing_result = getattr(match_with_result, "result", None) if match_with_result else None
         if existing_result:
             logger.info(
                 "Match %s already persisted result: winner=%s score=%s",
@@ -305,7 +312,10 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
             )
             return None
     except Exception:
-        logger.debug("Failed to inspect existing result for match %s", match_key)
+        logger.exception(
+            "Failed to fetch match with result for %s", match_key
+        )
+        return None
 
     try:
         winner, score_str = _calculate_match_outcome(scoreboard, match)
