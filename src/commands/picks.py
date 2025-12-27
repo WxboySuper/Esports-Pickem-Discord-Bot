@@ -6,9 +6,10 @@ from datetime import datetime, timezone
 import discord
 from discord import app_commands
 from sqlmodel import Session, select
+from sqlalchemy.orm import selectinload
 
 from src.db import get_session
-from src.models import Match, Pick
+from src.models import Match, Pick, Result
 from src import crud
 
 logger = logging.getLogger("esports-bot.commands.picks")
@@ -69,6 +70,77 @@ async def view_active(interaction: discord.Interaction):
         embed.add_field(
             name=match_info,
             value=f"Your pick: **{pick.chosen_team}**\nScheduled: {time_str}",
+            inline=False,
+        )
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@picks_group.command(
+    name="view-history",
+    description="View your past picks and their results.",
+)
+async def view_history(interaction: discord.Interaction):
+    """Shows a user their resolved picks history."""
+    logger.info(
+        f"'{interaction.user.name}' ({interaction.user.id}) requested "
+        "their pick history."
+    )
+    session: Session = next(get_session())
+
+    db_user = crud.get_user_by_discord_id(session, str(interaction.user.id))
+    if not db_user:
+        await interaction.response.send_message(
+            "You have no picks history.", ephemeral=True
+        )
+        return
+
+    # Fetch picks that have a result (via Match -> Result)
+    stmt = (
+        select(Pick)
+        .join(Match)
+        .join(Result)
+        .where(Pick.user_id == db_user.id)
+        .options(selectinload(Pick.match).selectinload(Match.result))
+        .order_by(Match.scheduled_time.desc())
+        .limit(25)
+    )
+    history_picks = session.exec(stmt).all()
+
+    if not history_picks:
+        await interaction.response.send_message(
+            "You have no resolved picks.", ephemeral=True
+        )
+        return
+
+    embed = discord.Embed(
+        title="Your Pick History",
+        color=discord.Color.gold(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    icon_url = interaction.user.avatar.url if interaction.user.avatar else None
+    embed.set_author(name=interaction.user.display_name, icon_url=icon_url)
+
+    for pick in history_picks:
+        match = pick.match
+        result = match.result
+
+        match_info = f"{match.team1} vs {match.team2}"
+        score_str = f" ({result.score})" if result.score else ""
+
+        status_icon = "✅ Correct" if pick.is_correct else "❌ Incorrect"
+        # Fallback if is_correct is None but result exists
+        if pick.is_correct is None:
+            status_icon = "❓ Unresolved"
+
+        value = (
+            f"Your pick: **{pick.chosen_team}**\n"
+            f"Winner: {result.winner}{score_str}\n"
+            f"Result: {status_icon}"
+        )
+        embed.add_field(
+            name=match_info,
+            value=value,
             inline=False,
         )
 
