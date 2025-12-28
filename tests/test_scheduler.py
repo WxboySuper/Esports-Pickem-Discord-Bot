@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, call
 from datetime import datetime, timedelta, timezone
-from src.scheduler import schedule_reminders, send_reminder
+from src.reminders import schedule_reminders, send_reminder
 from src.models import Match, Team
 from contextlib import asynccontextmanager
 
@@ -16,7 +16,7 @@ async def test_schedule_far_future_match():
     mock_scheduler.add_job = MagicMock()
     mock_scheduler.remove_job = MagicMock()
 
-    with patch("src.scheduler.scheduler", mock_scheduler):
+    with patch("src.reminders.scheduler", mock_scheduler):
 
         now = datetime.now(timezone.utc)
         match_time = now + timedelta(days=1)
@@ -75,8 +75,8 @@ async def test_schedule_late_30_min_reminder():
     mock_scheduler.add_job = MagicMock()
     mock_scheduler.remove_job = MagicMock()
 
-    with patch("src.scheduler.scheduler", mock_scheduler), patch(
-        "src.scheduler.datetime"
+    with patch("src.reminders.scheduler", mock_scheduler), patch(
+        "src.reminders.datetime"
     ) as mock_dt:
 
         now = datetime.now(timezone.utc)
@@ -129,8 +129,8 @@ async def test_schedule_late_5_min_reminder():
     mock_scheduler.add_job = MagicMock()
     mock_scheduler.remove_job = MagicMock()
 
-    with patch("src.scheduler.scheduler", mock_scheduler), patch(
-        "src.scheduler.datetime"
+    with patch("src.reminders.scheduler", mock_scheduler), patch(
+        "src.reminders.datetime"
     ) as mock_dt:
 
         now = datetime.now(timezone.utc)
@@ -160,9 +160,9 @@ async def test_schedule_late_5_min_reminder():
 
 
 @pytest.mark.asyncio
-@patch("src.scheduler.get_bot_instance")
-@patch("src.scheduler.get_async_session")
-@patch("src.scheduler.send_announcement")
+@patch("src.reminders.get_bot_instance")
+@patch("src.reminders.get_async_session")
+@patch("src.notifications.send_announcement")
 async def test_send_reminder_embed_content(
     mock_send_announcement, mock_get_session, mock_get_bot
 ):

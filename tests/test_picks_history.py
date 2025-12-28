@@ -47,16 +47,7 @@ async def test_view_history_no_picks(
     )
 
 
-@pytest.mark.asyncio
-@patch("src.commands.picks.get_session")
-@patch("src.commands.picks.crud.get_user_by_discord_id")
-async def test_view_history_with_picks(
-    mock_get_user, mock_get_session, mock_interaction, mock_session
-):
-    mock_get_session.return_value.__enter__.return_value = mock_session
-    user = User(id=1, discord_id="123", username="TestUser")
-    mock_get_user.return_value = user
-
+def _setup_history_test_data(user):
     # Create mock data
     contest = Contest(
         id=1,
@@ -75,8 +66,7 @@ async def test_view_history_with_picks(
         team2="Team B",
         scheduled_time=datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc),
     )
-    result1 = Result(match_id=match1.id, winner="Team A", score="2-0")
-    match1.result = result1
+    match1.result = Result(match_id=match1.id, winner="Team A", score="2-0")
 
     pick1 = Pick(
         user_id=user.id,
@@ -97,8 +87,7 @@ async def test_view_history_with_picks(
         team2="Team D",
         scheduled_time=datetime(2025, 1, 2, 12, 0, tzinfo=timezone.utc),
     )
-    result2 = Result(match_id=match2.id, winner="Team D", score="1-2")
-    match2.result = result2
+    match2.result = Result(match_id=match2.id, winner="Team D", score="1-2")
 
     pick2 = Pick(
         user_id=user.id,
@@ -110,11 +99,23 @@ async def test_view_history_with_picks(
     )
     pick2.match = match2
 
+    return [pick2, pick1]
+
+
+@pytest.mark.asyncio
+@patch("src.commands.picks.get_session")
+@patch("src.commands.picks.crud.get_user_by_discord_id")
+async def test_view_history_with_picks(
+    mock_get_user, mock_get_session, mock_interaction, mock_session
+):
+    mock_get_session.return_value.__enter__.return_value = mock_session
+    user = User(id=1, discord_id="123", username="TestUser")
+    mock_get_user.return_value = user
+
     # Mock session return
-    mock_session.exec.return_value.all.return_value = [
-        pick2,
-        pick1,
-    ]  # Descending order usually
+    mock_session.exec.return_value.all.return_value = _setup_history_test_data(
+        user
+    )
 
     await picks.view_history.callback(mock_interaction)
 

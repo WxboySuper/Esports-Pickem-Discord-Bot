@@ -18,41 +18,28 @@ def _find_existing_channel(
     """
     Finds a text channel in the guild with the announcement channel name
     (case-insensitive).
-
-    Ignores channels whose name cannot be accessed during the search.
-
-    Returns:
-        The matching discord.TextChannel if found, `None` otherwise.
     """
     name_lower = ANNOUNCEMENT_CHANNEL_NAME.lower()
-    for channel in guild.text_channels:
-        # channel.name access can raise in rare cases; ignore such channels
-        try:
-            if channel.name.lower() == name_lower:
-                return channel
-        except Exception:
-            continue
-    return None
+    return discord.utils.find(
+        lambda c: getattr(c, "name", "").lower() == name_lower,
+        guild.text_channels,
+    )
 
 
 def _get_bot_member(guild: discord.Guild) -> Optional[discord.Member]:
     """
     Resolve the bot's Member object for the given guild.
-
-    Returns:
-        discord.Member: The bot's member in the guild, or `None` if
-            the bot's member or user information is unavailable.
     """
-    bot = get_bot_instance()
-    bot_member = getattr(guild, "me", None)
-    if bot_member:
+    if bot_member := getattr(guild, "me", None):
         return bot_member
-    if not bot or not getattr(bot, "user", None):
-        return None
-    try:
-        return guild.get_member(bot.user.id)
-    except Exception:
-        return None
+
+    bot = get_bot_instance()
+    if bot and bot.user:
+        try:
+            return guild.get_member(bot.user.id)
+        except Exception:
+            pass
+    return None
 
 
 def _can_send(
@@ -85,6 +72,16 @@ def _can_send(
         return False
 
 
+def _find_first_writable_channel(
+    guild: discord.Guild, bot_member: Optional[discord.Member]
+) -> Optional[discord.TextChannel]:
+    """Find the first text channel where the bot has send permissions."""
+    for channel in guild.text_channels:
+        if _can_send(channel, bot_member):
+            return channel
+    return None
+
+
 async def _try_create_announcement_channel(
     guild: discord.Guild,
     bot_member: Optional[discord.Member],
@@ -92,22 +89,6 @@ async def _try_create_announcement_channel(
     """
     Attempt to create the dedicated announcement text channel with
     restricted send permissions.
-
-    If creation succeeds, returns the newly created TextChannel. The
-    channel is created so that the default role is denied the ability
-    to send messages; if `bot_member` is provided it is granted send
-    permission.
-
-    Parameters:
-        guild (discord.Guild): The guild in which to create the
-            channel.
-        bot_member (Optional[discord.Member]): The bot's Member object
-            in the guild, or None if unavailable.
-
-    Returns:
-        discord.TextChannel or None: The created announcement channel
-            on success, or `None` if creation failed or was not
-            permitted.
     """
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(send_messages=False)
@@ -123,15 +104,13 @@ async def _try_create_announcement_channel(
         )
     except (discord.Forbidden, discord.HTTPException) as e:
         logger.warning(
-            "Could not create announcement channel in guild %s: %s. "
-            "Falling back to existing channels.",
+            "Could not create announcement channel in guild %s: %s",
             getattr(guild, "id", "unknown"),
             e,
         )
-        return None
     except Exception:
-        # Be conservative: don't raise for unexpected runtime issues here
-        return None
+        pass
+    return None
 
 
 async def get_announcement_channel(
@@ -140,45 +119,23 @@ async def get_announcement_channel(
     """
     Resolve a suitable text channel in a guild for posting
     announcements.
-
-    The selection prefers an existing channel named
-    "pickem-announcements" (case-insensitive), attempts to create that
-    dedicated channel, falls back to the first channel the bot can
-    send messages in, and finally returns the guild's first text
-    channel if available.
-
-    Parameters:
-        guild (discord.Guild): Guild to search or create the
-            announcement channel in.
-
-    Returns:
-        discord.TextChannel or None: The chosen text channel for
-            announcements, or `None` if the guild has no text
-            channels.
     """
-    existing = _find_existing_channel(guild)
-    if existing:
+    if existing := _find_existing_channel(guild):
         return existing
 
     bot_member = _get_bot_member(guild)
 
-    # Try creating the dedicated announcement channel with restrictive
-    # overwrites
-    created = await _try_create_announcement_channel(guild, bot_member)
-    if created:
+    if created := await _try_create_announcement_channel(guild, bot_member):
         return created
 
-    # Fallback: return first channel where the bot can send messages
-    for channel in guild.text_channels:
-        if _can_send(channel, bot_member):
-            return channel
+    if writable := _find_first_writable_channel(guild, bot_member):
+        return writable
 
-    # If we know the bot member and no usable channel was found, return None
-    if bot_member is not None:
-        return None
+    # As a last resort, return the first text channel if we don't know perms
+    if bot_member is None and guild.text_channels:
+        return guild.text_channels[0]
 
-    # As a last resort, return the first text channel or None
-    return guild.text_channels[0] if guild.text_channels else None
+    return None
 
 
 async def send_announcement(
@@ -216,17 +173,12 @@ async def get_admin_channel(
 ) -> Optional[discord.TextChannel]:
     """
     Locate or create the administrator updates channel in the given guild.
-
-    Requires the 'Manage Channels' permission if the channel does not
-    already exist.
-
-    Returns:
-        discord.TextChannel: The existing or newly created admin channel,
-            or `None` if creation failed or was not permitted.
     """
-    for channel in guild.text_channels:
-        if channel.name == ADMIN_CHANNEL_NAME:
-            return channel
+    if channel := discord.utils.get(
+        guild.text_channels, name=ADMIN_CHANNEL_NAME
+    ):
+        return channel
+
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(send_messages=False),
         guild.me: discord.PermissionOverwrite(send_messages=True),
@@ -241,64 +193,51 @@ async def get_admin_channel(
             getattr(guild, "id", "unknown"),
             e,
         )
-        return None
     except Exception:
-        return None
+        pass
+    return None
+
+
+def _resolve_dev_guild(
+    bot: discord.Client, guild_id_str: str
+) -> Optional[discord.Guild]:
+    """Resolve the developer guild from its ID string."""
+    try:
+        guild = bot.get_guild(int(guild_id_str))
+        if not guild:
+            logger.warning("Developer guild %s not found.", guild_id_str)
+        return guild
+    except (ValueError, TypeError):
+        logger.warning("Invalid DEVELOPER_GUILD_ID: %s", guild_id_str)
+    except Exception:
+        pass
+    return None
 
 
 async def send_admin_update(message: str, mention_user_id: int | None = None):
     """
     Send a plain-text admin update to the developer guild's
     "admin-updates" channel.
-
-    Parameters:
-        message (str): The message text to send.
-        mention_user_id (int | None): Optional user ID to mention at the
-            start of the message.
-
-    Behavior:
-        - Looks up the developer guild using the `DEVELOPER_GUILD_ID`
-          environment variable and requires the bot instance to be
-          available. If the env var is missing, the bot instance is not
-          available, or the guild cannot be found, the function returns
-          early without sending.
-        - Attempts to locate or create the admin-updates channel and will
-          log and return early on failures.
     """
     bot = get_bot_instance()
-    if not bot:
-        logger.debug("Bot instance not available; cannot send admin update.")
-        return
-
     dev_guild_id = os.getenv("DEVELOPER_GUILD_ID")
-    if not dev_guild_id:
-        logger.debug("DEVELOPER_GUILD_ID not set; skipping admin update.")
+
+    if not bot or not dev_guild_id:
+        logger.debug("Bot or DEVELOPER_GUILD_ID not available.")
         return
 
-    try:
-        guild = bot.get_guild(int(dev_guild_id))
-    except Exception:
-        guild = None
-
+    guild = _resolve_dev_guild(bot, dev_guild_id)
     if not guild:
-        logger.warning(
-            "Developer guild id %s not found or bot not in guild.",
-            dev_guild_id,
-        )
         return
 
     try:
-        channel = await get_admin_channel(guild)
-        if channel is None:
-            logger.warning("No admin channel available in guild %s", guild.id)
-            return
-
-        body = message
-        if mention_user_id:
-            body = f"<@{mention_user_id}> {message}"
-        await channel.send(body)
-        logger.info(
-            "Sent admin update to guild %s channel %s", guild.id, channel.name
-        )
+        if channel := await get_admin_channel(guild):
+            body = (
+                f"<@{mention_user_id}> {message}"
+                if mention_user_id
+                else message
+            )
+            await channel.send(body)
+            logger.info("Sent admin update to %s", channel.name)
     except Exception as e:
         logger.exception("Failed sending admin update: %s", e)

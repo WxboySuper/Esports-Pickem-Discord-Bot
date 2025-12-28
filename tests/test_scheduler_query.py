@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 from src.models import Match, Result, Contest
-from src.scheduler import _get_matches_starting_soon
+from src.polling_manager import _get_matches_starting_soon
 
 # Use an in-memory SQLite database for testing
 DATABASE_URL = "sqlite+aiosqlite:///:memory:"
