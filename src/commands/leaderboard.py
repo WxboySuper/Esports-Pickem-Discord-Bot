@@ -640,7 +640,7 @@ class ContestSelectForLeaderboard(discord.ui.Select):
 )
 async def leaderboard(interaction: discord.Interaction):
     """Shows the main leaderboard with view options."""
-    logger.info(f"'{interaction.user.name}' requested the main leaderboard.")
+    logger.info("'%s' requested the main leaderboard.", interaction.user.name)
     session: Session = next(get_session())
 
     # Default to global view
@@ -665,7 +665,7 @@ async def leaderboard(interaction: discord.Interaction):
 )
 async def leaderboard_contest(interaction: discord.Interaction):
     """Shows a dropdown to select a contest leaderboard."""
-    logger.info(f"'{interaction.user.name}' requested a contest leaderboard.")
+    logger.info("'%s' requested a contest leaderboard.", interaction.user.name)
     session: Session = next(get_session())
     contests = crud.list_contests(session)
     if not contests:

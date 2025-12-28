@@ -58,7 +58,7 @@ async def upsert_match(
 
         if match:
             # Update existing match
-            logger.info(f"Updating existing match ID: {match.id}")
+            logger.info("Updating existing match ID: %s", match.id)
             match.team1 = match_data["team1"]
             match.team2 = match_data["team2"]
             match.best_of = match_data.get("best_of")
@@ -66,28 +66,30 @@ async def upsert_match(
             new_time = match_data["scheduled_time"]
             if original_time != new_time:
                 logger.info(
-                    f"Match {match.id} time changed from {original_time} "
-                    f"to {new_time}"
+                    "Match %s time changed from %s to %s",
+                    match.id,
+                    original_time,
+                    new_time,
                 )
                 time_changed = True
             match.scheduled_time = new_time
         else:
             # Create new match
-            logger.info(f"Creating new match: {match_data}")
+            logger.info("Creating new match: %s", match_data)
             match = Match(**match_data)
             time_changed = True  # It's a new match, so schedule it
 
         session.add(match)
         await session.flush()  # Flush to get the match.id if it's new
         await session.refresh(match)
-        logger.info(f"Upserted match ID: {match.id}")
+        logger.info("Upserted match ID: %s", match.id)
 
         return match, time_changed
     except KeyError as e:
-        logger.error(f"Missing key in match_data: {e}")
+        logger.error("Missing key in match_data: %s", e)
         return None, False
     except Exception:
-        logger.exception(f"Error upserting match with data: {match_data}")
+        logger.exception("Error upserting match with data: %s", match_data)
         return None, False
 
 
@@ -119,7 +121,7 @@ def create_match(session: Session, params: MatchCreateParams) -> Match:
         leaguepedia_id=params.leaguepedia_id,
     )
     _save_and_refresh(session, match)
-    logger.info(f"Created match with ID: {match.id}")
+    logger.info("Created match with ID: %s", match.id)
     return match
 
 
@@ -140,7 +142,7 @@ def bulk_create_matches(
     Returns:
         List[Match]: The created and refreshed `Match` instances.
     """
-    logger.info(f"Bulk creating {len(matches_data)} matches")
+    logger.info("Bulk creating %s matches", len(matches_data))
     matches = [Match(**data) for data in matches_data]
     _save_all_and_refresh(session, matches)
     logger.info("Bulk created matches.")
@@ -148,7 +150,7 @@ def bulk_create_matches(
 
 
 def get_matches_by_date(session: Session, date: datetime) -> List[Match]:
-    logger.debug(f"Fetching matches for date: {date.strftime('%Y-%m-%d')}")
+    logger.debug("Fetching matches for date: %s", date.strftime('%Y-%m-%d'))
     start = datetime(date.year, date.month, date.day, tzinfo=timezone.utc)
     end = datetime(
         date.year, date.month, date.day, 23, 59, 59, tzinfo=timezone.utc
@@ -165,7 +167,7 @@ def get_matches_by_date(session: Session, date: datetime) -> List[Match]:
 
 
 def list_matches_for_contest(session: Session, contest_id: int) -> List[Match]:
-    logger.debug(f"Listing matches for contest ID: {contest_id}")
+    logger.debug("Listing matches for contest ID: %s", contest_id)
     stmt = (
         select(Match)
         .where(Match.contest_id == contest_id)
@@ -182,7 +184,7 @@ async def get_match_with_result_by_id(
     """
     Fetches a match by its ID, eagerly loading the related result and contest.
     """
-    logger.debug(f"Fetching match with result by ID: {match_id}")
+    logger.debug("Fetching match with result by ID: %s", match_id)
     result = await session.exec(
         select(Match)
         .where(Match.id == match_id)
@@ -192,7 +194,7 @@ async def get_match_with_result_by_id(
 
 
 def get_match_by_id(session: Session, match_id: int) -> Optional[Match]:
-    logger.debug(f"Fetching match by ID: {match_id}")
+    logger.debug("Fetching match by ID: %s", match_id)
     return session.get(Match, match_id)
 
 
@@ -217,12 +219,12 @@ def update_match(
 
     Returns:
         Updated Match if a match with the given id was found and
-            updated, `None` if no such match exists.
+        updated, `None` if no such match exists.
     """
-    logger.info(f"Updating match ID: {match_id}")
+    logger.info("Updating match ID: %s", match_id)
     match = session.get(Match, match_id)
     if not match:
-        logger.warning(f"Match with ID {match_id} not found for update.")
+        logger.warning("Match with ID %s not found for update.", match_id)
         return None
     if params.team1 is not None:
         match.team1 = params.team1
@@ -231,7 +233,7 @@ def update_match(
     if params.scheduled_time is not None:
         match.scheduled_time = params.scheduled_time
     _save_and_refresh(session, match)
-    logger.info(f"Updated match ID: {match_id}")
+    logger.info("Updated match ID: %s", match_id)
     return match
 
 
@@ -249,11 +251,11 @@ def delete_match(session: Session, match_id: int) -> bool:
         bool: `True` if the match was deleted, `False` if no match with
             the given id was found.
     """
-    logger.info(f"Deleting match ID: {match_id}")
+    logger.info("Deleting match ID: %s", match_id)
     match = session.get(Match, match_id)
     if not match:
-        logger.warning(f"Match with ID {match_id} not found for deletion.")
+        logger.warning("Match with ID %s not found for deletion.", match_id)
         return False
     _delete_and_commit(session, match)
-    logger.info(f"Deleted match ID: {match_id}")
+    logger.info("Deleted match ID: %s", match_id)
     return True

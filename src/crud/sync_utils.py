@@ -73,7 +73,7 @@ async def _find_existing_by_leaguepedia(
             `None` otherwise.
     """
     stmt = select(model).where(
-        getattr(model, "leaguepedia_id") == leaguepedia_id
+        getattr(model, "leaguepedia_id", None) == leaguepedia_id
     )
     res = await session.exec(stmt)
     return res.first()

@@ -50,23 +50,23 @@ def create_pick(session: Session, params: PickCreateParams) -> Pick:
         pick_args["timestamp"] = params.timestamp
     pick = Pick(**pick_args)
     _save_and_refresh(session, pick)
-    logger.info(f"Created pick with ID: {pick.id}")
+    logger.info("Created pick with ID: %s", pick.id)
     return pick
 
 
 def get_pick_by_id(session: Session, pick_id: int) -> Optional[Pick]:
-    logger.debug(f"Fetching pick by ID: {pick_id}")
+    logger.debug("Fetching pick by ID: %s", pick_id)
     return session.get(Pick, pick_id)
 
 
 def list_picks_for_user(session: Session, user_id: int) -> List[Pick]:
-    logger.debug(f"Listing picks for user ID: {user_id}")
+    logger.debug("Listing picks for user ID: %s", user_id)
     statement = select(Pick).where(Pick.user_id == user_id)
     return list(session.exec(statement))
 
 
 def list_picks_for_match(session: Session, match_id: int) -> List[Pick]:
-    logger.debug(f"Listing picks for match ID: {match_id}")
+    logger.debug("Listing picks for match ID: %s", match_id)
     statement = select(Pick).where(Pick.match_id == match_id)
     return list(session.exec(statement))
 
@@ -86,15 +86,15 @@ def update_pick(
     Returns:
         Optional[Pick]: The updated Pick if found, otherwise None.
     """
-    logger.info(f"Updating pick ID: {pick_id}")
+    logger.info("Updating pick ID: %s", pick_id)
     pick = session.get(Pick, pick_id)
     if not pick:
-        logger.warning(f"Pick with ID {pick_id} not found for update.")
+        logger.warning("Pick with ID %s not found for update.", pick_id)
         return None
     if chosen_team is not None:
         pick.chosen_team = chosen_team
     _save_and_refresh(session, pick)
-    logger.info(f"Updated pick ID: {pick_id}")
+    logger.info("Updated pick ID: %s", pick_id)
     return pick
 
 
@@ -112,11 +112,11 @@ def delete_pick(session: Session, pick_id: int) -> bool:
         bool: `True` if the pick was deleted, `False` if no pick with
             the given id existed.
     """
-    logger.info(f"Deleting pick ID: {pick_id}")
+    logger.info("Deleting pick ID: %s", pick_id)
     pick = session.get(Pick, pick_id)
     if not pick:
-        logger.warning(f"Pick with ID {pick_id} not found for deletion.")
+        logger.warning("Pick with ID %s not found for deletion.", pick_id)
         return False
     _delete_and_commit(session, pick)
-    logger.info(f"Deleted pick ID: {pick_id}")
+    logger.info("Deleted pick ID: %s", pick_id)
     return True

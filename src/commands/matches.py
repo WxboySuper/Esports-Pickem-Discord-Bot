@@ -190,7 +190,7 @@ class TournamentSelect(discord.ui.Select):
 )
 async def view_by_day(interaction: discord.Interaction):
     """Shows matches for the current day with navigation."""
-    logger.info(f"'{interaction.user.name}' requested matches by day.")
+    logger.info("'%s' requested matches by day.", interaction.user.name)
     current_date = datetime.now(timezone.utc).date()
     session: Session = next(get_session())
     matches = crud.get_matches_by_date(session, current_date)
@@ -210,7 +210,9 @@ async def view_by_day(interaction: discord.Interaction):
 )
 async def view_by_tournament(interaction: discord.Interaction):
     """Shows a dropdown to select a tournament and view its matches."""
-    logger.info(f"'{interaction.user.name}' requested matches by tournament.")
+    logger.info(
+        "'%s' requested matches by tournament.", interaction.user.name
+    )
     session: Session = next(get_session())
     contests = crud.list_contests(session)
     if not contests:
@@ -244,8 +246,9 @@ async def upload(
     """Handles CSV upload for match schedules."""
 
     logger.info(
-        f"Admin '{interaction.user.name}' is uploading matches for contest "
-        f"{contest_id}."
+        "Admin '%s' is uploading matches for contest %s.",
+        interaction.user.name,
+        contest_id,
     )
     await interaction.response.defer(ephemeral=True)
 

@@ -177,7 +177,7 @@ async def enter_result(
         )
 
     except Exception as e:
-        logger.exception(f"Error entering result for match {match_id}")
+        logger.exception("Error entering result for match %s", match_id)
         session.rollback()
         await interaction.followup.send(
             f"An unexpected error occurred: {e}", ephemeral=True

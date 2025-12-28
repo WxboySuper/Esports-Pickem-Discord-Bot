@@ -65,7 +65,7 @@ def create_contest(session: Session, contest_data: dict) -> Contest:
     end_date = contest_data.get("end_date")
     leaguepedia_id = contest_data.get("leaguepedia_id")
 
-    logger.info(f"Creating contest: {name}")
+    logger.info("Creating contest: %s", name)
     contest = Contest(
         name=name,
         start_date=start_date,
@@ -73,12 +73,12 @@ def create_contest(session: Session, contest_data: dict) -> Contest:
         leaguepedia_id=leaguepedia_id,
     )
     _save_and_refresh(session, contest)
-    logger.info(f"Created contest with ID: {contest.id}")
+    logger.info("Created contest with ID: %s", contest.id)
     return contest
 
 
 def get_contest_by_id(session: Session, contest_id: int) -> Optional[Contest]:
-    logger.debug(f"Fetching contest by ID: {contest_id}")
+    logger.debug("Fetching contest by ID: %s", contest_id)
     return session.get(Contest, contest_id)
 
 
@@ -103,10 +103,10 @@ def update_contest(
         Contest | None: The updated Contest if found and modified,
             `None` if no Contest with the given `contest_id` exists.
     """
-    logger.info(f"Updating contest ID: {contest_id}")
+    logger.info("Updating contest ID: %s", contest_id)
     contest = session.get(Contest, contest_id)
     if not contest:
-        logger.warning(f"Contest with ID {contest_id} not found for update.")
+        logger.warning("Contest with ID %s not found for update.", contest_id)
         return None
     if params.name is not None:
         contest.name = params.name
@@ -115,7 +115,7 @@ def update_contest(
     if params.end_date is not None:
         contest.end_date = params.end_date
     _save_and_refresh(session, contest)
-    logger.info(f"Updated contest ID: {contest_id}")
+    logger.info("Updated contest ID: %s", contest_id)
     return contest
 
 
@@ -129,11 +129,11 @@ def delete_contest(session: Session, contest_id: int) -> bool:
     Returns:
         bool: True if the contest was found and deleted, False otherwise.
     """
-    logger.info(f"Deleting contest ID: {contest_id}")
+    logger.info("Deleting contest ID: %s", contest_id)
     contest = session.get(Contest, contest_id)
     if not contest:
-        logger.warning(f"Contest with ID {contest_id} not found for deletion.")
+        logger.warning("Contest with ID %s not found for deletion.", contest_id)
         return False
     _delete_and_commit(session, contest)
-    logger.info(f"Deleted contest ID: {contest_id}")
+    logger.info("Deleted contest ID: %s", contest_id)
     return True

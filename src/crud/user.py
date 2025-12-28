@@ -24,10 +24,10 @@ def create_user(
         user (User): The persisted User instance with its
             database-assigned `id` populated.
     """
-    logger.info(f"Creating user: {username} ({discord_id})")
+    logger.info("Creating user: %s (%s)", username, discord_id)
     user = User(discord_id=discord_id, username=username)
     _save_and_refresh(session, user)
-    logger.info(f"Created user with ID: {user.id}")
+    logger.info("Created user with ID: %s", user.id)
     return user
 
 
@@ -35,7 +35,7 @@ def get_user_by_discord_id(
     session: Session,
     discord_id: str,
 ) -> Optional[User]:
-    logger.debug(f"Fetching user by discord_id: {discord_id}")
+    logger.debug("Fetching user by discord_id: %s", discord_id)
     statement = select(User).where(User.discord_id == discord_id)
     return session.exec(statement).first()
 
@@ -58,15 +58,15 @@ def update_user(
         User | None: The updated User instance, or `None` if no user
             with the given id exists.
     """
-    logger.info(f"Updating user ID: {user_id}")
+    logger.info("Updating user ID: %s", user_id)
     user = session.get(User, user_id)
     if not user:
-        logger.warning(f"User with ID {user_id} not found for update.")
+        logger.warning("User with ID %s not found for update.", user_id)
         return None
     if username is not None:
         user.username = username
     _save_and_refresh(session, user)
-    logger.info(f"Updated user ID: {user_id}")
+    logger.info("Updated user ID: %s", user_id)
     return user
 
 
@@ -80,11 +80,11 @@ def delete_user(session: Session, user_id: int) -> bool:
     Returns:
         `true` if the user was found and deleted, `false` otherwise.
     """
-    logger.info(f"Deleting user ID: {user_id}")
+    logger.info("Deleting user ID: %s", user_id)
     user = session.get(User, user_id)
     if not user:
-        logger.warning(f"User with ID {user_id} not found for deletion.")
+        logger.warning("User with ID %s not found for deletion.", user_id)
         return False
     _delete_and_commit(session, user)
-    logger.info(f"Deleted user ID: {user_id}")
+    logger.info("Deleted user ID: %s", user_id)
     return True
