@@ -1,5 +1,9 @@
 # Esports Pick'em Discord Bot
 
+## Important
+
+**DO NOT COMMIT CHANGES WITHOUT USER AUTHORIZATION**
+
 ## Project Overview
 
 This project is a Discord bot designed for managing esports pick'em contests. It allows users to predict match outcomes and compete on leaderboards. The bot integrates with the Leaguepedia API to fetch match data and results.
