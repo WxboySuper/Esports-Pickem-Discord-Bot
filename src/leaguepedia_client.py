@@ -110,9 +110,7 @@ class LeaguepediaClient:
                 "Successfully logged in to Leaguepedia as '%s'.", username
             )
         except Exception:
-            logger.exception(
-                "Login failed; using unauthenticated client"
-            )
+            logger.exception("Login failed; using unauthenticated client")
             # Restore unauthenticated client so callers can continue safely.
             # Avoid leaving `self.client` as None which can cause retry loops.
             self.client = EsportsClient(wiki="lol")
