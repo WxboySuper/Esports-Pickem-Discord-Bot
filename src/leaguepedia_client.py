@@ -109,9 +109,13 @@ class LeaguepediaClient:
             logger.info(
                 "Successfully logged in to Leaguepedia as '%s'.", username
             )
-        except Exception as e:
-            logger.error("Failed to log in to Leaguepedia: %s", e)
-            self.client = None
+        except Exception:
+            logger.exception(
+                "Login failed; using unauthenticated client"
+            )
+            # Restore unauthenticated client so callers can continue safely.
+            # Avoid leaving `self.client` as None which can cause retry loops.
+            self.client = EsportsClient(wiki="lol")
 
     async def fetch_upcoming_matches(self, tournament_name_like: str):
         """
