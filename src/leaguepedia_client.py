@@ -107,12 +107,12 @@ class LeaguepediaClient:
 
             username = user_data.get("name")
             logger.info(
-                f"Successfully logged in to Leaguepedia as '{username}'."
+                "Successfully logged in to Leaguepedia as '%s'.", username
             )
-        except Exception as e:
-            logger.error(f"Failed to log in to Leaguepedia: {e}")
-            logger.warning("Falling back to unauthenticated client.")
-            # Fallback to an unauthenticated client
+        except Exception:
+            logger.exception("Login failed; using unauthenticated client")
+            # Restore unauthenticated client so callers can continue safely.
+            # Avoid leaving `self.client` as None which can cause retry loops.
             self.client = EsportsClient(wiki="lol")
 
     async def fetch_upcoming_matches(self, tournament_name_like: str):
@@ -151,7 +151,7 @@ class LeaguepediaClient:
             return response
         except Exception as e:
             logger.error(
-                f"Error fetching upcoming matches from Leaguepedia: {e}"
+                "Error fetching upcoming matches from Leaguepedia: %s", e
             )
             return []
 
@@ -475,7 +475,7 @@ class LeaguepediaClient:
                 return None
 
             logger.error(
-                f"Error fetching scoreboard data for {overview_page}: {e}"
+                "Error fetching scoreboard data for %s: %s", overview_page, e
             )
             return None
 

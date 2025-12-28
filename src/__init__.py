@@ -81,7 +81,7 @@ def _dispose_db_engines():
             if callable(dispose_fn):
                 dispose_fn()
         except Exception:
-            logger.debug(f"Failed to dispose {label}", exc_info=True)
+            logger.debug("Failed to dispose %s", label, exc_info=True)
 
     try:
         from . import db

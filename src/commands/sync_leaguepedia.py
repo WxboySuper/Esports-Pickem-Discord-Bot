@@ -244,12 +244,17 @@ async def _persist_match_outcome(ctx, match, winner, score_str):
             try:
                 logger.info(
                     "Match %s already has result: winner=%s score=%s",
-                    getattr(match_in_session, "leaguepedia_id", match_in_session.id),
+                    getattr(
+                        match_in_session, "leaguepedia_id", match_in_session.id
+                    ),
                     getattr(existing, "winner", None),
                     getattr(existing, "score", None),
                 )
             except Exception:
-                logger.debug("Failed to log existing result for match %s", match_in_session.id)
+                logger.debug(
+                    "Failed to log existing result for match %s",
+                    match_in_session.id,
+                )
             return None
 
         result = await save_result_and_update_picks(
@@ -284,7 +289,9 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
     transaction commits. Errors are logged and do not raise.
     """
     scoreboard = ctx.scoreboard
-    match_key = getattr(match, "leaguepedia_id", None) or getattr(match, "id", None)
+    match_key = getattr(match, "leaguepedia_id", None) or getattr(
+        match, "id", None
+    )
 
     if not scoreboard:
         logger.debug(
@@ -302,7 +309,11 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
         match_with_result = await crud.get_match_with_result_by_id(
             ctx.db_session, match.id
         )
-        existing_result = getattr(match_with_result, "result", None) if match_with_result else None
+        existing_result = (
+            getattr(match_with_result, "result", None)
+            if match_with_result
+            else None
+        )
         if existing_result:
             logger.info(
                 "Match %s already persisted result: winner=%s score=%s",
@@ -312,15 +323,15 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
             )
             return None
     except Exception:
-        logger.exception(
-            "Failed to fetch match with result for %s", match_key
-        )
+        logger.exception("Failed to fetch match with result for %s", match_key)
         return None
 
     try:
         winner, score_str = _calculate_match_outcome(scoreboard, match)
         if not winner:
-            logger.info("No result detected on scoreboard for match %s", match_key)
+            logger.info(
+                "No result detected on scoreboard for match %s", match_key
+            )
             return None
 
         logger.info(
@@ -435,7 +446,8 @@ async def perform_leaguepedia_sync() -> dict | None:
         try:
             logger.info(
                 "Sending result notification for match %s (result %s)",
-                match_id, result_id
+                match_id,
+                result_id,
             )
             await send_result_notification(match_id, result_id)
         except Exception as exc:
