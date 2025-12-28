@@ -199,10 +199,15 @@ def get_match_by_id(session: Session, match_id: int) -> Optional[Match]:
 
 
 def list_all_matches(session: Session) -> List[Match]:
-    """Returns all matches, sorted by most recent first."""
+    """Returns all matches, sorted by most recent first, with results
+    loaded."""
     logger.debug("Listing all matches")
     return list(
-        session.exec(select(Match).order_by(Match.scheduled_time.desc()))
+        session.exec(
+            select(Match)
+            .options(selectinload(Match.result))
+            .order_by(Match.scheduled_time.desc())
+        )
     )
 
 

@@ -10,8 +10,24 @@ from sqlmodel import Session
 from src.db import get_session
 from src import crud
 from src.auth import is_admin
+from src.models import Match
 
 logger = logging.getLogger("esports-bot.commands.result")
+
+
+def _format_match_choice_name(match_obj: Match, has_result: bool) -> str:
+    """Formats a match choice name for Discord autocomplete, with
+    truncation."""
+    prefix = "[HAS RESULT] " if has_result else ""
+    name = (
+        f"{prefix}{match_obj.team1} vs {match_obj.team2} "
+        f"(ID: {match_obj.id})"
+    )
+    if len(name) <= 100:
+        return name
+    suffix = f"... (ID: {match_obj.id})"
+    max_len = 100 - len(suffix)
+    return f"{name[:max_len]}{suffix}"
 
 
 async def winner_autocomplete(
@@ -51,44 +67,32 @@ async def match_autocompletion(
     current: str,
 ) -> list[app_commands.Choice[int]]:
     """Autocomplete for matches, prioritizing those without results."""
-    with next(get_session()) as session:
+    current_lc = current.lower()
+    choices: list[app_commands.Choice[int]] = []
+
+    try:
+        session: Session = next(get_session())
+    except StopIteration:
+        return []
+
+    with session:
+        # list_all_matches now eagerly loads results
         all_matches = crud.list_all_matches(session)
 
-        matches_with_results = []
-        matches_without_results = []
+    # Sort: matches without results first (False < True)
+    sorted_matches = sorted(all_matches, key=lambda m: m.result is not None)
 
-        for match in all_matches:
-            if crud.get_result_for_match(session, match.id):
-                matches_with_results.append(match)
-            else:
-                matches_without_results.append(match)
+    for match in sorted_matches:
+        has_result = match.result is not None
+        choice_name = _format_match_choice_name(match, has_result)
 
-        # Prioritize matches without results, then show matches with results
-        sorted_matches = matches_without_results + matches_with_results
-
-        choices = []
-        for match in sorted_matches:
-            has_result = match in matches_with_results
-            prefix = "[HAS RESULT] " if has_result else ""
-            choice_name = (
-                f"{prefix}{match.team1} vs {match.team2} (ID: {match.id})"
+        if current_lc in choice_name.lower():
+            choices.append(
+                app_commands.Choice(name=choice_name, value=match.id)
             )
 
-            # Truncate if necessary
-            if len(choice_name) > 100:
-                suffix = f"... (ID: {match.id})"
-                max_len = 100 - len(suffix)
-                choice_name = f"{choice_name[:max_len]}{suffix}"
-
-            # Only add to choices if it matches the user's input
-            if current.lower() in choice_name.lower():
-                choices.append(
-                    app_commands.Choice(name=choice_name, value=match.id)
-                )
-
-            # Respect Discord's 25-choice limit
-            if len(choices) >= 25:
-                break
+        if len(choices) >= 25:
+            break
 
     return choices
 

@@ -14,7 +14,10 @@ from src import crud
 
 logger = logging.getLogger("esports-bot.commands.picks")
 
-async def _acquire_session_for_callback(interaction: discord.Interaction, ctx_name: str):
+
+async def _acquire_session_for_callback(
+    interaction: discord.Interaction, ctx_name: str
+):
     try:
         session: Session = next(get_session())
         return session
