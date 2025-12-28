@@ -946,7 +946,7 @@ def start_scheduler():
     scheduler if it is not running. If the scheduler is already running,
     the function leaves it unchanged.
     """
-    from src.commands.sync_leaguepedia import perform_leaguepedia_sync
+    from src.sync_logic import perform_leaguepedia_sync
 
     if not getattr(scheduler, "running", False):
         logger.info("Scheduler not running. Starting jobs...")
