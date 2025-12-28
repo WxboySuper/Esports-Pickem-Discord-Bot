@@ -8,6 +8,7 @@ from .base import _save_and_refresh, _delete_and_commit
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class PickCreateParams:
     user_id: int
@@ -15,6 +16,7 @@ class PickCreateParams:
     match_id: int
     chosen_team: str
     timestamp: Optional[datetime] = None
+
 
 # Allow this function to have multiple explicit args for clarity
 # despite lint rules

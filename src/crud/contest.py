@@ -10,11 +10,13 @@ from .base import _save_and_refresh, _delete_and_commit
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class ContestUpdateParams:
     name: Optional[str] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+
 
 async def upsert_contest(
     session: AsyncSession, contest_data: dict
@@ -41,6 +43,7 @@ async def upsert_contest(
         contest_data,
         update_keys=["name", "start_date", "end_date"],
     )
+
 
 def create_contest(session: Session, contest_data: dict) -> Contest:
     """

@@ -6,6 +6,7 @@ from .base import _save_and_refresh, _delete_and_commit
 
 logger = logging.getLogger(__name__)
 
+
 def create_user(
     session: Session,
     discord_id: str,

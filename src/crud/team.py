@@ -3,6 +3,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from src.models import Team
 from .sync_utils import _upsert_by_leaguepedia
 
+
 async def upsert_team(
     session: AsyncSession, team_data: dict
 ) -> Optional[Team]:

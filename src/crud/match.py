@@ -10,6 +10,7 @@ from .base import _save_and_refresh, _save_all_and_refresh, _delete_and_commit
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class MatchCreateParams:
     contest_id: int
@@ -24,6 +25,7 @@ class MatchUpdateParams:
     team1: Optional[str] = None
     team2: Optional[str] = None
     scheduled_time: Optional[datetime] = None
+
 
 async def upsert_match(
     session: AsyncSession, match_data: dict
@@ -87,6 +89,7 @@ async def upsert_match(
     except Exception:
         logger.exception(f"Error upserting match with data: {match_data}")
         return None, False
+
 
 def create_match(session: Session, params: MatchCreateParams) -> Match:
     """

@@ -1,16 +1,9 @@
 import logging
 from typing import List, Optional, Type, Any
 from sqlmodel import Session
-from src.models import (
-    User,
-    Contest,
-    Match,
-    Pick,
-    Result,
-    Team,
-)
 
 logger = logging.getLogger(__name__)
+
 
 class _DBHelpers:
     """Grouped synchronous DB helper operations to improve cohesion.

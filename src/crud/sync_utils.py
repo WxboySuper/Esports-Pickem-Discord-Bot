@@ -5,6 +5,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger(__name__)
 
+
 async def _upsert_by_leaguepedia(
     session: AsyncSession,
     model: Type[Any],
