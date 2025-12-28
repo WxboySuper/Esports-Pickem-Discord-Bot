@@ -216,8 +216,14 @@ class TournamentSelect(discord.ui.Select):
         await interaction.response.defer()
         contest_id = int(self.values[0])
         with get_session() as session:
-            matches = crud.list_matches_for_contest(session, contest_id)
             contest = crud.get_contest_by_id(session, contest_id)
+            if not contest:
+                await interaction.edit_original_response(
+                    content=f"Contest with ID {contest_id} not found.",
+                    view=None,
+                )
+                return
+            matches = crud.list_matches_for_contest(session, contest_id)
             title = f"Matches for {contest.name}"
             embed = await create_matches_embed(title, matches, interaction)
             await interaction.edit_original_response(embed=embed, view=None)

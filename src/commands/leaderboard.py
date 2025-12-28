@@ -627,6 +627,12 @@ class ContestSelectForLeaderboard(discord.ui.Select):
         contest_id = int(self.values[0])
         with get_session() as session:
             contest = crud.get_contest_by_id(session, contest_id)
+            if not contest:
+                await interaction.edit_original_response(
+                    content=f"Contest with ID {contest_id} not found.",
+                    view=None,
+                )
+                return
             data = await get_leaderboard_data(session, contest_id=contest_id)
             title = f"Leaderboard for {contest.name}"
             embed = await create_leaderboard_embed(

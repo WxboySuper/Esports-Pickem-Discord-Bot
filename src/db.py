@@ -1,7 +1,7 @@
 # Temporary/local-friendly DB path handling:
 import os
 import logging
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from pathlib import Path
 
@@ -52,7 +52,6 @@ engine = create_engine(
 )
 
 
-@contextmanager
 def get_session():
     """
     Provide a synchronous SQLModel Session within a context-managed scope.
