@@ -218,6 +218,33 @@ def _to_int(val, default=0):
         return default
 
 
+def _normalize_legacy_accuracy(
+    accuracy: float, total_correct: int, total_picks: int
+) -> float:
+    """
+    Detect and normalize legacy fractional accuracy (0-1) to
+    percentage (0-100).
+
+    We detect legacy fractions by checking if the accuracy matches the
+    fraction (correct/picks) but is significantly different from the
+    percentage ((correct*100)/picks).
+    """
+    if not (0.0 < accuracy <= 1.0 and total_picks > 0):
+        return accuracy
+
+    fractional = total_correct / total_picks
+    percentage = (total_correct * 100.0) / total_picks
+
+    # If it matches the fraction exactly but not the percentage,
+    # it's legacy.
+    if (
+        abs(accuracy - fractional) < 0.0001
+        and abs(accuracy - percentage) > 0.0001
+    ):
+        return accuracy * 100.0
+    return accuracy
+
+
 def _parse_accuracy_row(t: tuple):
     """
     Normalize an accuracy-based database row into
@@ -239,32 +266,15 @@ def _parse_accuracy_row(t: tuple):
     raw_accuracy = t[1] if len(t) > 1 else None
     accuracy = _to_float(raw_accuracy, default=0.0)
 
-    total_correct = _to_int(t[2]) if len(t) > 2 and t[2] is not None else 0
-    total_picks = _to_int(t[3]) if len(t) > 3 and t[3] is not None else 0
+    total_correct = _to_int(t[2]) if len(t) > 2 else 0
+    total_picks = _to_int(t[3]) if len(t) > 3 else 0
 
-    # Normalize fractions (0-1) to percentage (0-100) only for legacy values.
-    # We detect legacy fractions by checking if the accuracy matches the
-    # fraction (correct/picks) but is significantly different from the
-    # percentage ((correct*100)/picks).
-    if 0.0 < accuracy <= 1.0 and total_picks > 0:
-        fractional = total_correct / total_picks
-        percentage = (total_correct * 100.0) / total_picks
-        # If it matches the fraction exactly but not the percentage,
-        # it's legacy.
-        if (
-            abs(accuracy - fractional) < 0.0001
-            and abs(accuracy - percentage) > 0.0001
-        ):
-            accuracy = accuracy * 100.0
+    accuracy = _normalize_legacy_accuracy(accuracy, total_correct, total_picks)
 
-    # Clamp to sensible bounds
-    if accuracy < 0.0:
-        accuracy = 0.0
-    elif accuracy > 100.0:
-        accuracy = 100.0
+    # Clamp and sanitize
+    accuracy = max(0.0, min(100.0, accuracy))
+    total_correct = max(0, total_correct)
 
-    if total_correct < 0:
-        total_correct = 0
     return (t[0], accuracy, total_correct, total_picks)
 
 
