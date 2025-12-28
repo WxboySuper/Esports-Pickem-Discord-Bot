@@ -97,6 +97,13 @@ async def send_reminder(match_id: int, minutes: int):
         match_id,
     )
     bot = get_bot_instance()
+    if not bot:
+        logger.error(
+            "Bot instance not available for %s-minute reminder: match %s",
+            minutes,
+            match_id,
+        )
+        return
 
     async with get_async_session() as session:
         match = await session.get(Match, match_id)
