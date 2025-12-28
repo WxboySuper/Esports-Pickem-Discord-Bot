@@ -23,62 +23,105 @@ matches_group = app_commands.Group(
 # --- Helper Functions and Classes ---
 
 
+def _make_aware(dt: datetime) -> datetime:
+    if dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=timezone.utc)
+
+
+def _status_for(c: Contest, now_dt: datetime) -> str:
+    start = _make_aware(c.start_date)
+    end = _make_aware(c.end_date)
+    return "Active" if start <= now_dt <= end else "Upcoming"
+
+
+def _label_for(c: Contest, now_dt: datetime) -> str:
+    start = _make_aware(c.start_date)
+    status = _status_for(c, now_dt)
+    label = f"{c.name} — {status} " f"({start.strftime('%Y-%m-%d %H:%M UTC')})"
+    if len(label) <= 100:
+        return label
+    suffix = f"... (ID: {c.id})"
+    max_name_length = 100 - len(suffix)
+    return f"{(c.name or '')[:max_name_length]}{suffix}"
+
+
+def _matches_name(current_norm: str, c: Contest) -> bool:
+    """Return True if contest `c` matches the normalized `current_norm`.
+
+    Encapsulates the conditional logic used for filtering by name so
+    callers don't include complex expressions inline.
+    """
+    if not current_norm:
+        return True
+    name = (c.name or "").lower()
+    return current_norm in name
+
+
+def _build_entries(
+    contests: list[Contest],
+    current_norm: str,
+    now: datetime,
+) -> list[tuple[str, datetime, Contest]]:
+    entries: list[tuple[str, datetime, Contest]] = []
+    for c in contests:
+        start = _make_aware(c.start_date)
+        end = _make_aware(c.end_date)
+        if end <= now:
+            continue
+        if not _matches_name(current_norm, c):
+            continue
+        status = _status_for(c, now)
+        entries.append((status, start, c))
+    entries.sort(key=lambda t: (0 if t[0] == "Active" else 1, t[1]))
+    return entries
+
+
+def _get_autocomplete_choices(
+    session: Session,
+    current: str,
+    limit: int = 25,
+) -> list[app_commands.Choice[int]]:
+    """Build autocomplete `Choice` objects for contests using helpers.
+
+    Separated so the public async handler is a tiny wrapper and its
+    complexity is minimal.
+    """
+    all_contests = crud.list_contests(session)
+    now = datetime.now(timezone.utc)
+    current_norm = (current or "").strip().lower()
+
+    entries = _build_entries(all_contests, current_norm, now)
+
+    choices: list[app_commands.Choice[int]] = []
+    for _, _, contest in entries:
+        choices.append(
+            app_commands.Choice(
+                name=_label_for(contest, now),
+                value=contest.id,
+            )
+        )
+        if len(choices) >= limit:
+            break
+
+    return choices
+
+
 async def contest_autocompletion(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[int]]:
-    """Autocomplete for contests, showing active and upcoming contests."""
-    with next(get_session()) as session:
-        all_contests = crud.list_contests(session)
-        now = datetime.now(timezone.utc)
+    """Autocomplete for contests, showing active and upcoming contests.
 
-        active_contests = []
-        upcoming_contests = []
+    This handler is a small wrapper that delegates work to
+    `_get_autocomplete_choices` so its complexity stays minimal.
+    """
 
-        for contest in all_contests:
-            # Make naive datetimes timezone-aware (assume UTC)
-            start_date = (
-                contest.start_date.replace(tzinfo=timezone.utc)
-                if contest.start_date.tzinfo is None
-                else contest.start_date
-            )
-            end_date = (
-                contest.end_date.replace(tzinfo=timezone.utc)
-                if contest.end_date.tzinfo is None
-                else contest.end_date
-            )
-
-            if end_date > now:  # Not ended
-                if start_date <= now:
-                    active_contests.append(contest)
-                else:
-                    upcoming_contests.append(contest)
-
-        # Sort active and upcoming contests by start date (earliest first)
-        active_contests.sort(key=lambda c: c.start_date)
-        upcoming_contests.sort(key=lambda c: c.start_date)
-
-        # Combine lists, active first, and get the top 25
-        sorted_contests = (active_contests + upcoming_contests)[:25]
-
-        choices = []
-        # Now, filter these 25 based on the user's input
-        for contest in sorted_contests:
-            if current.lower() in contest.name.lower():
-                choice_name = f"{contest.name} (ID: {contest.id})"
-                # Discord has a 100-char limit for choice names
-                if len(choice_name) > 100:
-                    suffix = f"... (ID: {contest.id})"
-                    max_name_length = 100 - len(suffix)
-                    choice_name = f"{contest.name[:max_name_length]}{suffix}"
-                choices.append(
-                    app_commands.Choice(
-                        name=choice_name,
-                        value=contest.id,
-                    )
-                )
-
-    return choices
+    session: Session = next(get_session())
+    try:
+        return _get_autocomplete_choices(session, current, limit=25)
+    finally:
+        session.close()
 
 
 async def create_matches_embed(
