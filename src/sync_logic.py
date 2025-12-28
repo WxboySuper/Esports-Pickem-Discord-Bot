@@ -9,7 +9,8 @@ from src.config import DATA_PATH
 from src.leaguepedia_client import leaguepedia_client
 from src.db import get_async_session
 from src.crud import upsert_contest, upsert_match, upsert_team
-from src.scheduler import schedule_reminders, send_result_notification
+from src.reminders import schedule_reminders
+from src.notifications import send_result_notification
 from src.match_result_utils import (
     filter_relevant_games_from_scoreboard,
     calculate_team_scores,

@@ -247,8 +247,8 @@ class LeaguepediaClient:
         Check exception args for rate limit indicators.
         Returns (is_rate_limit, retry_after_seconds).
         """
-        args = getattr(exc, "args", [])
-        if args and isinstance(args, tuple) and len(args) > 0:
+        args = getattr(exc, "args", ())
+        if args:
             first_arg = args[0]
             if isinstance(first_arg, str) and first_arg.lower() in (
                 "ratelimited",
