@@ -110,6 +110,10 @@ def determine_winner(
     Determine if there's a winner based on the current scores.
     Returns the winner team name or None if no winner yet.
     """
+    # Handle missing best_of to avoid TypeError
+    if match.best_of is None:
+        return None
+
     games_to_win = (match.best_of // 2) + 1
     if team1_score >= games_to_win:
         return match.team1

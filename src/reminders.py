@@ -8,7 +8,7 @@ from src.models import Match
 from src.bot_instance import get_bot_instance
 from src.scheduler_instance import scheduler
 from src.match_result_utils import fetch_teams
-from src.notifications import _broadcast_embed_to_guilds
+from src.notifications import broadcast_embed_to_guilds
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ async def send_reminder(match_id: int, minutes: int):
         team1, team2 = await fetch_teams(session, match)
 
         embed = _create_reminder_embed(match, team1, team2, minutes)
-        await _broadcast_embed_to_guilds(
+        await broadcast_embed_to_guilds(
             bot, embed, f"{minutes}-minute reminder for match {match_id}"
         )
 

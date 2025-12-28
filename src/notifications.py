@@ -1,6 +1,7 @@
 import logging
 import discord
 from datetime import datetime, timezone
+from typing import Any
 from sqlmodel import select
 from src.db import get_async_session
 from src.models import Match, Result, Pick
@@ -27,6 +28,14 @@ async def send_result_notification(match_id: int, result_id: int):
         match_id,
     )
     bot = get_bot_instance()
+    if not bot:
+        logger.error(
+            "Bot instance not available for result notification: "
+            "match %s, result %s",
+            match_id,
+            result_id,
+        )
+        return
 
     async with get_async_session() as session:
         match = await session.get(Match, match_id)
@@ -43,50 +52,76 @@ async def send_result_notification(match_id: int, result_id: int):
         logger.debug("Fetching teams and picks for match %s", match.id)
         team1, team2 = await fetch_teams(session, match)
 
-        winner_team_obj = team1 if result.winner == match.team1 else team2
+        stats = await _get_pick_stats(session, match.id, result.winner)
 
-        statement = select(Pick).where(Pick.match_id == match.id)
-        picks = (await session.exec(statement)).all()
-        total_picks = len(picks)
-        correct_picks = len(
-            [p for p in picks if p.chosen_team == result.winner]
-        )
-        correct_percentage = (
-            (correct_picks / total_picks) * 100 if total_picks > 0 else 0
-        )
+        embed = _build_result_embed(match, result, (team1, team2), stats)
 
-        opponent = match.team2 if result.winner == match.team1 else match.team1
-        title = f"🏆 Match Results: {match.team1} vs {match.team2}"
-        description = (
-            f"**{result.winner}** emerges victorious over **{opponent}** "
-            f"with a final score of **{result.score}**."
-        )
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.gold(),
-        )
-
-        if winner_team_obj and winner_team_obj.image_url:
-            embed.set_thumbnail(url=winner_team_obj.image_url)
-
-        if total_picks > 0:
-            picks_value = (
-                "**{cp}** of **{tp}** users "
-                "({pc:.2f}%) correctly picked the winner."
-            ).format(cp=correct_picks, tp=total_picks, pc=correct_percentage)
-        else:
-            picks_value = "No picks were made for this match."
-
-        embed.add_field(
-            name="📊 Pick'em Stats", value=picks_value, inline=False
-        )
-        embed.set_footer(text=f"Leaguepedia Match ID: {match.leaguepedia_id}")
-        embed.timestamp = datetime.now(timezone.utc)
-
-        await _broadcast_embed_to_guilds(
+        await broadcast_embed_to_guilds(
             bot, embed, f"result notification for match {match.id}"
         )
+
+
+async def _get_pick_stats(session, match_id: int, winner: str):
+    """
+    Calculate pick statistics for a given match.
+
+    Parameters:
+        session: Database session.
+        match_id (int): ID of the match.
+        winner (str): Name of the winning team.
+
+    Returns:
+        tuple: (total_picks, correct_picks, correct_percentage)
+    """
+    statement = select(Pick).where(Pick.match_id == match_id)
+    picks = (await session.exec(statement)).all()
+    total = len(picks)
+    correct = len([p for p in picks if p.chosen_team == winner])
+    percentage = (correct / total * 100) if total > 0 else 0
+    return total, correct, percentage
+
+
+def _build_result_embed(
+    match: Match,
+    result: Result,
+    teams: tuple[Any, Any],
+    stats: tuple[int, int, float],
+) -> discord.Embed:
+    """
+    Build the result notification embed.
+    """
+    team1, team2 = teams
+    total_picks, correct_picks, correct_percentage = stats
+
+    winner_team_obj = team1 if result.winner == match.team1 else team2
+    opponent = match.team2 if result.winner == match.team1 else match.team1
+
+    title = f"🏆 Match Results: {match.team1} vs {match.team2}"
+    description = (
+        f"**{result.winner}** emerges victorious over **{opponent}** "
+        f"with a final score of **{result.score}**."
+    )
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=discord.Color.gold(),
+    )
+
+    if winner_team_obj and winner_team_obj.image_url:
+        embed.set_thumbnail(url=winner_team_obj.image_url)
+
+    if total_picks > 0:
+        picks_value = (
+            f"**{correct_picks}** of **{total_picks}** users "
+            f"({correct_percentage:.2f}%) correctly picked the winner."
+        )
+    else:
+        picks_value = "No picks were made for this match."
+
+    embed.add_field(name="📊 Pick'em Stats", value=picks_value, inline=False)
+    embed.set_footer(text=f"Leaguepedia Match ID: {match.leaguepedia_id}")
+    embed.timestamp = datetime.now(timezone.utc)
+    return embed
 
 
 async def send_mid_series_update(match: Match, score: str):
@@ -107,6 +142,14 @@ async def send_mid_series_update(match: Match, score: str):
         score,
     )
     bot = get_bot_instance()
+    if not bot:
+        logger.error(
+            "Bot instance not available for mid-series update: "
+            "match %s, score %s",
+            match.id,
+            score,
+        )
+        return
 
     title = f"Live Update: {match.team1} vs {match.team2}"
     description = (
@@ -120,12 +163,12 @@ async def send_mid_series_update(match: Match, score: str):
     embed.set_footer(text=f"Match ID: {match.id}")
     embed.timestamp = datetime.now(timezone.utc)
 
-    await _broadcast_embed_to_guilds(
+    await broadcast_embed_to_guilds(
         bot, embed, f"mid-series update for match {match.id} (score: {score})"
     )
 
 
-async def _broadcast_embed_to_guilds(
+async def broadcast_embed_to_guilds(
     bot: discord.Client, embed: discord.Embed, context: str
 ):
     """
@@ -133,6 +176,8 @@ async def _broadcast_embed_to_guilds(
     record success or failure for each delivery.
 
     Parameters:
+        bot (discord.Client): The bot instance used to access guilds.
+        embed (discord.Embed): The embed to broadcast.
         context (str): Short description included in log messages to
             identify this broadcast.
     """

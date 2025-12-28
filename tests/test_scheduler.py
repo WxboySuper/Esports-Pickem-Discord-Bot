@@ -162,9 +162,9 @@ async def test_schedule_late_5_min_reminder():
 @pytest.mark.asyncio
 @patch("src.reminders.get_bot_instance")
 @patch("src.reminders.get_async_session")
-@patch("src.notifications.send_announcement")
+@patch("src.reminders.broadcast_embed_to_guilds")
 async def test_send_reminder_embed_content(
-    mock_send_announcement, mock_get_session, mock_get_bot
+    mock_broadcast, mock_get_session, mock_get_bot
 ):
     """
     Tests that send_reminder generates the correct embed content for both
@@ -213,9 +213,9 @@ async def test_send_reminder_embed_content(
     # Test 30-minute reminder
     await send_reminder(match_id=1, minutes=30)
 
-    # Check that send_announcement was called
-    mock_send_announcement.assert_called_once()
-    sent_embed = mock_send_announcement.call_args[0][1]
+    # Check that broadcast_embed_to_guilds was called
+    mock_broadcast.assert_called_once()
+    sent_embed = mock_broadcast.call_args[0][1]
 
     assert "Upcoming Match Reminder" in sent_embed.title
     assert "Team Liquid" in sent_embed.description
@@ -223,14 +223,14 @@ async def test_send_reminder_embed_content(
     assert sent_embed.thumbnail.url == "http://team_liquid.png"
 
     # Reset mock for next call
-    mock_send_announcement.reset_mock()
+    mock_broadcast.reset_mock()
     mock_get_session.return_value = async_context_manager()
 
     # Test 5-minute reminder
     await send_reminder(match_id=1, minutes=5)
 
-    mock_send_announcement.assert_called_once()
-    sent_embed = mock_send_announcement.call_args[0][1]
+    mock_broadcast.assert_called_once()
+    sent_embed = mock_broadcast.call_args[0][1]
 
     assert "Match Starting Soon" in sent_embed.title
     assert "Last chance" in sent_embed.description
