@@ -14,6 +14,54 @@ from src import crud
 
 logger = logging.getLogger("esports-bot.commands.picks")
 
+async def _acquire_session_for_callback(interaction: discord.Interaction, ctx_name: str):
+    try:
+        session: Session = next(get_session())
+        return session
+    except StopIteration:
+        logger.error("Failed to acquire DB session generator for %s", ctx_name)
+        await interaction.followup.send(
+            "Internal server error: cannot access database.", ephemeral=True
+        )
+        return None
+
+
+def _build_picks_embed(match: Match, picks: list[Pick]) -> discord.Embed:
+    embed = discord.Embed(
+        title=f"Picks for {match.team1} vs {match.team2}",
+        color=discord.Color.green(),
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    if not picks:
+        embed.description = "No picks have been submitted for this match yet."
+        return embed
+
+    team1_picks = []
+    team2_picks = []
+    for pick in picks:
+        user_name = pick.user.username or f"User ID: {pick.user.discord_id}"
+        if pick.chosen_team == match.team1:
+            team1_picks.append(user_name)
+        else:
+            team2_picks.append(user_name)
+
+    if team1_picks:
+        embed.add_field(
+            name=(f"Picks for {match.team1} " f"({len(team1_picks)})"),
+            value="\n".join(team1_picks),
+            inline=True,
+        )
+    if team2_picks:
+        embed.add_field(
+            name=(f"Picks for {match.team2} " f"({len(team2_picks)})"),
+            value="\n".join(team2_picks),
+            inline=True,
+        )
+
+    return embed
+
+
 picks_group = app_commands.Group(
     name="picks", description="Commands for viewing picks."
 )
@@ -187,60 +235,20 @@ class MatchSelectForPicks(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
         match_id = int(self.values[0])
-        try:
-            session: Session = next(get_session())
-        except StopIteration:
-            logger.error(
-                "Failed to acquire DB session generator for "
-                "MatchSelectForPicks.callback"
-            )
-            await interaction.followup.send(
-                "Internal server error: cannot access database.",
-                ephemeral=True,
-            )
-            return
-        match = crud.get_match_by_id(session, match_id)
 
+        session = await _acquire_session_for_callback(
+            interaction, "MatchSelectForPicks.callback"
+        )
+        if not session:
+            return
+
+        match = crud.get_match_by_id(session, match_id)
         if not match:
             await interaction.followup.send("Match not found.", ephemeral=True)
             return
 
         picks = crud.list_picks_for_match(session, match_id)
-
-        embed = discord.Embed(
-            title=f"Picks for {match.team1} vs {match.team2}",
-            color=discord.Color.green(),
-            timestamp=datetime.now(timezone.utc),
-        )
-
-        if not picks:
-            embed.description = (
-                "No picks have been submitted for this match yet."
-            )
-        else:
-            team1_picks = []
-            team2_picks = []
-            for pick in picks:
-                user_name = (
-                    pick.user.username or f"User ID: {pick.user.discord_id}"
-                )
-                if pick.chosen_team == match.team1:
-                    team1_picks.append(user_name)
-                else:
-                    team2_picks.append(user_name)
-
-            if team1_picks:
-                embed.add_field(
-                    name=(f"Picks for {match.team1} " f"({len(team1_picks)})"),
-                    value="\n".join(team1_picks),
-                    inline=True,
-                )
-            if team2_picks:
-                embed.add_field(
-                    name=(f"Picks for {match.team2} " f"({len(team2_picks)})"),
-                    value="\n".join(team2_picks),
-                    inline=True,
-                )
+        embed = _build_picks_embed(match, picks)
 
         await interaction.followup.send(embed=embed, ephemeral=True)
         await interaction.edit_original_response(view=None)
