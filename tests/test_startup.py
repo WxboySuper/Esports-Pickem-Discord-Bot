@@ -1,6 +1,6 @@
 from unittest.mock import patch, MagicMock
 
-from src.commands.sync_leaguepedia import perform_leaguepedia_sync
+from src.sync_logic import perform_leaguepedia_sync
 from src.scheduler import (
     start_scheduler,
 )

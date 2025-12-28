@@ -117,11 +117,8 @@ async def contest_autocompletion(
     `_get_autocomplete_choices` so its complexity stays minimal.
     """
 
-    session: Session = next(get_session())
-    try:
+    with get_session() as session:
         return _get_autocomplete_choices(session, current, limit=25)
-    finally:
-        session.close()
 
 
 async def create_matches_embed(
@@ -176,11 +173,13 @@ class DayNavigationView(discord.ui.View):
     async def update_embed(self, interaction: discord.Interaction):
         """Updates the embed with matches for the current date."""
         await interaction.response.defer()
-        session: Session = next(get_session())
-        matches = crud.get_matches_by_date(session, self.current_date)
-        title = f"Matches for {self.current_date.strftime('%Y-%m-%d')}"
-        embed = await create_matches_embed(title, matches, self.interaction)
-        await interaction.edit_original_response(embed=embed, view=self)
+        with get_session() as session:
+            matches = crud.get_matches_by_date(session, self.current_date)
+            title = f"Matches for {self.current_date.strftime('%Y-%m-%d')}"
+            embed = await create_matches_embed(
+                title, matches, self.interaction
+            )
+            await interaction.edit_original_response(embed=embed, view=self)
 
     @discord.ui.button(
         label="< Previous Day",
@@ -216,12 +215,12 @@ class TournamentSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
         contest_id = int(self.values[0])
-        session: Session = next(get_session())
-        matches = crud.list_matches_for_contest(session, contest_id)
-        contest = crud.get_contest_by_id(session, contest_id)
-        title = f"Matches for {contest.name}"
-        embed = await create_matches_embed(title, matches, interaction)
-        await interaction.edit_original_response(embed=embed, view=None)
+        with get_session() as session:
+            matches = crud.list_matches_for_contest(session, contest_id)
+            contest = crud.get_contest_by_id(session, contest_id)
+            title = f"Matches for {contest.name}"
+            embed = await create_matches_embed(title, matches, interaction)
+            await interaction.edit_original_response(embed=embed, view=None)
 
 
 # --- Commands ---
@@ -235,16 +234,16 @@ async def view_by_day(interaction: discord.Interaction):
     """Shows matches for the current day with navigation."""
     logger.info("'%s' requested matches by day.", interaction.user.name)
     current_date = datetime.now(timezone.utc).date()
-    session: Session = next(get_session())
-    matches = crud.get_matches_by_date(session, current_date)
-    title = f"Matches for {current_date.strftime('%Y-%m-%d')}"
-    embed = await create_matches_embed(title, matches, interaction)
-    view = DayNavigationView(current_date, interaction)
-    await interaction.response.send_message(
-        embed=embed,
-        view=view,
-        ephemeral=True,
-    )
+    with get_session() as session:
+        matches = crud.get_matches_by_date(session, current_date)
+        title = f"Matches for {current_date.strftime('%Y-%m-%d')}"
+        embed = await create_matches_embed(title, matches, interaction)
+        view = DayNavigationView(current_date, interaction)
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True,
+        )
 
 
 @matches_group.command(
@@ -254,20 +253,20 @@ async def view_by_day(interaction: discord.Interaction):
 async def view_by_tournament(interaction: discord.Interaction):
     """Shows a dropdown to select a tournament and view its matches."""
     logger.info("'%s' requested matches by tournament.", interaction.user.name)
-    session: Session = next(get_session())
-    contests = crud.list_contests(session)
-    if not contests:
-        await interaction.response.send_message(
-            "No tournaments found.",
-            ephemeral=True,
-        )
-        return
+    with get_session() as session:
+        contests = crud.list_contests(session)
+        if not contests:
+            await interaction.response.send_message(
+                "No tournaments found.",
+                ephemeral=True,
+            )
+            return
 
-    view = discord.ui.View(timeout=180)
-    view.add_item(TournamentSelect(contests=contests[:25]))
-    await interaction.response.send_message(
-        "Please select a tournament:", view=view, ephemeral=True
-    )
+        view = discord.ui.View(timeout=180)
+        view.add_item(TournamentSelect(contests=contests[:25]))
+        await interaction.response.send_message(
+            "Please select a tournament:", view=view, ephemeral=True
+        )
 
 
 @matches_group.command(
@@ -293,56 +292,55 @@ async def upload(
     )
     await interaction.response.defer(ephemeral=True)
 
-    session: Session = next(get_session())
-    contest = crud.get_contest_by_id(session, contest_id)
-    if not contest:
-        await interaction.followup.send(
-            f"Contest with ID {contest_id} not found.", ephemeral=True
-        )
-        return
-
-    try:
-        csv_data = await attachment.read()
-        csv_file = io.StringIO(csv_data.decode("utf-8"))
-        reader = csv.DictReader(csv_file)
-
-        matches_to_create = []
-        errors = []
-        for i, row in enumerate(reader, 1):
-            try:
-                matches_to_create.append(
-                    {
-                        "contest_id": contest_id,
-                        "team1": row["team1"],
-                        "team2": row["team2"],
-                        "scheduled_time": datetime.fromisoformat(
-                            row["scheduled_time"]
-                        ),
-                    }
-                )
-            except (KeyError, ValueError) as e:
-                errors.append(f"Row {i+1}: Invalid data or format. {e}")
-
-        if errors:
+    with get_session() as session:
+        contest = crud.get_contest_by_id(session, contest_id)
+        if not contest:
             await interaction.followup.send(
-                "Errors found in CSV:\n" + "\n".join(errors), ephemeral=True
+                f"Contest with ID {contest_id} not found.", ephemeral=True
             )
             return
 
-        crud.bulk_create_matches(session, matches_to_create)
-        await interaction.followup.send(
-            f"Successfully uploaded {len(matches_to_create)} matches for "
-            f"'{contest.name}'.",
-            ephemeral=True,
-        )
+        try:
+            csv_data = await attachment.read()
+            csv_file = io.StringIO(csv_data.decode("utf-8"))
+            reader = csv.DictReader(csv_file)
 
-    except Exception as e:
-        logger.exception("Error during match upload.")
-        await interaction.followup.send(
-            f"An unexpected error occurred: {e}", ephemeral=True
-        )
-    finally:
-        session.close()
+            matches_to_create = []
+            errors = []
+            for i, row in enumerate(reader, 1):
+                try:
+                    matches_to_create.append(
+                        {
+                            "contest_id": contest_id,
+                            "team1": row["team1"],
+                            "team2": row["team2"],
+                            "scheduled_time": datetime.fromisoformat(
+                                row["scheduled_time"]
+                            ),
+                        }
+                    )
+                except (KeyError, ValueError) as e:
+                    errors.append(f"Row {i+1}: Invalid data or format. {e}")
+
+            if errors:
+                await interaction.followup.send(
+                    "Errors found in CSV:\n" + "\n".join(errors),
+                    ephemeral=True,
+                )
+                return
+
+            crud.bulk_create_matches(session, matches_to_create)
+            await interaction.followup.send(
+                f"Successfully uploaded {len(matches_to_create)} matches for "
+                f"'{contest.name}'.",
+                ephemeral=True,
+            )
+
+        except Exception as e:
+            logger.exception("Error during match upload.")
+            await interaction.followup.send(
+                f"An unexpected error occurred: {e}", ephemeral=True
+            )
 
 
 async def setup(bot):

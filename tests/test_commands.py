@@ -48,7 +48,7 @@ async def test_upload_command_valid_csv(
     mock_contest = MagicMock()
     mock_contest.name = "Test Contest"
     mock_crud.get_contest_by_id.return_value = mock_contest
-    mock_session = mock_get_session.return_value.__next__.return_value
+    mock_session = mock_get_session.return_value.__enter__.return_value
 
     # Act
     await upload.callback(

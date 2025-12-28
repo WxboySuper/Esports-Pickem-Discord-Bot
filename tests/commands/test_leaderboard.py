@@ -39,7 +39,7 @@ async def test_leaderboard_command_initial_call(
 
     # Assert
     mock_get_data.assert_called_once_with(
-        mock_get_session.return_value.__next__.return_value
+        mock_get_session.return_value.__enter__.return_value
     )
     mock_create_embed.assert_called_once_with(
         "Global Leaderboard", [("user1", 100)], mock_interaction
@@ -92,7 +92,7 @@ async def test_leaderboard_view_button_click(
 
     # Check that the leaderboard was updated
     mock_get_data.assert_called_with(
-        mock_get_session.return_value.__next__.return_value,
+        mock_get_session.return_value.__enter__.return_value,
         days=None,
         guild_id=mock_interaction.guild.id,
     )

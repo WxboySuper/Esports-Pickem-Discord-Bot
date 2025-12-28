@@ -1,8 +1,8 @@
 import pytest
 from datetime import datetime, timezone, timedelta
-from src.commands import sync_leaguepedia
+from src import sync_logic
 from src.models import Match, Contest, Result
-from src.commands.sync_leaguepedia import SyncContext
+from src.sync_logic import SyncContext
 from tests.testing_utils import (
     get_test_async_session,
     setup_test_db,
@@ -31,9 +31,7 @@ async def test_calculate_match_outcome_basic():
         },
     ]
 
-    winner, score = sync_leaguepedia._calculate_match_outcome(
-        scoreboard, match
-    )
+    winner, score = sync_logic._calculate_match_outcome(scoreboard, match)
     assert winner == "TeamA"
     assert score == "2-0"
 
@@ -75,12 +73,23 @@ async def test_persist_match_outcome_and_notifications():
                 "matches": 0,
                 "teams": 0,
             },
-            scoreboard=None,
+            scoreboard=[
+                {
+                    "Team1": "TeamA",
+                    "Team2": "TeamB",
+                    "Winner": 1,
+                },
+                {
+                    "Team1": "TeamA",
+                    "Team2": "TeamB",
+                    "Winner": 1,
+                },
+            ],
         )
 
-        # Persist a result for the match
-        result = await sync_leaguepedia._persist_match_outcome(
-            ctx, match, "TeamA", "2-0"
+        # Detect and handle result for the match
+        result = await sync_logic._detect_and_handle_result(
+            match, ctx, str(match.leaguepedia_id)
         )
 
         # Result should be created and queued in notifications
@@ -132,7 +141,7 @@ async def test_detect_and_handle_result_errors_and_noop():
             summary={},
             scoreboard=[],
         )
-        res = await sync_leaguepedia._detect_and_handle_result(
+        res = await sync_logic._detect_and_handle_result(
             match, ctx, str(match.leaguepedia_id)
         )
         assert res is None
@@ -141,7 +150,7 @@ async def test_detect_and_handle_result_errors_and_noop():
         # Case: scoreboard with no definitive winner -> no action
         scoreboard = [{"Team1": "TeamX", "Team2": "TeamY", "Winner": None}]
         ctx.scoreboard = scoreboard
-        res = await sync_leaguepedia._detect_and_handle_result(
+        res = await sync_logic._detect_and_handle_result(
             match, ctx, str(match.leaguepedia_id)
         )
         assert res is None
@@ -168,7 +177,7 @@ async def test_detect_and_handle_result_errors_and_noop():
         await session.delete(match)
         await session.flush()
 
-        res = await sync_leaguepedia._detect_and_handle_result(
+        res = await sync_logic._detect_and_handle_result(
             match, ctx, str(match.leaguepedia_id)
         )
         assert res is None

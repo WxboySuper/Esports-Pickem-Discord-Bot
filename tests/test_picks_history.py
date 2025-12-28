@@ -32,7 +32,7 @@ def mock_session():
 async def test_view_history_no_picks(
     mock_get_user, mock_get_session, mock_interaction, mock_session
 ):
-    mock_get_session.return_value = iter([mock_session])
+    mock_get_session.return_value.__enter__.return_value = mock_session
     mock_get_user.return_value = User(
         id=1, discord_id="123", username="TestUser"
     )
@@ -53,7 +53,7 @@ async def test_view_history_no_picks(
 async def test_view_history_with_picks(
     mock_get_user, mock_get_session, mock_interaction, mock_session
 ):
-    mock_get_session.return_value = iter([mock_session])
+    mock_get_session.return_value.__enter__.return_value = mock_session
     user = User(id=1, discord_id="123", username="TestUser")
     mock_get_user.return_value = user
 
