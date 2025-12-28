@@ -132,7 +132,9 @@ def delete_contest(session: Session, contest_id: int) -> bool:
     logger.info("Deleting contest ID: %s", contest_id)
     contest = session.get(Contest, contest_id)
     if not contest:
-        logger.warning("Contest with ID %s not found for deletion.", contest_id)
+        logger.warning(
+            "Contest with ID %s not found for deletion.", contest_id
+        )
         return False
     _delete_and_commit(session, contest)
     logger.info("Deleted contest ID: %s", contest_id)

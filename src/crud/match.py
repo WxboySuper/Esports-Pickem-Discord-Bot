@@ -150,7 +150,7 @@ def bulk_create_matches(
 
 
 def get_matches_by_date(session: Session, date: datetime) -> List[Match]:
-    logger.debug("Fetching matches for date: %s", date.strftime('%Y-%m-%d'))
+    logger.debug("Fetching matches for date: %s", date.strftime("%Y-%m-%d"))
     start = datetime(date.year, date.month, date.day, tzinfo=timezone.utc)
     end = datetime(
         date.year, date.month, date.day, 23, 59, 59, tzinfo=timezone.utc

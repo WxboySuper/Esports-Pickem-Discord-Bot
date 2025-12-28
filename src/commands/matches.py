@@ -210,9 +210,7 @@ async def view_by_day(interaction: discord.Interaction):
 )
 async def view_by_tournament(interaction: discord.Interaction):
     """Shows a dropdown to select a tournament and view its matches."""
-    logger.info(
-        "'%s' requested matches by tournament.", interaction.user.name
-    )
+    logger.info("'%s' requested matches by tournament.", interaction.user.name)
     session: Session = next(get_session())
     contests = crud.list_contests(session)
     if not contests:
