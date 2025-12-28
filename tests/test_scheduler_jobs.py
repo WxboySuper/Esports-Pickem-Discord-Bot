@@ -7,7 +7,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from sqlalchemy import create_engine
 
-from src.commands.sync_leaguepedia import perform_leaguepedia_sync
+from src.sync_logic import perform_leaguepedia_sync
 
 
 @pytest.fixture
@@ -43,12 +43,10 @@ async def test_perform_leaguepedia_sync_is_picklable(jobstore):
 
 
 @pytest.mark.asyncio
+@patch("src.sync_logic.schedule_reminders", new_callable=AsyncMock)
+@patch("src.sync_logic.get_async_session")
 @patch(
-    "src.commands.sync_leaguepedia.schedule_reminders", new_callable=AsyncMock
-)
-@patch("src.commands.sync_leaguepedia.get_async_session")
-@patch(
-    "src.commands.sync_leaguepedia.open",
+    "src.sync_logic.open",
     mock_open(read_data='["Worlds 2025"]'),
 )
 @patch("src.leaguepedia_client.leaguepedia_client.fetch_upcoming_matches")
@@ -76,12 +74,12 @@ async def test_perform_leaguepedia_sync_logic(
     mock_upsert_match_return_value = (mock_match, True)
 
     with patch(
-        "src.commands.sync_leaguepedia.upsert_contest",
+        "src.sync_logic.upsert_contest",
         return_value=mock_contest,
     ) as mock_upsert_contest, patch(
-        "src.commands.sync_leaguepedia.upsert_team", new_callable=AsyncMock
+        "src.sync_logic.upsert_team", new_callable=AsyncMock
     ) as mock_upsert_team, patch(
-        "src.commands.sync_leaguepedia.upsert_match",
+        "src.sync_logic.upsert_match",
         return_value=mock_upsert_match_return_value,
     ) as mock_upsert_match:
 

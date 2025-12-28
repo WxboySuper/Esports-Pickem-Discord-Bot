@@ -23,62 +23,102 @@ matches_group = app_commands.Group(
 # --- Helper Functions and Classes ---
 
 
+def _make_aware(dt: datetime) -> datetime:
+    if dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=timezone.utc)
+
+
+def _status_for(c: Contest, now_dt: datetime) -> str:
+    start = _make_aware(c.start_date)
+    end = _make_aware(c.end_date)
+    return "Active" if start <= now_dt <= end else "Upcoming"
+
+
+def _label_for(c: Contest, now_dt: datetime) -> str:
+    start = _make_aware(c.start_date)
+    status = _status_for(c, now_dt)
+    label = f"{c.name} — {status} " f"({start.strftime('%Y-%m-%d %H:%M UTC')})"
+    if len(label) <= 100:
+        return label
+    suffix = f"... (ID: {c.id})"
+    max_name_length = 100 - len(suffix)
+    return f"{(c.name or '')[:max_name_length]}{suffix}"
+
+
+def _matches_name(current_norm: str, c: Contest) -> bool:
+    """Return True if contest `c` matches the normalized `current_norm`.
+
+    Encapsulates the conditional logic used for filtering by name so
+    callers don't include complex expressions inline.
+    """
+    if not current_norm:
+        return True
+    name = (c.name or "").lower()
+    return current_norm in name
+
+
+def _build_entries(
+    contests: list[Contest],
+    current_norm: str,
+    now: datetime,
+) -> list[tuple[str, datetime, Contest]]:
+    entries: list[tuple[str, datetime, Contest]] = []
+    for c in contests:
+        start = _make_aware(c.start_date)
+        end = _make_aware(c.end_date)
+        if end <= now:
+            continue
+        if not _matches_name(current_norm, c):
+            continue
+        status = _status_for(c, now)
+        entries.append((status, start, c))
+    entries.sort(key=lambda t: (0 if t[0] == "Active" else 1, t[1]))
+    return entries
+
+
+def _get_autocomplete_choices(
+    session: Session,
+    current: str,
+    limit: int = 25,
+) -> list[app_commands.Choice[int]]:
+    """Build autocomplete `Choice` objects for contests using helpers.
+
+    Separated so the public async handler is a tiny wrapper and its
+    complexity is minimal.
+    """
+    all_contests = crud.list_contests(session)
+    now = datetime.now(timezone.utc)
+    current_norm = (current or "").strip().lower()
+
+    entries = _build_entries(all_contests, current_norm, now)
+
+    choices: list[app_commands.Choice[int]] = []
+    for _, _, contest in entries:
+        choices.append(
+            app_commands.Choice(
+                name=_label_for(contest, now),
+                value=contest.id,
+            )
+        )
+        if len(choices) >= limit:
+            break
+
+    return choices
+
+
 async def contest_autocompletion(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[int]]:
-    """Autocomplete for contests, showing active and upcoming contests."""
-    with next(get_session()) as session:
-        all_contests = crud.list_contests(session)
-        now = datetime.now(timezone.utc)
+    """Autocomplete for contests, showing active and upcoming contests.
 
-        active_contests = []
-        upcoming_contests = []
+    This handler is a small wrapper that delegates work to
+    `_get_autocomplete_choices` so its complexity stays minimal.
+    """
 
-        for contest in all_contests:
-            # Make naive datetimes timezone-aware (assume UTC)
-            start_date = (
-                contest.start_date.replace(tzinfo=timezone.utc)
-                if contest.start_date.tzinfo is None
-                else contest.start_date
-            )
-            end_date = (
-                contest.end_date.replace(tzinfo=timezone.utc)
-                if contest.end_date.tzinfo is None
-                else contest.end_date
-            )
-
-            if end_date > now:  # Not ended
-                if start_date <= now:
-                    active_contests.append(contest)
-                else:
-                    upcoming_contests.append(contest)
-
-        # Sort active and upcoming contests by start date (earliest first)
-        active_contests.sort(key=lambda c: c.start_date)
-        upcoming_contests.sort(key=lambda c: c.start_date)
-
-        # Combine lists, active first, and get the top 25
-        sorted_contests = (active_contests + upcoming_contests)[:25]
-
-        choices = []
-        # Now, filter these 25 based on the user's input
-        for contest in sorted_contests:
-            if current.lower() in contest.name.lower():
-                choice_name = f"{contest.name} (ID: {contest.id})"
-                # Discord has a 100-char limit for choice names
-                if len(choice_name) > 100:
-                    suffix = f"... (ID: {contest.id})"
-                    max_name_length = 100 - len(suffix)
-                    choice_name = f"{contest.name[:max_name_length]}{suffix}"
-                choices.append(
-                    app_commands.Choice(
-                        name=choice_name,
-                        value=contest.id,
-                    )
-                )
-
-    return choices
+    with get_session() as session:
+        return _get_autocomplete_choices(session, current, limit=25)
 
 
 async def create_matches_embed(
@@ -133,11 +173,13 @@ class DayNavigationView(discord.ui.View):
     async def update_embed(self, interaction: discord.Interaction):
         """Updates the embed with matches for the current date."""
         await interaction.response.defer()
-        session: Session = next(get_session())
-        matches = crud.get_matches_by_date(session, self.current_date)
-        title = f"Matches for {self.current_date.strftime('%Y-%m-%d')}"
-        embed = await create_matches_embed(title, matches, self.interaction)
-        await interaction.edit_original_response(embed=embed, view=self)
+        with get_session() as session:
+            matches = crud.get_matches_by_date(session, self.current_date)
+            title = f"Matches for {self.current_date.strftime('%Y-%m-%d')}"
+            embed = await create_matches_embed(
+                title, matches, self.interaction
+            )
+            await interaction.edit_original_response(embed=embed, view=self)
 
     @discord.ui.button(
         label="< Previous Day",
@@ -173,12 +215,18 @@ class TournamentSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
         contest_id = int(self.values[0])
-        session: Session = next(get_session())
-        matches = crud.list_matches_for_contest(session, contest_id)
-        contest = crud.get_contest_by_id(session, contest_id)
-        title = f"Matches for {contest.name}"
-        embed = await create_matches_embed(title, matches, interaction)
-        await interaction.edit_original_response(embed=embed, view=None)
+        with get_session() as session:
+            contest = crud.get_contest_by_id(session, contest_id)
+            if not contest:
+                await interaction.edit_original_response(
+                    content=f"Contest with ID {contest_id} not found.",
+                    view=None,
+                )
+                return
+            matches = crud.list_matches_for_contest(session, contest_id)
+            title = f"Matches for {contest.name}"
+            embed = await create_matches_embed(title, matches, interaction)
+            await interaction.edit_original_response(embed=embed, view=None)
 
 
 # --- Commands ---
@@ -192,16 +240,16 @@ async def view_by_day(interaction: discord.Interaction):
     """Shows matches for the current day with navigation."""
     logger.info("'%s' requested matches by day.", interaction.user.name)
     current_date = datetime.now(timezone.utc).date()
-    session: Session = next(get_session())
-    matches = crud.get_matches_by_date(session, current_date)
-    title = f"Matches for {current_date.strftime('%Y-%m-%d')}"
-    embed = await create_matches_embed(title, matches, interaction)
-    view = DayNavigationView(current_date, interaction)
-    await interaction.response.send_message(
-        embed=embed,
-        view=view,
-        ephemeral=True,
-    )
+    with get_session() as session:
+        matches = crud.get_matches_by_date(session, current_date)
+        title = f"Matches for {current_date.strftime('%Y-%m-%d')}"
+        embed = await create_matches_embed(title, matches, interaction)
+        view = DayNavigationView(current_date, interaction)
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True,
+        )
 
 
 @matches_group.command(
@@ -211,20 +259,20 @@ async def view_by_day(interaction: discord.Interaction):
 async def view_by_tournament(interaction: discord.Interaction):
     """Shows a dropdown to select a tournament and view its matches."""
     logger.info("'%s' requested matches by tournament.", interaction.user.name)
-    session: Session = next(get_session())
-    contests = crud.list_contests(session)
-    if not contests:
-        await interaction.response.send_message(
-            "No tournaments found.",
-            ephemeral=True,
-        )
-        return
+    with get_session() as session:
+        contests = crud.list_contests(session)
+        if not contests:
+            await interaction.response.send_message(
+                "No tournaments found.",
+                ephemeral=True,
+            )
+            return
 
-    view = discord.ui.View(timeout=180)
-    view.add_item(TournamentSelect(contests=contests[:25]))
-    await interaction.response.send_message(
-        "Please select a tournament:", view=view, ephemeral=True
-    )
+        view = discord.ui.View(timeout=180)
+        view.add_item(TournamentSelect(contests=contests[:25]))
+        await interaction.response.send_message(
+            "Please select a tournament:", view=view, ephemeral=True
+        )
 
 
 @matches_group.command(
@@ -250,56 +298,68 @@ async def upload(
     )
     await interaction.response.defer(ephemeral=True)
 
-    session: Session = next(get_session())
-    contest = crud.get_contest_by_id(session, contest_id)
-    if not contest:
-        await interaction.followup.send(
-            f"Contest with ID {contest_id} not found.", ephemeral=True
-        )
-        return
-
-    try:
-        csv_data = await attachment.read()
-        csv_file = io.StringIO(csv_data.decode("utf-8"))
-        reader = csv.DictReader(csv_file)
-
-        matches_to_create = []
-        errors = []
-        for i, row in enumerate(reader, 1):
-            try:
-                matches_to_create.append(
-                    {
-                        "contest_id": contest_id,
-                        "team1": row["team1"],
-                        "team2": row["team2"],
-                        "scheduled_time": datetime.fromisoformat(
-                            row["scheduled_time"]
-                        ),
-                    }
-                )
-            except (KeyError, ValueError) as e:
-                errors.append(f"Row {i+1}: Invalid data or format. {e}")
-
-        if errors:
+    with get_session() as session:
+        contest = crud.get_contest_by_id(session, contest_id)
+        if not contest:
             await interaction.followup.send(
-                "Errors found in CSV:\n" + "\n".join(errors), ephemeral=True
+                f"Contest with ID {contest_id} not found.", ephemeral=True
             )
             return
 
-        crud.bulk_create_matches(session, matches_to_create)
-        await interaction.followup.send(
-            f"Successfully uploaded {len(matches_to_create)} matches for "
-            f"'{contest.name}'.",
-            ephemeral=True,
-        )
+        try:
+            csv_data = await attachment.read()
+            csv_file = io.StringIO(csv_data.decode("utf-8"))
+            reader = csv.DictReader(csv_file)
 
-    except Exception as e:
-        logger.exception("Error during match upload.")
-        await interaction.followup.send(
-            f"An unexpected error occurred: {e}", ephemeral=True
-        )
-    finally:
-        session.close()
+            matches_to_create = []
+            errors = []
+            for i, row in enumerate(reader, 1):
+                try:
+                    team1 = row["team1"]
+                    team2 = row["team2"]
+                    scheduled_time = datetime.fromisoformat(
+                        row["scheduled_time"]
+                    )
+                    # Extract leaguepedia_id or generate a fallback
+                    leaguepedia_id = row.get("leaguepedia_id")
+                    if not leaguepedia_id:
+                        # Deterministic fallback for manual uploads
+                        leaguepedia_id = (
+                            f"manual-{contest_id}-{team1}-{team2}-"
+                            f"{scheduled_time.isoformat()}"
+                        )
+
+                    matches_to_create.append(
+                        {
+                            "contest_id": contest_id,
+                            "leaguepedia_id": leaguepedia_id,
+                            "team1": team1,
+                            "team2": team2,
+                            "scheduled_time": scheduled_time,
+                        }
+                    )
+                except (KeyError, ValueError) as e:
+                    errors.append(f"Row {i}: Invalid data or format. {e}")
+
+            if errors:
+                await interaction.followup.send(
+                    "Errors found in CSV:\n" + "\n".join(errors),
+                    ephemeral=True,
+                )
+                return
+
+            crud.bulk_create_matches(session, matches_to_create)
+            await interaction.followup.send(
+                f"Successfully uploaded {len(matches_to_create)} matches for "
+                f"'{contest.name}'.",
+                ephemeral=True,
+            )
+
+        except Exception as e:
+            logger.exception("Error during match upload.")
+            await interaction.followup.send(
+                f"An unexpected error occurred: {e}", ephemeral=True
+            )
 
 
 async def setup(bot):

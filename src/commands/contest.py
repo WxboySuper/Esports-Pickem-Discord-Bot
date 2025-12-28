@@ -28,43 +28,42 @@ class ContestModal(discord.ui.Modal, title="Create New Contest"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        session = next(get_session())
         from datetime import datetime
 
-        try:
-            start_date_val = datetime.strptime(
-                self.start_date.value,
-                "%Y-%m-%d",
-            )
-            end_date_val = datetime.strptime(
-                self.end_date.value,
-                "%Y-%m-%d",
-            )
+        with get_session() as session:
+            try:
+                start_date_val = datetime.strptime(
+                    self.start_date.value,
+                    "%Y-%m-%d",
+                )
+                end_date_val = datetime.strptime(
+                    self.end_date.value,
+                    "%Y-%m-%d",
+                )
 
-            contest = create_contest(
-                session,
-                {
-                    "name": self.name.value,
-                    "start_date": start_date_val,
-                    "end_date": end_date_val,
-                },
-            )
-            await interaction.response.send_message(
-                f"Contest '{contest.name}' created with ID {contest.id}",
-                ephemeral=True,
-            )
-        except ValueError:
-            logger.exception("Invalid date format for contest creation")
-            await interaction.response.send_message(
-                "Invalid date format. Please use YYYY-MM-DD.", ephemeral=True
-            )
-        except Exception as e:
-            logger.exception("Error creating contest")
-            await interaction.response.send_message(
-                f"Failed to create contest. Error: {e}", ephemeral=True
-            )
-        finally:
-            session.close()
+                contest = create_contest(
+                    session,
+                    {
+                        "name": self.name.value,
+                        "start_date": start_date_val,
+                        "end_date": end_date_val,
+                    },
+                )
+                await interaction.response.send_message(
+                    f"Contest '{contest.name}' created with ID {contest.id}",
+                    ephemeral=True,
+                )
+            except ValueError:
+                logger.exception("Invalid date format for contest creation")
+                await interaction.response.send_message(
+                    "Invalid date format. Please use YYYY-MM-DD.",
+                    ephemeral=True,
+                )
+            except Exception as e:
+                logger.exception("Error creating contest")
+                await interaction.response.send_message(
+                    f"Failed to create contest. Error: {e}", ephemeral=True
+                )
 
 
 class Contest(

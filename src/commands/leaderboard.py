@@ -143,11 +143,11 @@ def _passes_guild(user, guild_id: int) -> bool:
     if guild_id is None:
         return True
 
-    bot = get_bot_instance()
-    if not bot:
+    bot_instance = get_bot_instance()
+    if not bot_instance:
         return False
 
-    guild = bot.get_guild(guild_id)
+    guild = bot_instance.get_guild(guild_id)
     if not guild:
         return False
 
@@ -218,6 +218,30 @@ def _to_int(val, default=0):
         return default
 
 
+def _normalize_legacy_accuracy(
+    accuracy: float, total_correct: int, total_picks: int
+) -> float:
+    """
+    Detect and normalize legacy fractional accuracy (0-1) to
+    percentage (0-100).
+
+    We detect legacy fractions by checking if the accuracy matches the
+    fraction (correct/picks) but is significantly different from the
+    percentage ((correct*100)/picks).
+    """
+    if not (0.0 < accuracy <= 1.0 and total_picks > 0):
+        return accuracy
+
+    fractional = total_correct / total_picks
+    percentage = (total_correct * 100.0) / total_picks
+
+    # If it matches the fraction exactly but not the percentage,
+    # it's legacy.
+    if abs(accuracy - fractional) < 0.0001 < abs(accuracy - percentage):
+        return accuracy * 100.0
+    return accuracy
+
+
 def _parse_accuracy_row(t: tuple):
     """
     Normalize an accuracy-based database row into
@@ -239,32 +263,15 @@ def _parse_accuracy_row(t: tuple):
     raw_accuracy = t[1] if len(t) > 1 else None
     accuracy = _to_float(raw_accuracy, default=0.0)
 
-    total_correct = _to_int(t[2]) if len(t) > 2 and t[2] is not None else 0
-    total_picks = _to_int(t[3]) if len(t) > 3 and t[3] is not None else 0
+    total_correct = _to_int(t[2]) if len(t) > 2 else 0
+    total_picks = _to_int(t[3]) if len(t) > 3 else 0
 
-    # Normalize fractions (0-1) to percentage (0-100) only for legacy values.
-    # We detect legacy fractions by checking if the accuracy matches the
-    # fraction (correct/picks) but is significantly different from the
-    # percentage ((correct*100)/picks).
-    if 0.0 < accuracy <= 1.0 and total_picks > 0:
-        fractional = total_correct / total_picks
-        percentage = (total_correct * 100.0) / total_picks
-        # If it matches the fraction exactly but not the percentage,
-        # it's legacy.
-        if (
-            abs(accuracy - fractional) < 0.0001
-            and abs(accuracy - percentage) > 0.0001
-        ):
-            accuracy = accuracy * 100.0
+    accuracy = _normalize_legacy_accuracy(accuracy, total_correct, total_picks)
 
-    # Clamp to sensible bounds
-    if accuracy < 0.0:
-        accuracy = 0.0
-    elif accuracy > 100.0:
-        accuracy = 100.0
+    # Clamp and sanitize
+    accuracy = max(0.0, min(100.0, accuracy))
+    total_correct = max(0, total_correct)
 
-    if total_correct < 0:
-        total_correct = 0
     return (t[0], accuracy, total_correct, total_picks)
 
 
@@ -549,36 +556,36 @@ class LeaderboardView(discord.ui.View):
             return
 
         await interaction.response.defer()
-        session: Session = next(get_session())
-        # Only attempt to read guild id if this interaction occurred in a guild
-        guild_id = (
-            interaction.guild.id
-            if (period == "Server" and interaction.guild is not None)
-            else None
-        )
+        with get_session() as session:
+            # Only read guild id if interaction occurred in a guild
+            guild_id = (
+                interaction.guild.id
+                if (period == "Server" and interaction.guild is not None)
+                else None
+            )
 
-        # Update button styles
-        for item in self.children:
-            if isinstance(item, discord.ui.Button):
-                if item.label == period:
-                    item.style = discord.ButtonStyle.primary
-                    item.disabled = True
-                else:
-                    item.style = discord.ButtonStyle.secondary
-                    item.disabled = False
+            # Update button styles
+            for item in self.children:
+                if isinstance(item, discord.ui.Button):
+                    if item.label == period:
+                        item.style = discord.ButtonStyle.primary
+                        item.disabled = True
+                    else:
+                        item.style = discord.ButtonStyle.secondary
+                        item.disabled = False
 
-        data = await get_leaderboard_data(
-            session,
-            days=days,
-            guild_id=guild_id,
-        )
-        title = f"{period} Leaderboard"
-        embed = await create_leaderboard_embed(
-            title,
-            data,
-            self.interaction,
-        )
-        await interaction.edit_original_response(embed=embed, view=self)
+            data = await get_leaderboard_data(
+                session,
+                days=days,
+                guild_id=guild_id,
+            )
+            title = f"{period} Leaderboard"
+            embed = await create_leaderboard_embed(
+                title,
+                data,
+                self.interaction,
+            )
+            await interaction.edit_original_response(embed=embed, view=self)
 
     @discord.ui.button(label="Global", style=discord.ButtonStyle.primary)
     async def global_leaderboard(
@@ -618,17 +625,22 @@ class ContestSelectForLeaderboard(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
         contest_id = int(self.values[0])
-        session: Session = next(get_session())
-
-        contest = crud.get_contest_by_id(session, contest_id)
-        data = await get_leaderboard_data(session, contest_id=contest_id)
-        title = f"Leaderboard for {contest.name}"
-        embed = await create_leaderboard_embed(
-            title,
-            data,
-            interaction,
-        )
-        await interaction.edit_original_response(embed=embed, view=None)
+        with get_session() as session:
+            contest = crud.get_contest_by_id(session, contest_id)
+            if not contest:
+                await interaction.edit_original_response(
+                    content=f"Contest with ID {contest_id} not found.",
+                    view=None,
+                )
+                return
+            data = await get_leaderboard_data(session, contest_id=contest_id)
+            title = f"Leaderboard for {contest.name}"
+            embed = await create_leaderboard_embed(
+                title,
+                data,
+                interaction,
+            )
+            await interaction.edit_original_response(embed=embed, view=None)
 
 
 # --- Commands ---
@@ -641,22 +653,21 @@ class ContestSelectForLeaderboard(discord.ui.Select):
 async def leaderboard(interaction: discord.Interaction):
     """Shows the main leaderboard with view options."""
     logger.info("'%s' requested the main leaderboard.", interaction.user.name)
-    session: Session = next(get_session())
+    with get_session() as session:
+        # Default to global view
+        data = await get_leaderboard_data(session)
+        embed = await create_leaderboard_embed(
+            "Global Leaderboard",
+            data,
+            interaction,
+        )
+        view = LeaderboardView(interaction)
 
-    # Default to global view
-    data = await get_leaderboard_data(session)
-    embed = await create_leaderboard_embed(
-        "Global Leaderboard",
-        data,
-        interaction,
-    )
-    view = LeaderboardView(interaction)
-
-    await interaction.response.send_message(
-        embed=embed,
-        view=view,
-        ephemeral=True,
-    )
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True,
+        )
 
 
 @app_commands.command(
@@ -666,24 +677,22 @@ async def leaderboard(interaction: discord.Interaction):
 async def leaderboard_contest(interaction: discord.Interaction):
     """Shows a dropdown to select a contest leaderboard."""
     logger.info("'%s' requested a contest leaderboard.", interaction.user.name)
-    session: Session = next(get_session())
-    contests = crud.list_contests(session)
-    if not contests:
-        await interaction.response.send_message(
-            "No contests found.",
-            ephemeral=True,
-        )
-        return
+    with get_session() as session:
+        contests = crud.list_contests(session)
+        if not contests:
+            await interaction.response.send_message(
+                "No contests found.",
+                ephemeral=True,
+            )
+            return
 
-    view = discord.ui.View(timeout=180)
-    view.add_item(ContestSelectForLeaderboard(contests=contests[:25]))
-    await interaction.response.send_message(
-        "Please select a contest:", view=view, ephemeral=True
-    )
+        view = discord.ui.View(timeout=180)
+        view.add_item(ContestSelectForLeaderboard(contests=contests[:25]))
+        await interaction.response.send_message(
+            "Please select a contest:", view=view, ephemeral=True
+        )
 
 
 async def setup(bot_instance):
-    global bot
-    bot = bot_instance
-    bot.tree.add_command(leaderboard)
-    bot.tree.add_command(leaderboard_contest)
+    bot_instance.tree.add_command(leaderboard)
+    bot_instance.tree.add_command(leaderboard_contest)

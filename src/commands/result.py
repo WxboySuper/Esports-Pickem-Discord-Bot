@@ -5,13 +5,28 @@ from typing import List
 
 import discord
 from discord import app_commands
-from sqlmodel import Session
 
 from src.db import get_session
 from src import crud
 from src.auth import is_admin
+from src.models import Match
 
 logger = logging.getLogger("esports-bot.commands.result")
+
+
+def _format_match_choice_name(match_obj: Match, has_result: bool) -> str:
+    """Formats a match choice name for Discord autocomplete, with
+    truncation."""
+    prefix = "[HAS RESULT] " if has_result else ""
+    name = (
+        f"{prefix}{match_obj.team1} vs {match_obj.team2} "
+        f"(ID: {match_obj.id})"
+    )
+    if len(name) <= 100:
+        return name
+    suffix = f"... (ID: {match_obj.id})"
+    max_len = 100 - len(suffix)
+    return f"{name[:max_len]}{suffix}"
 
 
 async def winner_autocomplete(
@@ -29,21 +44,23 @@ async def winner_autocomplete(
     except ValueError:
         return []
 
-    session: Session = next(get_session())
-    match = crud.get_match_by_id(session, match_id)
+    with get_session() as session:
+        match = crud.get_match_by_id(session, match_id)
 
-    if not match:
-        return []
+        if not match:
+            return []
 
-    choices = [
-        app_commands.Choice(name=match.team1, value=match.team1),
-        app_commands.Choice(name=match.team2, value=match.team2),
-    ]
+        choices = [
+            app_commands.Choice(name=match.team1, value=match.team1),
+            app_commands.Choice(name=match.team2, value=match.team2),
+        ]
 
-    # Filter choices based on what the user has already typed
-    return [
-        choice for choice in choices if current.lower() in choice.name.lower()
-    ]
+        # Filter choices based on what the user has already typed
+        return [
+            choice
+            for choice in choices
+            if current.lower() in choice.name.lower()
+        ]
 
 
 async def match_autocompletion(
@@ -51,44 +68,27 @@ async def match_autocompletion(
     current: str,
 ) -> list[app_commands.Choice[int]]:
     """Autocomplete for matches, prioritizing those without results."""
-    with next(get_session()) as session:
+    current_lc = current.lower()
+    choices: list[app_commands.Choice[int]] = []
+
+    with get_session() as session:
+        # list_all_matches now eagerly loads results
         all_matches = crud.list_all_matches(session)
 
-        matches_with_results = []
-        matches_without_results = []
+    # Sort: matches without results first (False < True)
+    sorted_matches = sorted(all_matches, key=lambda m: m.result is not None)
 
-        for match in all_matches:
-            if crud.get_result_for_match(session, match.id):
-                matches_with_results.append(match)
-            else:
-                matches_without_results.append(match)
+    for match in sorted_matches:
+        has_result = match.result is not None
+        choice_name = _format_match_choice_name(match, has_result)
 
-        # Prioritize matches without results, then show matches with results
-        sorted_matches = matches_without_results + matches_with_results
-
-        choices = []
-        for match in sorted_matches:
-            has_result = match in matches_with_results
-            prefix = "[HAS RESULT] " if has_result else ""
-            choice_name = (
-                f"{prefix}{match.team1} vs {match.team2} (ID: {match.id})"
+        if current_lc in choice_name.lower():
+            choices.append(
+                app_commands.Choice(name=choice_name, value=match.id)
             )
 
-            # Truncate if necessary
-            if len(choice_name) > 100:
-                suffix = f"... (ID: {match.id})"
-                max_len = 100 - len(suffix)
-                choice_name = f"{choice_name[:max_len]}{suffix}"
-
-            # Only add to choices if it matches the user's input
-            if current.lower() in choice_name.lower():
-                choices.append(
-                    app_commands.Choice(name=choice_name, value=match.id)
-                )
-
-            # Respect Discord's 25-choice limit
-            if len(choices) >= 25:
-                break
+        if len(choices) >= 25:
+            break
 
     return choices
 
@@ -119,71 +119,68 @@ async def enter_result(
     )
     await interaction.response.defer(ephemeral=True)
 
-    session: Session = next(get_session())
+    with get_session() as session:
+        # --- Validation ---
+        match = crud.get_match_by_id(session, match_id)
+        if not match:
+            await interaction.followup.send(
+                f"Match with ID {match_id} not found.", ephemeral=True
+            )
+            return
 
-    # --- Validation ---
-    match = crud.get_match_by_id(session, match_id)
-    if not match:
-        await interaction.followup.send(
-            f"Match with ID {match_id} not found.", ephemeral=True
-        )
-        return
+        if winner not in [match.team1, match.team2]:
+            await interaction.followup.send(
+                f"Invalid winner. Please choose either '{match.team1}' or "
+                f"'{match.team2}'.",
+                ephemeral=True,
+            )
+            return
 
-    if winner not in [match.team1, match.team2]:
-        await interaction.followup.send(
-            f"Invalid winner. Please choose either '{match.team1}' or "
-            f"'{match.team2}'.",
-            ephemeral=True,
-        )
-        return
+        if crud.get_result_for_match(session, match_id):
+            await interaction.followup.send(
+                f"A result for match {match_id} has already been entered.",
+                ephemeral=True,
+            )
+            return
 
-    if crud.get_result_for_match(session, match_id):
-        await interaction.followup.send(
-            f"A result for match {match_id} has already been entered.",
-            ephemeral=True,
-        )
-        return
+        # --- Process Result and Score Picks ---
+        try:
+            # 1. Create the result
+            crud.create_result(session, match_id=match_id, winner=winner)
 
-    # --- Process Result and Score Picks ---
-    try:
-        # 1. Create the result
-        crud.create_result(session, match_id=match_id, winner=winner)
+            # 2. Get all picks for the match
+            picks = crud.list_picks_for_match(session, match_id)
 
-        # 2. Get all picks for the match
-        picks = crud.list_picks_for_match(session, match_id)
+            updated_picks_count = 0
+            for pick in picks:
+                if pick.chosen_team == winner:
+                    pick.status = "correct"
+                    pick.score = 10  # Award 10 points for a correct pick
+                else:
+                    pick.status = "incorrect"
+                    pick.score = 0
 
-        updated_picks_count = 0
-        for pick in picks:
-            if pick.chosen_team == winner:
-                pick.status = "correct"
-                pick.score = 10  # Award 10 points for a correct pick
-            else:
-                pick.status = "incorrect"
-                pick.score = 0
+                session.add(pick)
+                updated_picks_count += 1
 
-            session.add(pick)
-            updated_picks_count += 1
+            session.commit()
 
-        session.commit()
+            await interaction.followup.send(
+                (
+                    "Result for match "
+                    f"**{match.team1} vs {match.team2}** has been entered as "
+                    f"**{winner}**.\nProcessed and scored "
+                    f"{updated_picks_count} user picks."
+                ),
+                ephemeral=True,
+            )
 
-        await interaction.followup.send(
-            (
-                "Result for match "
-                f"**{match.team1} vs {match.team2}** has been entered as "
-                f"**{winner}**.\nProcessed and scored "
-                f"{updated_picks_count} user picks."
-            ),
-            ephemeral=True,
-        )
-
-    except Exception as e:
-        logger.exception("Error entering result for match %s", match_id)
-        session.rollback()
-        await interaction.followup.send(
-            f"An unexpected error occurred: {e}", ephemeral=True
-        )
-    finally:
-        session.close()
+        except Exception as e:
+            logger.exception("Error entering result for match %s", match_id)
+            session.rollback()
+            await interaction.followup.send(
+                f"An unexpected error occurred: {e}", ephemeral=True
+            )
 
 
 async def setup(bot):

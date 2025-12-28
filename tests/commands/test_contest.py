@@ -56,7 +56,7 @@ async def test_contest_modal_on_submit(
     modal.end_date.value = "2025-01-31"
 
     mock_session = MagicMock()
-    mock_get_session.return_value = iter([mock_session])
+    mock_get_session.return_value.__enter__.return_value = mock_session
     created_contest = ContestModel(id=1, name="Test Contest")
     mock_create_contest.return_value = created_contest
 
@@ -76,4 +76,4 @@ async def test_contest_modal_on_submit(
         "Contest 'Test Contest' created with ID 1",
         ephemeral=True,
     )
-    mock_session.close.assert_called_once()
+    mock_get_session.return_value.__exit__.assert_called_once()

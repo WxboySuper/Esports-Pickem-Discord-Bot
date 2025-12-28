@@ -50,7 +50,7 @@ async def test_pick_command_no_active_matches(
     mock_get_session, mock_interaction, mock_session
 ):
     """Test the /pick command when there are no active matches."""
-    mock_get_session.return_value = iter([mock_session])
+    mock_get_session.return_value.__enter__.return_value = mock_session
     mock_session.exec.return_value.all.return_value = []
 
     await pick.pick.callback(mock_interaction)
@@ -67,7 +67,7 @@ async def test_picks_view_active_no_picks(
     mock_get_session, mock_get_user, mock_interaction, mock_session
 ):
     """Test /picks view-active when the user has no picks."""
-    mock_get_session.return_value = iter([mock_session])
+    mock_get_session.return_value.__enter__.return_value = mock_session
     # Simulate user not found or has no picks
     mock_get_user.return_value = None
     await picks.view_active.callback(mock_interaction)
@@ -84,7 +84,7 @@ async def test_stats_command_new_user(
     mock_session,
 ):
     """Test /stats command for a user with no picks."""
-    mock_get_session.return_value = iter([mock_session])
+    mock_get_session.return_value.__enter__.return_value = mock_session
     with patch(
         "src.commands.stats.crud.get_user_by_discord_id"
     ) as mock_get_user:
@@ -101,7 +101,7 @@ async def test_matches_view_by_day_no_matches(
     mock_get_session, mock_interaction, mock_session
 ):
     """Test /matches view-by-day when no matches are scheduled."""
-    mock_get_session.return_value = iter([mock_session])
+    mock_get_session.return_value.__enter__.return_value = mock_session
     with patch(
         "src.commands.matches.crud.get_matches_by_date"
     ) as mock_get_matches:
@@ -119,7 +119,7 @@ async def test_leaderboard_command_empty(
     mock_get_session, mock_interaction, mock_session
 ):
     """Test /leaderboard command when the leaderboard is empty."""
-    mock_get_session.return_value = iter([mock_session])
+    mock_get_session.return_value.__enter__.return_value = mock_session
     with patch(
         "src.commands.leaderboard.get_leaderboard_data"
     ) as mock_get_data:
@@ -155,7 +155,7 @@ async def test_enter_result_success(
     mock_session,
 ):
     """Test successful entry of a match result."""
-    mock_get_session.return_value = iter([mock_session])
+    mock_get_session.return_value.__enter__.return_value = mock_session
 
     # Mock data
     test_match = Match(
