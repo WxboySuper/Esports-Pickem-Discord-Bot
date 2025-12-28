@@ -309,18 +309,31 @@ async def upload(
             errors = []
             for i, row in enumerate(reader, 1):
                 try:
+                    team1 = row["team1"]
+                    team2 = row["team2"]
+                    scheduled_time = datetime.fromisoformat(
+                        row["scheduled_time"]
+                    )
+                    # Extract leaguepedia_id or generate a fallback
+                    leaguepedia_id = row.get("leaguepedia_id")
+                    if not leaguepedia_id:
+                        # Deterministic fallback for manual uploads
+                        leaguepedia_id = (
+                            f"manual-{contest_id}-{team1}-{team2}-"
+                            f"{scheduled_time.isoformat()}"
+                        )
+
                     matches_to_create.append(
                         {
                             "contest_id": contest_id,
-                            "team1": row["team1"],
-                            "team2": row["team2"],
-                            "scheduled_time": datetime.fromisoformat(
-                                row["scheduled_time"]
-                            ),
+                            "leaguepedia_id": leaguepedia_id,
+                            "team1": team1,
+                            "team2": team2,
+                            "scheduled_time": scheduled_time,
                         }
                     )
                 except (KeyError, ValueError) as e:
-                    errors.append(f"Row {i+1}: Invalid data or format. {e}")
+                    errors.append(f"Row {i}: Invalid data or format. {e}")
 
             if errors:
                 await interaction.followup.send(

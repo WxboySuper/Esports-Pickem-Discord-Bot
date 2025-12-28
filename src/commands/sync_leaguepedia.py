@@ -5,9 +5,11 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.auth import is_admin
-from src.sync_logic import perform_leaguepedia_sync
+from src.sync_logic import SyncContext, perform_leaguepedia_sync
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["SyncLeaguepedia", "SyncContext", "setup"]
 
 
 class SyncLeaguepedia(commands.Cog):

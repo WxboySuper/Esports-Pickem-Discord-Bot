@@ -59,7 +59,7 @@ async def stats(interaction: discord.Interaction, user: discord.Member = None):
         all_user_scores = session.exec(ranking_query).all()
 
         global_rank = "N/A"
-        for i, (user_id, score) in enumerate(all_user_scores):
+        for i, (user_id, _) in enumerate(all_user_scores):
             if user_id == db_user.id:
                 global_rank = i + 1
                 break

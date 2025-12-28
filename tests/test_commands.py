@@ -22,6 +22,12 @@ INVALID_CSV_BAD_DATE = (
     "team1,team2,scheduled_time\n" "Team A,Team B,2025/01/01 12:00\n"
 )
 
+# CSV with leaguepedia_id provided
+VALID_CSV_WITH_ID = (
+    "team1,team2,scheduled_time,leaguepedia_id\n"
+    "Team A,Team B,2025-01-01T12:00:00,custom-id-123\n"
+)
+
 
 @pytest.fixture
 def mock_interaction():
@@ -65,6 +71,9 @@ async def test_upload_command_valid_csv(
 
     assert len(matches_data) == 2
     assert matches_data[0]["team1"] == "Team A"
+    assert matches_data[0]["leaguepedia_id"].startswith(
+        "manual-1-Team A-Team B-"
+    )
     assert matches_data[0]["scheduled_time"] == datetime.fromisoformat(
         "2025-01-01T12:00:00"
     )
@@ -127,3 +136,31 @@ async def test_upload_command_invalid_csv(
         args, _ = mock_interaction.followup.send.call_args
         assert expected_error_part in args[0]
         mock_crud.bulk_create_matches.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("src.commands.matches.get_session")
+@patch("src.commands.matches.crud")
+async def test_upload_command_with_leaguepedia_id(
+    mock_crud, mock_get_session, mock_interaction
+):
+    # Arrange
+    attachment = AsyncMock(spec=discord.Attachment)
+    attachment.read.return_value = VALID_CSV_WITH_ID.encode("utf-8")
+
+    mock_contest = MagicMock()
+    mock_contest.name = "Test Contest"
+    mock_crud.get_contest_by_id.return_value = mock_contest
+
+    # Act
+    await upload.callback(
+        mock_interaction, contest_id=1, attachment=attachment
+    )
+
+    # Assert
+    mock_crud.bulk_create_matches.assert_called_once()
+    args, _ = mock_crud.bulk_create_matches.call_args
+    _, matches_data = args
+
+    assert len(matches_data) == 1
+    assert matches_data[0]["leaguepedia_id"] == "custom-id-123"
