@@ -222,8 +222,7 @@ class MatchSelectForPicks(discord.ui.Select):
             team2_picks = []
             for pick in picks:
                 user_name = (
-                    pick.user.username
-                    or f"User ID: {pick.user.discord_id}"
+                    pick.user.username or f"User ID: {pick.user.discord_id}"
                 )
                 if pick.chosen_team == match.team1:
                     team1_picks.append(user_name)
@@ -232,19 +231,13 @@ class MatchSelectForPicks(discord.ui.Select):
 
             if team1_picks:
                 embed.add_field(
-                    name=(
-                        f"Picks for {match.team1} "
-                        f"({len(team1_picks)})"
-                    ),
+                    name=(f"Picks for {match.team1} " f"({len(team1_picks)})"),
                     value="\n".join(team1_picks),
                     inline=True,
                 )
             if team2_picks:
                 embed.add_field(
-                    name=(
-                        f"Picks for {match.team2} "
-                        f"({len(team2_picks)})"
-                    ),
+                    name=(f"Picks for {match.team2} " f"({len(team2_picks)})"),
                     value="\n".join(team2_picks),
                     inline=True,
                 )
