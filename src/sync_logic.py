@@ -98,7 +98,8 @@ async def _process_match(
 
 async def _upsert_contest_data(overview_page, contest_matches, db_session):
     valid_times = [
-        t for m in contest_matches
+        t
+        for m in contest_matches
         if (t := _parse_date(m.get("DateTime UTC"))) is not None
     ]
 
@@ -222,7 +223,9 @@ async def _detect_and_handle_result(match, ctx: SyncContext, match_id: str):
 
     logger.info(
         "Detected result for match %s: winner=%s score=%s",
-        match_id, winner, score_str
+        match_id,
+        winner,
+        score_str,
     )
 
     try:
@@ -291,7 +294,8 @@ async def _run_post_sync_actions(
         except Exception:
             logger.exception(
                 "Failed to notify for match %s (result %s)",
-                match_id, result_id
+                match_id,
+                result_id,
             )
 
 
