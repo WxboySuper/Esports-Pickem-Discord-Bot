@@ -190,7 +190,7 @@ async def create_matches_embed(
         embed.description = "No matches found."
         return embed
 
-    display_matches, page, total_pages, page_size, total_matches = (
+    display_matches, page, total_pages, _, total_matches = (
         _paginate_matches(matches, page_info)
     )
     embed.set_footer(

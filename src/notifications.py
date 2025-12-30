@@ -120,7 +120,7 @@ def _build_result_embed(
     Build the revamped result notification embed.
     """
     team1_obj, team2_obj = teams
-    total_picks, correct_picks, correct_percentage = stats
+    _, _, _ = stats
 
     # Determine winner and loser info
     if result.winner == match.team1:

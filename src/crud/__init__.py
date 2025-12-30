@@ -1,12 +1,12 @@
 # flake8: noqa
 
-from .team import (
+from .team import (  # skipcq: PY-W2000
     upsert_team,
     upsert_team_by_pandascore,
     get_team_by_pandascore_id,
 )
 
-from .contest import (
+from .contest import (  # skipcq: PY-W2000
     upsert_contest,
     upsert_contest_by_pandascore,
     get_contest_by_pandascore_ids,
@@ -18,7 +18,7 @@ from .contest import (
     ContestUpdateParams,
 )
 
-from .match import (
+from .match import (  # skipcq: PY-W2000
     upsert_match,
     upsert_match_by_pandascore,
     get_match_by_pandascore_id,

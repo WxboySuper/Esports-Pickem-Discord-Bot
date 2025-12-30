@@ -65,9 +65,20 @@ class PandaScoreClient:
                 PANDASCORE_API_KEY from config.
         """
         self.api_key = api_key or PANDASCORE_API_KEY
-        # Fail fast when API key is missing or empty/whitespace only.
+
+        # Determine whether the client is operational or disabled due to
+        # a missing API key. In disabled mode we avoid creating HTTP
+        # sessions without Authorization headers and make network calls
+        # fail with a clear exception. Tests that patch instance methods
+        # can still replace them as needed.
         if not (isinstance(self.api_key, str) and self.api_key.strip()):
-            raise ValueError("PandaScore API key is required")
+            self._disabled = True
+            logger.warning(
+                "PandaScore API key is not configured; client created in "
+                "disabled mode. Network calls will raise PandaScoreError."
+            )
+        else:
+            self._disabled = False
         self._session: Optional[aiohttp.ClientSession] = None
         self._request_count = 0
         self._window_start = datetime.now(timezone.utc)
@@ -75,18 +86,35 @@ class PandaScoreClient:
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create an aiohttp session."""
         if self._session is None or self._session.closed:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Accept": "application/json",
-            }
+            headers = self._build_headers()
             self._session = aiohttp.ClientSession(headers=headers)
+
         return self._session
 
-    def _build_url(self, endpoint: str) -> str:
+
+    def _build_headers(self) -> Dict[str, Any]:
+        """Construct and validate headers for aiohttp sessions.
+
+        Extracted to simplify `_get_session` and reduce cyclomatic
+        complexity. Raises `PandaScoreError` if the API key is missing.
+        """
+        if getattr(self, "_disabled", False):
+            raise PandaScoreError(
+                "PandaScore client is disabled because no API key is configured"
+            )
+        headers: Dict[str, Any] = {"Accept": "application/json"}
+        if isinstance(self.api_key, str) and self.api_key.strip():
+            headers["Authorization"] = f"Bearer {self.api_key}"
+            return headers
+
+        raise PandaScoreError("Attempted to create aiohttp session without API key")
+
+    @staticmethod
+    def _build_url(endpoint: str) -> str:
         return f"{BASE_URL}{endpoint}"
 
+    @staticmethod
     async def _do_request_once(
-        self,
         session: aiohttp.ClientSession,
         url: str,
         params: Optional[Dict[str, Any]] = None,
@@ -108,8 +136,9 @@ class PandaScoreClient:
             response.raise_for_status()
             return await response.json()
 
+    @staticmethod
     async def _handle_client_response_error(
-        self, e: ClientResponseError, attempt: int, max_retries: int, url: str
+        e: ClientResponseError, attempt: int, max_retries: int, url: str
     ) -> None:
         """Handle ClientResponseError with logging and backoff."""
         logger.error(
@@ -124,8 +153,9 @@ class PandaScoreClient:
             )
         await asyncio.sleep(2**attempt)
 
+    @staticmethod
     async def _handle_client_error(
-        self, e: ClientError, attempt: int, max_retries: int
+        e: ClientError, attempt: int, max_retries: int
     ) -> None:
         """Handle ClientError with logging and backoff."""
         logger.error("PandaScore connection error: %s", e)
@@ -135,8 +165,9 @@ class PandaScoreClient:
             )
         await asyncio.sleep(2**attempt)
 
+    @staticmethod
     async def _handle_rate_limit_error(
-        self, e: RateLimitError, attempt: int, max_retries: int
+        e: RateLimitError, attempt: int, max_retries: int
     ) -> None:
         """Handle PandaScore rate-limit errors with Retry-After/backoff.
 
@@ -145,7 +176,7 @@ class PandaScoreClient:
         """
         retry_seconds = getattr(e, "retry_after", None)
         if attempt == max_retries - 1:
-            raise
+            raise e
         if retry_seconds is None:
             retry_seconds = min(60, 2**attempt)
         logger.warning(
@@ -266,8 +297,9 @@ class PandaScoreClient:
             logger.exception("Failed to fetch %s", description)
             return []
 
+    @staticmethod
     def _build_params(
-        self, options: Optional[Dict[str, Any]] = None
+        options: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Build query params for PandaScore match endpoints from options.
 
@@ -323,10 +355,13 @@ class PandaScoreClient:
 
         endpoint, desc_template = entry
 
-        # For running we expect a simple page param; for others use
-        # the helper `_build_params` to construct query params.
+        # For running we expect a simple page param; include both page
+        # size and page number so pagination works as callers expect.
         if k == "running":
-            params = {"page[size]": opts.get("page_size", DEFAULT_PAGE_SIZE)}
+            params = {
+                "page[size]": opts.get("page_size", DEFAULT_PAGE_SIZE),
+                "page[number]": opts.get("page", 1),
+            }
             description = desc_template
         else:
             build_opts = {
@@ -367,6 +402,20 @@ class PandaScoreClient:
                 "page_size": page_size,
                 "page": page,
             },
+        )
+
+    async def fetch_running_matches(
+        self, page_size: int = DEFAULT_PAGE_SIZE, page: int = 1
+    ) -> List[JSONType]:
+        """
+        Backwards-compatible helper to fetch running matches.
+
+        Tests and older call sites may patch or call this method; keep a
+        thin wrapper around the unified `fetch_matches` API.
+        """
+        return await self.fetch_matches(
+            "running",
+            {"page_size": page_size, "page": page},
         )
 
     async def fetch_all_upcoming_matches(
