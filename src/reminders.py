@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
 import discord
@@ -80,6 +81,9 @@ async def schedule_reminders(match: Match):
             run_date=now,
             args=[match.id, 30],
         )
+
+    # Yield to event loop to prevent heartbeat blocking during bulk scheduling
+    await asyncio.sleep(0)
 
 
 async def send_reminder(match_id: int, minutes: int):

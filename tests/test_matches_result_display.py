@@ -25,6 +25,9 @@ async def test_create_matches_embed_with_result():
     )
     match_no_result.contest = contest
     match_no_result.result = None
+    match_no_result.status = "not_started"
+    match_no_result.best_of = 3
+    match_no_result.last_announced_score = None
 
     match_with_result = MagicMock(spec=Match)
     match_with_result.team1 = "Team C"
@@ -33,6 +36,9 @@ async def test_create_matches_embed_with_result():
         2025, 12, 26, 15, 0, tzinfo=timezone.utc
     )
     match_with_result.contest = contest
+    match_with_result.status = "finished"
+    match_with_result.best_of = 3
+    match_with_result.last_announced_score = None
     result = MagicMock(spec=Result)
     result.winner = "Team C"
     result.score = "2-0"
@@ -49,10 +55,12 @@ async def test_create_matches_embed_with_result():
     # Field 0: No result
     assert embed.fields[0].name == "Team A vs Team B"
     assert "Result" not in embed.fields[0].value
+    assert "**Status:** ⏳ Upcoming" in embed.fields[0].value
 
     # Field 1: With result
     assert embed.fields[1].name == "Team C vs Team D"
-    assert "Result: Team C won (2-0)" in embed.fields[1].value
+    assert "Result:** **Team C** won (2-0)" in embed.fields[1].value
+    assert "**Status:** ✅ Finished" in embed.fields[1].value
 
 
 @pytest.mark.asyncio

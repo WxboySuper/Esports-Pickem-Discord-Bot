@@ -1,3 +1,7 @@
+"""
+Discord command for syncing matches from PandaScore API.
+"""
+
 import io
 import logging
 import discord
@@ -5,27 +9,31 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.auth import is_admin
-from src.sync_logic import SyncContext, perform_leaguepedia_sync
+from src.pandascore_sync import perform_pandascore_sync
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["SyncLeaguepedia", "SyncContext", "setup"]
+__all__ = ["SyncMatches", "setup"]
 
 
-class SyncLeaguepedia(commands.Cog):
-    """A cog for syncing data from Leaguepedia."""
+class SyncMatches(commands.Cog):
+    """A cog for syncing data from PandaScore."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     @app_commands.command(
-        name="sync-leaguepedia",
-        description="Syncs configured tournaments from Leaguepedia.",
+        name="sync-matches",
+        description=(
+            "Syncs matches (upcoming, running, and recent past) "
+            "from PandaScore API."
+        ),
     )
     @is_admin()
-    async def sync_leaguepedia(self, interaction: discord.Interaction):
+    async def sync_matches(self, interaction: discord.Interaction):
         """
-        Performs a full sync and returns the logs as a file for debugging.
+        Performs a full sync of matches from PandaScore
+        and returns the logs as a file for debugging.
         """
         await interaction.response.defer(ephemeral=True, thinking=True)
 
@@ -43,20 +51,19 @@ class SyncLeaguepedia(commands.Cog):
         root_logger.addHandler(handler)
 
         try:
-            summary = await perform_leaguepedia_sync()
+            summary = await perform_pandascore_sync()
 
             # Retrieve the logs
             log_contents = log_stream.getvalue()
 
             if summary is None:
                 message = (
-                    "Sync could not be completed. This may be because the "
-                    "configuration file was not found or was empty. "
-                    "See attached logs for more details."
+                    "Sync could not be completed. Check API key configuration "
+                    "and rate limits. See attached logs for more details."
                 )
             else:
                 message = (
-                    "Leaguepedia sync complete!\n"
+                    "PandaScore sync complete!\n"
                     f"- Upserted {summary['contests']} contests.\n"
                     f"- Upserted {summary['matches']} matches.\n"
                     f"- Upserted {summary['teams']} teams."
@@ -84,4 +91,4 @@ class SyncLeaguepedia(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(SyncLeaguepedia(bot))
+    await bot.add_cog(SyncMatches(bot))

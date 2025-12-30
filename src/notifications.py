@@ -1,10 +1,11 @@
 import logging
+import asyncio
 import discord
 from datetime import datetime, timezone
-from typing import Any
+from typing import Optional, Tuple
 from sqlmodel import select
 from src.db import get_async_session
-from src.models import Match, Result, Pick
+from src.models import Match, Result, Pick, Team
 from src.announcements import send_announcement
 from src.bot_instance import get_bot_instance
 from src.match_result_utils import fetch_teams
@@ -15,13 +16,7 @@ logger = logging.getLogger(__name__)
 async def send_result_notification(match_id: int, result_id: int):
     """
     Load fresh `Match` and `Result` objects in a new session and broadcast
-    the result notification to all guilds. Accepting IDs ensures the
-    notification code always works with session-bound instances and avoids
-    detached-instance pitfalls.
-
-    Parameters:
-        match_id (int): Database ID of the match.
-        result_id (int): Database ID of the result.
+    the result notification to all guilds.
     """
     logger.info(
         "Broadcasting result notification for match %s to all guilds.",
@@ -38,7 +33,9 @@ async def send_result_notification(match_id: int, result_id: int):
         return
 
     async with get_async_session() as session:
-        match = await session.get(Match, match_id)
+        from src import crud
+
+        match = await crud.get_match_with_result_by_id(session, match_id)
         result = await session.get(Result, result_id)
 
         if not match or not result:
@@ -56,9 +53,8 @@ async def send_result_notification(match_id: int, result_id: int):
 
         embed = _build_result_embed(match, result, (team1, team2), stats)
 
-        await broadcast_embed_to_guilds(
-            bot, embed, f"result notification for match {match.id}"
-        )
+        context = f"result notification for match {match.id}"
+        await broadcast_embed_to_guilds(bot, embed, context)
 
 
 async def _get_pick_stats(session, match_id: int, winner: str):
@@ -81,46 +77,86 @@ async def _get_pick_stats(session, match_id: int, winner: str):
     return total, correct, percentage
 
 
+def _fmt_team_name(name: str, obj: Optional[Team]) -> str:
+    if obj and getattr(obj, "acronym", None):
+        return f"{name} ({obj.acronym})"
+    return name
+
+
+def _get_contest_name(match: Match) -> str:
+    contest = getattr(match, "contest", None)
+    return (
+        getattr(contest, "name", "Unknown Contest")
+        if contest
+        else "Unknown Contest"
+    )
+
+
+def _score_value(match: Match, result: Result) -> str:
+    score_val = f"**{result.score}**"
+    if getattr(match, "best_of", None):
+        score_val += f" (Best of {match.best_of})"
+    return score_val
+
+
+def _stats_value(stats: Tuple[int, int, float]) -> str:
+    total_picks, correct_picks, correct_percentage = stats
+    if total_picks > 0:
+        return (
+            f"✅ **{correct_picks}** correct\n"
+            f"👥 **{total_picks}** total picks\n"
+            f"📈 **{correct_percentage:.1f}%** accuracy"
+        )
+    return "No picks were made."
+
+
 def _build_result_embed(
     match: Match,
     result: Result,
-    teams: tuple[Any, Any],
-    stats: tuple[int, int, float],
+    teams: Tuple[Optional[Team], Optional[Team]],
+    stats: Tuple[int, int, float],
 ) -> discord.Embed:
     """
-    Build the result notification embed.
+    Build the revamped result notification embed.
     """
-    team1, team2 = teams
+    team1_obj, team2_obj = teams
     total_picks, correct_picks, correct_percentage = stats
 
-    winner_team_obj = team1 if result.winner == match.team1 else team2
-    opponent = match.team2 if result.winner == match.team1 else match.team1
-
-    title = f"🏆 Match Results: {match.team1} vs {match.team2}"
-    description = (
-        f"**{result.winner}** emerges victorious over **{opponent}** "
-        f"with a final score of **{result.score}**."
-    )
-    embed = discord.Embed(
-        title=title,
-        description=description,
-        color=discord.Color.gold(),
-    )
-
-    if winner_team_obj and winner_team_obj.image_url:
-        embed.set_thumbnail(url=winner_team_obj.image_url)
-
-    if total_picks > 0:
-        picks_value = (
-            f"**{correct_picks}** of **{total_picks}** users "
-            f"({correct_percentage:.2f}%) correctly picked the winner."
-        )
+    # Determine winner and loser info
+    if result.winner == match.team1:
+        winner_obj, loser_obj = team1_obj, team2_obj
+        winner_name, loser_name = match.team1, match.team2
     else:
-        picks_value = "No picks were made for this match."
+        winner_obj, loser_obj = team2_obj, team1_obj
+        winner_name, loser_name = match.team2, match.team1
 
-    embed.add_field(name="📊 Pick'em Stats", value=picks_value, inline=False)
-    embed.set_footer(text=f"Leaguepedia Match ID: {match.leaguepedia_id}")
-    embed.timestamp = datetime.now(timezone.utc)
+    winner_display = _fmt_team_name(winner_name, winner_obj)
+    loser_display = _fmt_team_name(loser_name, loser_obj)
+
+    contest_name = _get_contest_name(match)
+
+    embed = discord.Embed(
+        title=f"🏆 {contest_name} - Match Result",
+        description=f"**{winner_display}** has defeated **{loser_display}**!",
+        color=discord.Color.gold(),
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    embed.add_field(
+        name="Final Score", value=_score_value(match, result), inline=True
+    )
+    embed.add_field(
+        name="Pick'em Stats", value=_stats_value(stats), inline=True
+    )
+
+    if winner_obj and getattr(winner_obj, "image_url", None):
+        embed.set_thumbnail(url=winner_obj.image_url)
+
+    footer = f"Match ID: {match.id}"
+    if getattr(match, "pandascore_id", None):
+        footer += f" | PandaScore: {match.pandascore_id}"
+    embed.set_footer(text=footer)
+
     return embed
 
 
@@ -136,8 +172,7 @@ async def send_mid_series_update(match: Match, score: str):
             displayed in the embed.
     """
     logger.info(
-        "Broadcasting mid-series update for match %s "
-        "(score: %s) to all guilds.",
+        "Broadcasting mid-series update for match %s (score %s).",
         match.id,
         score,
     )
@@ -163,9 +198,8 @@ async def send_mid_series_update(match: Match, score: str):
     embed.set_footer(text=f"Match ID: {match.id}")
     embed.timestamp = datetime.now(timezone.utc)
 
-    await broadcast_embed_to_guilds(
-        bot, embed, f"mid-series update for match {match.id} (score: {score})"
-    )
+    context = f"mid-series update for match {match.id} (score: {score})"
+    await broadcast_embed_to_guilds(bot, embed, context)
 
 
 async def broadcast_embed_to_guilds(
@@ -181,11 +215,15 @@ async def broadcast_embed_to_guilds(
         context (str): Short description included in log messages to
             identify this broadcast.
     """
-    for guild in bot.guilds:
+    for i, guild in enumerate(bot.guilds):
         try:
             await send_announcement(guild, embed)
             logger.info("Sent %s to guild %s.", context, guild.id)
         except Exception as e:
-            logger.error(
-                "Failed to send %s to guild %s: %s", context, guild.id, e
-            )
+            msg = "Failed to send %s to guild %s: %s"
+            logger.error(msg, context, guild.id, e)
+
+        # Yield to event loop every 3 guilds to avoid heartbeat blocking.
+        # Use (i+1) % 3 == 0 to process the first guild before yielding.
+        if (i + 1) % 3 == 0:
+            await asyncio.sleep(0)

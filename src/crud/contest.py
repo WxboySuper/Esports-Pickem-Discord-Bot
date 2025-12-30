@@ -45,6 +45,94 @@ async def upsert_contest(
     )
 
 
+async def upsert_contest_by_pandascore(
+    session: AsyncSession, contest_data: dict
+) -> Optional[Contest]:
+    """
+    Create or update a Contest using PandaScore identifiers.
+
+    The function upserts a Contest by `pandascore_league_id` and
+    `pandascore_serie_id`, creating a new record if none exists or
+    updating the existing record.
+
+    Parameters:
+        contest_data (dict): Mapping of contest fields. Must include
+            `pandascore_league_id` and `pandascore_serie_id`. May include
+            `name`, `start_date`, and `end_date`.
+
+    Returns:
+        Contest or None: The created or updated Contest, or None if
+            the upsert failed.
+    """
+    league_id = contest_data.get("pandascore_league_id")
+    serie_id = contest_data.get("pandascore_serie_id")
+
+    missing = []
+    if league_id is None:
+        missing.append("pandascore_league_id")
+    if serie_id is None:
+        missing.append("pandascore_serie_id")
+    if missing:
+        logger.error(
+            "Missing required PandaScore IDs in data: %s", ", ".join(missing)
+        )
+        return None
+
+    try:
+        contest = await get_contest_by_pandascore_ids(
+            session, league_id, serie_id
+        )
+
+        if contest:
+            _update_contest_from_data(contest, contest_data)
+        else:
+            contest = _create_contest_from_data(contest_data)
+
+        session.add(contest)
+        await session.flush()
+        logger.info("Upserted contest: %s (ID: %s)", contest.name, contest.id)
+        return contest
+    except Exception:
+        logger.exception("Error upserting contest with data: %s", contest_data)
+        return None
+
+
+def _update_contest_from_data(contest: Contest, contest_data: dict) -> None:
+    """Updates existing contest fields from data."""
+    logger.info("Updating existing contest: %s", contest.name)
+    for key in ["name", "start_date", "end_date"]:
+        if key in contest_data and contest_data[key] is not None:
+            setattr(contest, key, contest_data[key])
+
+
+def _create_contest_from_data(contest_data: dict) -> Contest:
+    """Creates a new contest instance from data."""
+    logger.info("Creating new contest: %s", contest_data.get("name"))
+    return Contest(**contest_data)
+
+
+async def get_contest_by_pandascore_ids(
+    session: AsyncSession, league_id: int, serie_id: int
+) -> Optional[Contest]:
+    """
+    Fetch a contest by its PandaScore league and serie IDs.
+
+    Parameters:
+        league_id: The PandaScore league ID
+        serie_id: The PandaScore serie ID
+
+    Returns:
+        Optional[Contest]: The Contest if found, None otherwise
+    """
+    result = await session.exec(
+        select(Contest).where(
+            Contest.pandascore_league_id == league_id,
+            Contest.pandascore_serie_id == serie_id,
+        )
+    )
+    return result.first()
+
+
 def create_contest(session: Session, contest_data: dict) -> Contest:
     """
     Create a Contest record from a dictionary of contest fields.

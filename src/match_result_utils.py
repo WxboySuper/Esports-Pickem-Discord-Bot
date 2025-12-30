@@ -203,20 +203,36 @@ def filter_relevant_games_from_scoreboard(
 
 async def fetch_teams(session, match: Match):
     """
-    Retrieve the Team objects corresponding to the match's team1 and
-    team2 names.
+    Retrieve the `Team` objects corresponding to the match's teams.
+
+    This function prefers ID-based lookup: if `match.team1_id` and/or
+    `match.team2_id` are present it will first attempt to retrieve the
+    corresponding `Team` rows by `pandascore_id`. If an ID is absent,
+    the function falls back to a name-based lookup using `match.team1`
+    and `match.team2` respectively. If no `Team` is found for a side,
+    the function returns `None` for that position.
 
     Parameters:
         session: Database session to execute queries.
-        match (Match): Match instance whose `team1` and `team2` name
-            fields are used to look up teams.
+        match (Match): Match instance whose `team1_id`/`team2_id` and
+            `team1`/`team2` fields are used for lookups.
 
     Returns:
-        tuple: (team1_obj, team2_obj) where each element is the
-            matching Team object or `None` if no match was found.
+        tuple: `(team1_obj, team2_obj)` where each element is the
+            matching `Team` object or `None` if no match was found. The
+            function does not raise on missing teams; callers should
+            handle `None` values appropriately.
     """
-    team1_stmt = select(Team).where(Team.name == match.team1)
-    team2_stmt = select(Team).where(Team.name == match.team2)
-    team1 = (await session.exec(team1_stmt)).first()
-    team2 = (await session.exec(team2_stmt)).first()
+    if match.team1_id:
+        t1_stmt = select(Team).where(Team.pandascore_id == match.team1_id)
+    else:
+        t1_stmt = select(Team).where(Team.name == match.team1)
+
+    if match.team2_id:
+        t2_stmt = select(Team).where(Team.pandascore_id == match.team2_id)
+    else:
+        t2_stmt = select(Team).where(Team.name == match.team2)
+
+    team1 = (await session.exec(t1_stmt)).first()
+    team2 = (await session.exec(t2_stmt)).first()
     return team1, team2

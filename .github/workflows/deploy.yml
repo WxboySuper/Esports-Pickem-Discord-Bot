@@ -99,6 +99,7 @@ jobs:
           LOG_LEVEL=${LOG_LEVEL:-INFO}
           LEAGUEPEDIA_USER=${LEAGUEPEDIA_USER:-}
           LEAGUEPEDIA_PASS=${LEAGUEPEDIA_PASS:-}
+          PANDASCORE_API_KEY=${PANDASCORE_API_KEY:-}
           # Add other keys as needed; set them as repository secrets
           EOF
 

@@ -1,9 +1,15 @@
 # flake8: noqa
 
-from .team import upsert_team
+from .team import (
+    upsert_team,
+    upsert_team_by_pandascore,
+    get_team_by_pandascore_id,
+)
 
 from .contest import (
     upsert_contest,
+    upsert_contest_by_pandascore,
+    get_contest_by_pandascore_ids,
     create_contest,
     get_contest_by_id,
     list_contests,
@@ -14,6 +20,8 @@ from .contest import (
 
 from .match import (
     upsert_match,
+    upsert_match_by_pandascore,
+    get_match_by_pandascore_id,
     create_match,
     bulk_create_matches,
     get_matches_by_date,

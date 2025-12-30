@@ -109,7 +109,7 @@ async def test_matches_view_by_day_no_matches(
         await matches.view_by_day.callback(mock_interaction)
 
         # Check that an embed with "No matches found." is sent
-        _, kwargs = mock_interaction.response.send_message.call_args
+        _, kwargs = mock_interaction.followup.send.call_args
         assert "No matches found" in kwargs["embed"].description
 
 
