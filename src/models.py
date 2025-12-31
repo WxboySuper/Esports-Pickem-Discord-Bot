@@ -1,4 +1,5 @@
 from typing import Optional, List
+import sqlalchemy as sa
 from datetime import datetime, timezone
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column
@@ -48,15 +49,26 @@ class User(SQLModel, table=True):
 class Team(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
-    leaguepedia_id: str = Field(index=True, unique=True)
+    leaguepedia_id: Optional[str] = Field(default=None, index=True)
+    pandascore_id: Optional[int] = Field(default=None, index=True, unique=True)
     image_url: Optional[str] = None
+    acronym: Optional[str] = None
     roster: Optional[str] = None  # Storing as JSON string
 
 
 class Contest(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    leaguepedia_id: str = Field(index=True, unique=True)
+    leaguepedia_id: Optional[str] = Field(default=None, index=True)
+    pandascore_league_id: Optional[int] = Field(default=None, index=True)
+    pandascore_serie_id: Optional[int] = Field(default=None, index=True)
     name: str = Field(index=True)
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "pandascore_league_id",
+            "pandascore_serie_id",
+            name="uq_contest_pandascore_league_serie",
+        ),
+    )
     start_date: datetime = Field(
         sa_column=Column(TZDateTime(), nullable=False)
     )
@@ -67,11 +79,15 @@ class Contest(SQLModel, table=True):
 
 class Match(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    leaguepedia_id: str = Field(index=True, unique=True)
+    leaguepedia_id: Optional[str] = Field(default=None, index=True)
+    pandascore_id: Optional[int] = Field(default=None, index=True, unique=True)
     contest_id: int = Field(foreign_key="contest.id", index=True)
     team1: str
     team2: str
+    team1_id: Optional[int] = Field(default=None)  # PandaScore team ID
+    team2_id: Optional[int] = Field(default=None)  # PandaScore team ID
     best_of: Optional[int] = Field(default=None)
+    status: Optional[str] = Field(default="not_started")  # PandaScore status
     last_announced_score: Optional[str] = Field(default=None)
     scheduled_time: datetime = Field(
         sa_column=Column(TZDateTime(), nullable=False, index=True)

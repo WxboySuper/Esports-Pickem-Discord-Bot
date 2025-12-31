@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime, timedelta, timezone
 
 from src.models import Match, Contest, Result
-from src.polling import poll_live_match_job
+from src.pandascore_polling import poll_live_match_job
 
 
 @pytest.mark.asyncio
@@ -15,34 +15,49 @@ async def test_poll_live_match_job_mid_series_update():
     # Arrange
     mock_match = Match(
         id=1,
+        pandascore_id=123,
         team1="Team A",
         team2="Team B",
+        team1_id=100,
+        team2_id=200,
         best_of=5,
         scheduled_time=datetime.now(timezone.utc) - timedelta(hours=1),
         last_announced_score="0-0",
-        contest=Contest(leaguepedia_id="LPL/2025_Season/Spring_Season"),
+        contest=Contest(pandascore_league_id=1),
     )
-    mock_scoreboard_data = [
-        {"Team1": "Team A", "Team2": "Team B", "Winner": "1"}
-    ]
-    mock_session = AsyncMock()
+    mock_match_data = {
+        "id": 123,
+        "status": "running",
+        "results": [
+            {"team_id": 100, "score": 1},
+            {"team_id": 200, "score": 0},
+        ],
+        "winner_id": None,
+    }
+    mock_session = MagicMock()
+    mock_session.commit = AsyncMock()
+    mock_session.exec = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.first.return_value = None
+    mock_session.exec.return_value = mock_result
 
     with patch(
-        "src.polling.get_async_session"
+        "src.pandascore_polling.get_async_session"
     ) as mock_get_async_session, patch(
-        "src.polling.crud.get_match_with_result_by_id",
+        "src.pandascore_polling.crud.get_match_with_result_by_id",
         new_callable=AsyncMock,
         return_value=mock_match,
     ) as mock_get_match, patch(
-        "src.polling.leaguepedia_client.get_scoreboard_data",
+        "src.pandascore_polling_core.pandascore_client.fetch_match_by_id",
         new_callable=AsyncMock,
-        return_value=mock_scoreboard_data,
-    ) as mock_get_scoreboard, patch(
-        "src.polling.send_mid_series_update", new_callable=AsyncMock
+        return_value=mock_match_data,
+    ) as mock_get_match_data, patch(
+        "src.notifications.send_mid_series_update", new_callable=AsyncMock
     ) as mock_send_update, patch(
-        "src.polling.send_result_notification", new_callable=AsyncMock
+        "src.notifications.send_result_notification",
+        new_callable=AsyncMock,
     ) as mock_send_result, patch(
-        "src.polling.scheduler.remove_job"
+        "src.scheduler_instance.scheduler.remove_job"
     ) as mock_remove_job:
 
         mock_get_async_session.return_value.__aenter__.return_value = (
@@ -54,9 +69,7 @@ async def test_poll_live_match_job_mid_series_update():
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 1)
-        mock_get_scoreboard.assert_awaited_once_with(
-            "LPL/2025_Season/Spring_Season"
-        )
+        mock_get_match_data.assert_awaited_once_with(123)
         mock_send_update.assert_awaited_once()
         mock_send_result.assert_not_called()
         mock_remove_job.assert_not_called()
@@ -73,43 +86,62 @@ async def test_poll_live_match_job_final_result():
     # Arrange
     mock_match = Match(
         id=2,
+        pandascore_id=456,
         team1="Team A",
         team2="Team B",
+        team1_id=100,
+        team2_id=200,
         best_of=3,
         scheduled_time=datetime.now(timezone.utc) - timedelta(hours=1),
         last_announced_score="1-0",
-        contest=Contest(leaguepedia_id="LPL/2025_Season/Spring_Season"),
+        contest=Contest(pandascore_league_id=1),
     )
-    mock_scoreboard_data = [
-        {"Team1": "Team A", "Team2": "Team B", "Winner": "1"},
-        {"Team1": "Team A", "Team2": "Team B", "Winner": "1"},
-    ]
-    mock_session = AsyncMock()
-    # Configure the mock for session.exec to return a result proxy
-    # whose `all()` method returns an empty list.
-    mock_result_proxy = MagicMock()
-    mock_result_proxy.all.return_value = []
-    mock_session.exec.return_value = mock_result_proxy
+    mock_match_data = {
+        "id": 456,
+        "status": "finished",
+        "results": [
+            {"team_id": 100, "score": 2},
+            {"team_id": 200, "score": 0},
+        ],
+        "winner_id": 100,
+    }
+    mock_session = MagicMock()
+    mock_session.commit = AsyncMock()
+    mock_session.flush = AsyncMock()
+    mock_session.exec = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.first.return_value = None
+    mock_session.exec.return_value = mock_result
 
     with patch(
-        "src.polling.get_async_session"
+        "src.pandascore_polling.get_async_session"
     ) as mock_get_async_session, patch(
-        "src.polling.crud.get_match_with_result_by_id",
+        "src.db.get_async_session"
+    ) as mock_db_get_async_session, patch(
+        "src.pandascore_polling.crud.get_match_with_result_by_id",
         new_callable=AsyncMock,
         return_value=mock_match,
     ) as mock_get_match, patch(
-        "src.polling.leaguepedia_client.get_scoreboard_data",
+        "src.pandascore_polling_core.pandascore_client.fetch_match_by_id",
         new_callable=AsyncMock,
-        return_value=mock_scoreboard_data,
-    ) as mock_get_scoreboard, patch(
-        "src.polling.send_mid_series_update", new_callable=AsyncMock
+        return_value=mock_match_data,
+    ) as mock_get_match_data, patch(
+        "src.notifications.send_mid_series_update", new_callable=AsyncMock
     ) as mock_send_update, patch(
-        "src.polling.send_result_notification", new_callable=AsyncMock
+        "src.notifications.send_result_notification",
+        new_callable=AsyncMock,
     ) as mock_send_result, patch(
-        "src.polling.scheduler.remove_job"
-    ) as mock_remove_job:
+        "src.scheduler_instance.scheduler.remove_job"
+    ) as mock_remove_job, patch(
+        "src.match_result_utils.save_result_and_update_picks",
+        new_callable=AsyncMock,
+        return_value=Result(id=1, winner="Team A", score="2-0"),
+    ):
 
         mock_get_async_session.return_value.__aenter__.return_value = (
+            mock_session
+        )
+        mock_db_get_async_session.return_value.__aenter__.return_value = (
             mock_session
         )
 
@@ -118,15 +150,10 @@ async def test_poll_live_match_job_final_result():
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 2)
-        mock_get_scoreboard.assert_awaited_once_with(
-            "LPL/2025_Season/Spring_Season"
-        )
+        mock_get_match_data.assert_awaited_once_with(456)
         mock_send_update.assert_not_called()
         mock_send_result.assert_awaited_once()
         mock_remove_job.assert_called_once()
-        # Assert that a Result object was created and saved
-        mock_session.add.assert_called_once()
-        assert isinstance(mock_session.add.call_args[0][0], Result)
         mock_session.commit.assert_awaited_once()
 
 
@@ -138,34 +165,48 @@ async def test_poll_live_match_job_no_score_change():
     # Arrange
     mock_match = Match(
         id=3,
+        pandascore_id=789,
         team1="Team A",
         team2="Team B",
+        team1_id=100,
+        team2_id=200,
         best_of=5,
         scheduled_time=datetime.now(timezone.utc) - timedelta(hours=1),
         last_announced_score="1-0",
-        contest=Contest(leaguepedia_id="LPL/2025_Season/Spring_Season"),
+        contest=Contest(pandascore_league_id=1),
     )
-    mock_scoreboard_data = [
-        {"Team1": "Team A", "Team2": "Team B", "Winner": "1"}
-    ]
-    mock_session = AsyncMock()
+    mock_match_data = {
+        "id": 789,
+        "status": "running",
+        "results": [
+            {"team_id": 100, "score": 1},
+            {"team_id": 200, "score": 0},
+        ],
+        "winner_id": None,
+    }
+    mock_session = MagicMock()
+    mock_session.exec = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.first.return_value = None
+    mock_session.exec.return_value = mock_result
 
     with patch(
-        "src.polling.get_async_session"
+        "src.pandascore_polling.get_async_session"
     ) as mock_get_async_session, patch(
-        "src.polling.crud.get_match_with_result_by_id",
+        "src.pandascore_polling.crud.get_match_with_result_by_id",
         new_callable=AsyncMock,
         return_value=mock_match,
     ) as mock_get_match, patch(
-        "src.polling.leaguepedia_client.get_scoreboard_data",
+        "src.pandascore_polling_core.pandascore_client.fetch_match_by_id",
         new_callable=AsyncMock,
-        return_value=mock_scoreboard_data,
-    ) as mock_get_scoreboard, patch(
-        "src.polling.send_mid_series_update", new_callable=AsyncMock
+        return_value=mock_match_data,
+    ) as mock_get_match_data, patch(
+        "src.notifications.send_mid_series_update", new_callable=AsyncMock
     ) as mock_send_update, patch(
-        "src.polling.send_result_notification", new_callable=AsyncMock
+        "src.notifications.send_result_notification",
+        new_callable=AsyncMock,
     ) as mock_send_result, patch(
-        "src.polling.scheduler.remove_job"
+        "src.scheduler_instance.scheduler.remove_job"
     ) as mock_remove_job:
 
         mock_get_async_session.return_value.__aenter__.return_value = (
@@ -177,9 +218,7 @@ async def test_poll_live_match_job_no_score_change():
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 3)
-        mock_get_scoreboard.assert_awaited_once_with(
-            "LPL/2025_Season/Spring_Season"
-        )
+        mock_get_match_data.assert_awaited_once_with(789)
         mock_send_update.assert_not_called()
         mock_send_result.assert_not_called()
         mock_remove_job.assert_not_called()
@@ -194,26 +233,32 @@ async def test_poll_live_match_job_already_has_result():
     # Arrange
     mock_match = Match(
         id=4,
+        pandascore_id=101,
         team1="Team A",
         team2="Team B",
         best_of=3,
         scheduled_time=datetime.now(timezone.utc) - timedelta(hours=1),
         result=Result(winner="Team A", score="2-0"),
-        contest=Contest(leaguepedia_id="LPL/2025_Season/Spring_Season"),
+        contest=Contest(pandascore_league_id=1),
     )
-    mock_session = AsyncMock()
+    mock_session = MagicMock()
+    mock_session.exec = AsyncMock()
+    # Return a result so it unschedules
+    mock_session.exec.return_value.first.return_value = Result(
+        id=1, winner="Team A", score="2-0"
+    )
 
     with patch(
-        "src.polling.get_async_session"
+        "src.pandascore_polling.get_async_session"
     ) as mock_get_async_session, patch(
-        "src.polling.crud.get_match_with_result_by_id",
+        "src.pandascore_polling.crud.get_match_with_result_by_id",
         new_callable=AsyncMock,
         return_value=mock_match,
     ) as mock_get_match, patch(
-        "src.polling.leaguepedia_client.get_scoreboard_data",
+        "src.pandascore_polling_core.pandascore_client.fetch_match_by_id",
         new_callable=AsyncMock,
-    ) as mock_get_scoreboard, patch(
-        "src.polling.scheduler.remove_job"
+    ) as mock_get_match_data, patch(
+        "src.scheduler_instance.scheduler.remove_job"
     ) as mock_remove_job:
 
         mock_get_async_session.return_value.__aenter__.return_value = (
@@ -225,5 +270,5 @@ async def test_poll_live_match_job_already_has_result():
 
         # Assert
         mock_get_match.assert_awaited_once_with(mock_session, 4)
-        mock_get_scoreboard.assert_not_called()
+        mock_get_match_data.assert_not_called()
         mock_remove_job.assert_called_once()

@@ -75,5 +75,11 @@ class Contest(
         await interaction.response.send_modal(ContestModal())
 
 
-async def setup(bot):
-    bot.tree.add_command(Contest())
+async def setup(_bot):
+    # Contest creation command is disabled for v1.0 release.
+    # Keeping the source code intact so it can be re-enabled later.
+    logger.info(
+        "Contest commands are disabled for v1.0 release and will "
+        "not be registered."
+    )
+    return

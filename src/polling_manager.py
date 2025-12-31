@@ -4,7 +4,7 @@ from sqlmodel import select
 from src.db import get_async_session
 from src.models import Match, Result
 from src.scheduler_instance import scheduler
-from src.polling import poll_live_match_job
+from src.pandascore_polling import poll_live_match_job
 
 logger = logging.getLogger(__name__)
 

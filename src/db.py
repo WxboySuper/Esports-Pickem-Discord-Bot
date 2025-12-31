@@ -1,7 +1,8 @@
 # Temporary/local-friendly DB path handling:
 import os
 import logging
-from contextlib import asynccontextmanager
+from urllib.parse import urlparse, urlunparse
+from contextlib import asynccontextmanager, contextmanager
 from typing import AsyncGenerator
 from pathlib import Path
 
@@ -23,19 +24,52 @@ project_root = Path(__file__).resolve().parents[1]
 local_db_path = project_root / "data" / "esports-pickem.db"
 local_db_path.parent.mkdir(parents=True, exist_ok=True)
 env_db_url = os.getenv("DATABASE_URL")
+# Legacy default location used by existing deployments.
+legacy_db_path = Path("/opt/esports-bot/data/esports-pickem.db")
+
 if env_db_url:
     raw_db_url = env_db_url
+elif local_db_path.exists() or not legacy_db_path.parent.exists():
+    # Fallback to project-local path for development / non-legacy layouts.
+    raw_db_url = f"sqlite:///{local_db_path}"
 else:
     # Legacy default location used by existing deployments.
-    legacy_db_path = Path("/opt/esports-bot/data/esports-pickem.db")
-    if legacy_db_path.parent.exists():
-        raw_db_url = f"sqlite:///{legacy_db_path}"
-    else:
-        # Fallback to project-local path for development / non-legacy layouts.
-        raw_db_url = f"sqlite:///{local_db_path}"
+    raw_db_url = f"sqlite:///{legacy_db_path}"
+
 # Historical normalization: support old paths/URLs that used `esports_pickem`.
 raw_db_url = raw_db_url.replace("esports_pickem", "esports-pickem")
 DATABASE_URL = raw_db_url
+
+
+def _sanitize_database_url(raw: str) -> str:
+    """Return a sanitized representation of a database URL.
+
+    Removes any embedded userinfo (username/password) and returns a
+    reconstructed URL using only scheme, host[:port], and path. For
+    SQLite URLs the local file path is preserved but no credentials
+    are included.
+    """
+    try:
+        p = urlparse(raw)
+    except Exception:
+        return "<invalid-database-url>"
+
+    scheme = p.scheme or ""
+    # Preserve sqlite paths but do not reveal other secrets
+    if scheme.startswith("sqlite"):
+        # Reconstruct as scheme:///path or scheme://<path>
+        if p.path:
+            return f"{scheme}://{p.path}"
+        return scheme
+
+    host = p.hostname or ""
+    port = f":{p.port}" if p.port else ""
+    path = p.path or ""
+    sanitized = urlunparse((scheme, f"{host}{port}", path, "", "", ""))
+    return sanitized
+
+
+logger.info("Using database at: %s", _sanitize_database_url(DATABASE_URL))
 
 _sql_echo = os.getenv("SQL_ECHO", "False").lower() in ("true", "1", "t")
 
@@ -52,6 +86,7 @@ engine = create_engine(
 )
 
 
+@contextmanager
 def get_session():
     """
     Provide a synchronous SQLModel Session within a context-managed scope.
@@ -68,6 +103,11 @@ def get_session():
 
 
 def init_db():
+    # Import models here to ensure they are registered with SQLModel.metadata
+    # before create_all is called.
+    from . import models  # noqa: F401 skipcq: PY-W2000
+
+    logger.info("Metadata tables: %s", SQLModel.metadata.tables.keys())
     SQLModel.metadata.create_all(engine)
 
 
@@ -97,8 +137,34 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.close()
 
 
-event.listen(engine, "connect", _set_sqlite_pragma)
-event.listen(async_engine.sync_engine, "connect", _set_sqlite_pragma)
+def _is_sqlite() -> bool:
+    """Return True if the configured DATABASE_URL targets SQLite."""
+    try:
+        return "sqlite" in (DATABASE_URL or "")
+    except Exception:
+        return False
+
+
+if _is_sqlite():
+    try:
+        event.listen(engine, "connect", _set_sqlite_pragma)
+    except Exception:
+        logger.exception(
+            (
+                "Could not register connect event listener on sync engine; "
+                "continuing without PRAGMA setup"
+            )
+        )
+
+    try:
+        event.listen(async_engine.sync_engine, "connect", _set_sqlite_pragma)
+    except Exception:
+        logger.exception(
+            (
+                "Could not register connect event listener on async engine; "
+                "continuing without PRAGMA setup"
+            )
+        )
 
 
 @asynccontextmanager

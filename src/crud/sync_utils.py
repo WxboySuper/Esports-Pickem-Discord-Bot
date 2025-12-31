@@ -100,7 +100,6 @@ async def _create_new_by_leaguepedia(
     obj = model(**data)
     session.add(obj)
     await session.flush()
-    await session.refresh(obj)
     logger.info(
         "Upserted %s: %s (ID: %s)",
         obj.__class__.__name__,
@@ -141,7 +140,6 @@ async def _update_existing_by_leaguepedia(
 
     session.add(obj)
     await session.flush()
-    await session.refresh(obj)
     logger.info(
         "Upserted %s: %s (ID: %s)",
         obj.__class__.__name__,
