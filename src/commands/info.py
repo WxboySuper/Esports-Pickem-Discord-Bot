@@ -42,7 +42,7 @@ async def setup(bot):
         # Split into small fields to avoid overly long embed values.
         per_field = 10
         for i in range(0, len(lines), per_field):
-            chunk = "\n".join(lines[i: i + per_field])
+            chunk = "\n".join(lines[i : i + per_field])  # noqa: E203
             idx = (i // per_field) + 1
             total = (len(lines) + per_field - 1) // per_field
             title = "Commands" if total == 1 else f"Commands ({idx}/{total})"
