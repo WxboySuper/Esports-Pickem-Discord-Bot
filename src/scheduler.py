@@ -9,24 +9,25 @@ def start_scheduler():
     Ensure the module scheduler has the required recurring jobs and start
     it if not already running.
 
-    Registers a 6-hour interval job to sync Leaguepedia data and a
+    Registers a 6-hour interval job to sync PandaScore data and a
     5-minute interval job to schedule live match polling, then starts the
     scheduler if it is not running. If the scheduler is already running,
     the function leaves it unchanged.
     """
-    from src.sync_logic import perform_leaguepedia_sync
+    from src.pandascore_sync import perform_pandascore_sync
     from src.polling_manager import schedule_live_polling
+    from src.pandascore_polling import poll_running_matches_job
 
     if not getattr(scheduler, "running", False):
         logger.info("Scheduler not running. Starting jobs...")
         scheduler.add_job(
-            perform_leaguepedia_sync,
+            perform_pandascore_sync,
             "interval",
             hours=6,
-            id="sync_all_tournaments_job",
+            id="sync_pandascore_job",
             replace_existing=True,
         )
-        logger.info("Added 'sync_all_tournaments_job' to scheduler.")
+        logger.info("Added 'sync_pandascore_job' to scheduler.")
         scheduler.add_job(
             schedule_live_polling,
             "interval",
@@ -35,6 +36,15 @@ def start_scheduler():
             replace_existing=True,
         )
         logger.info("Added 'schedule_live_polling_job' to scheduler.")
+        # Poll running matches every 2 minutes for score updates
+        scheduler.add_job(
+            poll_running_matches_job,
+            "interval",
+            minutes=2,
+            id="poll_running_matches_job",
+            replace_existing=True,
+        )
+        logger.info("Added 'poll_running_matches_job' to scheduler.")
 
         scheduler.start()
         logger.info("Scheduler started.")

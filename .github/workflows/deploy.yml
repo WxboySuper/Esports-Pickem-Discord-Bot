@@ -63,6 +63,7 @@ jobs:
           LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
           LEAGUEPEDIA_USER: ${{ secrets.LEAGUEPEDIA_USER }}
           LEAGUEPEDIA_PASS: ${{ secrets.LEAGUEPEDIA_PASS }}
+          PANDASCORE_API_KEY: ${{ secrets.PANDASCORE_API_KEY }}
         run: |
           set -euo pipefail
           mkdir -p deployment-package
@@ -99,6 +100,7 @@ jobs:
           LOG_LEVEL=${LOG_LEVEL:-INFO}
           LEAGUEPEDIA_USER=${LEAGUEPEDIA_USER:-}
           LEAGUEPEDIA_PASS=${LEAGUEPEDIA_PASS:-}
+          PANDASCORE_API_KEY=${PANDASCORE_API_KEY:-}
           # Add other keys as needed; set them as repository secrets
           EOF
 

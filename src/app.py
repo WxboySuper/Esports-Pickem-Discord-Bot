@@ -15,15 +15,16 @@ import inspect
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv, find_dotenv
+from src.logging_config import setup_logging
 from src.scheduler import start_scheduler
 from src.bot_instance import set_bot_instance
-from src.leaguepedia_client import leaguepedia_client
-from src.logging_config import setup_logging
 import aiohttp
 from src.db import init_db
 
-load_dotenv(find_dotenv())
+# Initialize logging as early as possible
 setup_logging()
+
+load_dotenv(find_dotenv())
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +49,7 @@ class EsportsBot(commands.Bot):
         "result",
         "announce",
         "wipe",
-        "configure_sync",
-        "sync_leaguepedia",
-        "find_tournament",
+        "sync_matches",
     ]
 
     def __init__(self):
@@ -63,11 +62,10 @@ class EsportsBot(commands.Bot):
         becomes ready.
 
         Initializes the HTTP session, registers the global bot
-        instance, ensures database tables exist, logs into the
-        Leaguepedia client, starts the scheduler, loads command
-        modules (if a commands package is available), and synchronizes
-        global application commands. Exceptions raised during database
-        initialization are logged and re-raised, causing the startup
+        instance, ensures database tables exist, starts the scheduler,
+        loads command modules (if a commands package is available), and
+        synchronizes global application commands. Exceptions raised during
+        database initialization are logged and re-raised, causing the startup
         process to abort.
         """
         logger.info("Executing setup_hook...")
@@ -80,8 +78,6 @@ class EsportsBot(commands.Bot):
         except Exception:
             logger.exception("Failed initializing database tables.")
             raise
-        logger.info("Logging into Leaguepedia...")
-        await leaguepedia_client.login()
         logger.info("Starting scheduler...")
         start_scheduler()
         logger.info("Loading command modules...")
@@ -91,7 +87,17 @@ class EsportsBot(commands.Bot):
         await self._sync_global_commands()
         logger.info("setup_hook complete.")
 
-    def _resolve_commands_package(self):
+    async def close(self):
+        """Properly close the HTTP session and the bot."""
+        from src.pandascore_client import pandascore_client
+
+        if self.session:
+            await self.session.close()
+        await pandascore_client.close()
+        await super().close()
+
+    @staticmethod
+    def _resolve_commands_package():
         if __package__:
             pkg_name = f"{__package__}.commands"
             try:

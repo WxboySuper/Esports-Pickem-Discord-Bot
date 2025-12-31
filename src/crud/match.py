@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from sqlmodel import Session, select
@@ -29,7 +29,7 @@ class MatchUpdateParams:
 
 async def upsert_match(
     session: AsyncSession, match_data: dict
-) -> tuple[Optional[Match], bool]:
+) -> Tuple[Optional[Match], bool]:
     """
     Create or update a Match identified by its `leaguepedia_id`.
 
@@ -51,7 +51,9 @@ async def upsert_match(
 
     try:
         existing_match = await session.exec(
-            select(Match).where(Match.leaguepedia_id == leaguepedia_id)
+            select(Match)
+            .where(Match.leaguepedia_id == leaguepedia_id)
+            .options(selectinload(Match.result))
         )
         match = existing_match.first()
         time_changed = False
@@ -81,7 +83,6 @@ async def upsert_match(
 
         session.add(match)
         await session.flush()  # Flush to get the match.id if it's new
-        await session.refresh(match)
         logger.info("Upserted match ID: %s", match.id)
 
         return match, time_changed
@@ -91,6 +92,110 @@ async def upsert_match(
     except Exception:
         logger.exception("Error upserting match with data: %s", match_data)
         return None, False
+
+
+async def upsert_match_by_pandascore(
+    session: AsyncSession, match_data: dict
+) -> Tuple[Optional[Match], bool]:
+    """
+    Create or update a Match identified by its PandaScore ID.
+
+    Parameters:
+        match_data (dict): Mapping with match fields. Must include
+            `pandascore_id`, `team1`, `team2`, and `scheduled_time`.
+            May include `best_of`, `status`, `team1_id`, `team2_id`.
+
+    Returns:
+        tuple[Optional[Match], bool]: A tuple containing the upserted
+            Match (or None on failure) and a boolean that is True
+            if the match's scheduled time changed or the match was
+            newly created, False otherwise.
+    """
+    pandascore_id = match_data.get("pandascore_id")
+    if pandascore_id is None:
+        logger.error("Missing pandascore_id in match_data")
+        return None, False
+
+    try:
+        result = await session.exec(
+            select(Match)
+            .where(Match.pandascore_id == pandascore_id)
+            .options(selectinload(Match.result))
+        )
+        match = result.first()
+
+        if match:
+            time_changed = _update_match_from_data(match, match_data)
+        else:
+            match, time_changed = _create_match_from_data(match_data)
+
+        session.add(match)
+        await session.flush()
+        logger.info(
+            "Upserted match ID: %s (PandaScore: %s)", match.id, pandascore_id
+        )
+
+        return match, time_changed
+    except KeyError as e:
+        logger.error("Missing key in match_data: %s", e)
+        return None, False
+    except Exception:
+        logger.exception("Error upserting match with data: %s", match_data)
+        return None, False
+
+
+def _update_match_from_data(match: Match, match_data: dict) -> bool:
+    """Updates existing match fields and returns True if time changed."""
+    logger.info(
+        "Updating existing match (PandaScore ID: %s)", match.pandascore_id
+    )
+    for key in ["team1", "team2", "team1_id", "team2_id", "best_of", "status"]:
+        if key in match_data and match_data[key] is not None:
+            setattr(match, key, match_data[key])
+
+    original_time = match.scheduled_time
+    new_time = match_data.get("scheduled_time")
+    if new_time and original_time != new_time:
+        logger.info(
+            "Match %s time changed from %s to %s",
+            match.id,
+            original_time,
+            new_time,
+        )
+        match.scheduled_time = new_time
+        return True
+    return False
+
+
+def _create_match_from_data(match_data: dict) -> Tuple[Match, bool]:
+    """Creates a new match instance from data."""
+    logger.info(
+        "Creating new match (PandaScore ID: %s): %s vs %s",
+        match_data.get("pandascore_id"),
+        match_data.get("team1"),
+        match_data.get("team2"),
+    )
+    return Match(**match_data), True
+
+
+async def get_match_by_pandascore_id(
+    session: AsyncSession, pandascore_id: int
+) -> Optional[Match]:
+    """
+    Fetch a match by its PandaScore ID.
+
+    Parameters:
+        pandascore_id: The PandaScore match ID
+
+    Returns:
+        Optional[Match]: The Match if found, None otherwise
+    """
+    result = await session.exec(
+        select(Match)
+        .where(Match.pandascore_id == pandascore_id)
+        .options(selectinload(Match.result), selectinload(Match.contest))
+    )
+    return result.first()
 
 
 def create_match(session: Session, params: MatchCreateParams) -> Match:
@@ -159,9 +264,8 @@ def get_matches_by_date(session: Session, date: datetime) -> List[Match]:
         select(Match)
         .where(Match.scheduled_time >= start)
         .where(Match.scheduled_time <= end)
-        .where(Match.team1 != "TBD")
-        .where(Match.team2 != "TBD")
         .options(selectinload(Match.result), selectinload(Match.contest))
+        .order_by(Match.scheduled_time)
     )
     return list(session.exec(statement))
 
@@ -171,9 +275,8 @@ def list_matches_for_contest(session: Session, contest_id: int) -> List[Match]:
     stmt = (
         select(Match)
         .where(Match.contest_id == contest_id)
-        .where(Match.team1 != "TBD")
-        .where(Match.team2 != "TBD")
         .options(selectinload(Match.result), selectinload(Match.contest))
+        .order_by(Match.scheduled_time)
     )
     return list(session.exec(stmt))
 

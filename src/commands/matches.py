@@ -20,6 +20,48 @@ matches_group = app_commands.Group(
     name="matches", description="Commands for viewing and managing matches."
 )
 
+# Display helpers for matches embed
+STATUS_MAP = {
+    "finished": "✅ Finished",
+    "running": "🔴 Live",
+    "not_started": "⏳ Upcoming",
+    "canceled": "❌ Canceled",
+    "postponed": "🕒 Postponed",
+}
+
+
+def _format_match_value(m: Match) -> str:
+    status_label = STATUS_MAP.get(
+        m.status, m.status.capitalize() if m.status else "Upcoming"
+    )
+    time_str = m.scheduled_time.strftime("%H:%M UTC")
+    value = (
+        f"**Status:** {status_label}\n"
+        f"**Time:** {time_str}\n"
+        f"**Contest:** {m.contest.name if m.contest else 'Unknown'}"
+    )
+    if m.best_of:
+        value += f"\n**Format:** Best of {m.best_of}"
+    if m.result:
+        score_str = f" ({m.result.score})" if m.result.score else ""
+        value += f"\n**Result:** **{m.result.winner}** won{score_str}"
+    elif m.status == "running" and m.last_announced_score:
+        value += f"\n**Current Score:** {m.last_announced_score}"
+    return value
+
+
+def _paginate_matches(ms: list[Match], info: tuple[int, int] | None):
+    if info is None:
+        p, sz = 1, 10
+    else:
+        p, sz = info
+    total = len(ms)
+    total_pages = (total + sz - 1) // sz
+    start = (p - 1) * sz
+    end = start + sz
+    return ms[start:end], p, total_pages, sz, total
+
+
 # --- Helper Functions and Classes ---
 
 
@@ -122,9 +164,16 @@ async def contest_autocompletion(
 
 
 async def create_matches_embed(
-    title: str, matches: list[Match], interaction: discord.Interaction
+    title: str,
+    matches: list[Match],
+    interaction: discord.Interaction,
+    page_info: tuple[int, int] | None = None,
 ) -> discord.Embed:
-    """Creates a standard embed for displaying a list of matches."""
+    """Creates a standard embed for displaying a list of matches.
+
+    `page_info` is an optional (page, page_size) tuple. When omitted the
+    defaults are page=1 and page_size=10.
+    """
     embed = discord.Embed(
         title=title,
         color=discord.Color.purple(),
@@ -139,23 +188,71 @@ async def create_matches_embed(
 
     if not matches:
         embed.description = "No matches found."
-    else:
-        for match in matches:
-            time_str = match.scheduled_time.strftime("%H:%M UTC")
-            value = f"Time: {time_str}\nContest: {match.contest.name}"
+        return embed
 
-            if match.result:
-                score_str = (
-                    f" ({match.result.score})" if match.result.score else ""
-                )
-                value += f"\n**Result: {match.result.winner} won{score_str}**"
+    display_matches, page, total_pages, _, total_matches = _paginate_matches(
+        matches, page_info
+    )
+    embed.set_footer(
+        text=f"Page {page} of {total_pages} | Total Matches: {total_matches}"
+    )
 
-            embed.add_field(
-                name=f"{match.team1} vs {match.team2}",
-                value=value,
-                inline=False,
-            )
+    for m in display_matches:
+        embed.add_field(
+            name=f"{m.team1} vs {m.team2}",
+            value=_format_match_value(m),
+            inline=False,
+        )
     return embed
+
+
+class PaginatedMatchesView(discord.ui.View):
+    """A view with buttons to navigate between pages of matches."""
+
+    def __init__(
+        self,
+        title: str,
+        matches: list[Match],
+        interaction: discord.Interaction,
+        page_size: int = 10,
+    ):
+        super().__init__(timeout=180)
+        self.title = title
+        self.matches = matches
+        self.interaction = interaction
+        self.page_size = page_size
+        self.current_page = 1
+        self.total_pages = (len(matches) + page_size - 1) // page_size
+        self._update_buttons()
+
+    def _update_buttons(self):
+        self.prev_button.disabled = self.current_page <= 1
+        self.next_button.disabled = self.current_page >= self.total_pages
+
+    async def update_message(self, interaction: discord.Interaction):
+        """Updates the embed with matches for the current page."""
+        embed = await create_matches_embed(
+            self.title,
+            self.matches,
+            self.interaction,
+            page_info=(self.current_page, self.page_size),
+        )
+        self._update_buttons()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="◀️ Previous", style=discord.ButtonStyle.gray)
+    async def prev_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        self.current_page -= 1
+        await self.update_message(interaction)
+
+    @discord.ui.button(label="Next ▶️", style=discord.ButtonStyle.gray)
+    async def next_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        self.current_page += 1
+        await self.update_message(interaction)
 
 
 class DayNavigationView(discord.ui.View):
@@ -169,36 +266,72 @@ class DayNavigationView(discord.ui.View):
         super().__init__(timeout=180)
         self.current_date = current_date
         self.interaction = interaction
+        self.current_page = 1
 
     async def update_embed(self, interaction: discord.Interaction):
         """Updates the embed with matches for the current date."""
-        await interaction.response.defer()
         with get_session() as session:
             matches = crud.get_matches_by_date(session, self.current_date)
             title = f"Matches for {self.current_date.strftime('%Y-%m-%d')}"
-            embed = await create_matches_embed(
-                title, matches, self.interaction
+
+            page_size = 10
+            total_pages = (len(matches) + page_size - 1) // page_size
+            self.current_page = (
+                max(1, min(self.current_page, total_pages))
+                if total_pages > 0
+                else 1
             )
-            await interaction.edit_original_response(embed=embed, view=self)
+
+            embed = await create_matches_embed(
+                title,
+                matches,
+                self.interaction,
+                page_info=(self.current_page, page_size),
+            )
+
+            # Update button states
+            self.prev_page.disabled = self.current_page <= 1
+            self.next_page.disabled = self.current_page >= total_pages
+
+            if interaction.response.is_done():
+                await interaction.edit_original_response(
+                    embed=embed, view=self
+                )
+            else:
+                await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(
-        label="< Previous Day",
-        style=discord.ButtonStyle.secondary,
+        label="📅 Prev Day", style=discord.ButtonStyle.secondary
     )
     async def previous_day(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         self.current_date -= timedelta(days=1)
+        self.current_page = 1
+        await self.update_embed(interaction)
+
+    @discord.ui.button(label="◀️", style=discord.ButtonStyle.primary)
+    async def prev_page(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        self.current_page -= 1
+        await self.update_embed(interaction)
+
+    @discord.ui.button(label="▶️", style=discord.ButtonStyle.primary)
+    async def next_page(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        self.current_page += 1
         await self.update_embed(interaction)
 
     @discord.ui.button(
-        label="Next Day >",
-        style=discord.ButtonStyle.secondary,
+        label="Next Day 📅", style=discord.ButtonStyle.secondary
     )
     async def next_day(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         self.current_date += timedelta(days=1)
+        self.current_page = 1
         await self.update_embed(interaction)
 
 
@@ -225,8 +358,20 @@ class TournamentSelect(discord.ui.Select):
                 return
             matches = crud.list_matches_for_contest(session, contest_id)
             title = f"Matches for {contest.name}"
-            embed = await create_matches_embed(title, matches, interaction)
-            await interaction.edit_original_response(embed=embed, view=None)
+
+            if len(matches) > 10:
+                view = PaginatedMatchesView(title, matches, interaction)
+                embed = await create_matches_embed(
+                    title, matches, interaction, page_info=(1, 10)
+                )
+                await interaction.edit_original_response(
+                    embed=embed, view=view
+                )
+            else:
+                embed = await create_matches_embed(title, matches, interaction)
+                await interaction.edit_original_response(
+                    embed=embed, view=None
+                )
 
 
 # --- Commands ---
@@ -240,12 +385,26 @@ async def view_by_day(interaction: discord.Interaction):
     """Shows matches for the current day with navigation."""
     logger.info("'%s' requested matches by day.", interaction.user.name)
     current_date = datetime.now(timezone.utc).date()
+
+    # Initial response
+    await interaction.response.defer(ephemeral=True)
+
     with get_session() as session:
         matches = crud.get_matches_by_date(session, current_date)
         title = f"Matches for {current_date.strftime('%Y-%m-%d')}"
-        embed = await create_matches_embed(title, matches, interaction)
+
+        embed = await create_matches_embed(
+            title, matches, interaction, page_info=(1, 10)
+        )
         view = DayNavigationView(current_date, interaction)
-        await interaction.response.send_message(
+
+        # Update button states for the first page
+        page_size = 10
+        total_pages = (len(matches) + page_size - 1) // page_size
+        view.prev_page.disabled = True
+        view.next_page.disabled = total_pages <= 1
+
+        await interaction.followup.send(
             embed=embed,
             view=view,
             ephemeral=True,

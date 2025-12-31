@@ -172,6 +172,31 @@ def test_match_crud_and_queries(session: Session):
     assert crud.get_match_by_id(session, m3.id) is None
 
 
+def test_match_crud_includes_tbd(session: Session):
+    contest = _mk_contest(session)
+    day = datetime(2025, 5, 10, tzinfo=timezone.utc)
+
+    # Create a TBD match
+    m_tbd = crud.create_match(
+        session,
+        crud.MatchCreateParams(
+            contest_id=contest.id,
+            team1="TBD",
+            team2="TBD",
+            scheduled_time=day,
+            leaguepedia_id="m_tbd",
+        ),
+    )
+
+    # Verify it's included in list_matches_for_contest
+    in_contest = crud.list_matches_for_contest(session, contest.id)
+    assert m_tbd.id in [m.id for m in in_contest]
+
+    # Verify it's included in get_matches_by_date
+    on_day = crud.get_matches_by_date(session, day)
+    assert m_tbd.id in [m.id for m in on_day]
+
+
 def test_match_update_delete_missing(session: Session):
     assert (
         crud.update_match(session, 5555, crud.MatchUpdateParams(team1="GG"))
