@@ -75,7 +75,7 @@ def get_session():
 def init_db():
     # Import models here to ensure they are registered with SQLModel.metadata
     # before create_all is called.
-    from . import models  # noqa: F401
+    from . import models  # noqa: F401 skipcq: PY-W2000
 
     logger.info("Metadata tables: %s", SQLModel.metadata.tables.keys())
     SQLModel.metadata.create_all(engine)

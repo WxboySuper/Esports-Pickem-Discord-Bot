@@ -504,9 +504,7 @@ class DisabledPandaScoreClient:
     # skipcq: PYL-R0201
     async def _get_session(
         self,
-    ) -> (
-        aiohttp.ClientSession
-    ):  # pragma: no cover - simple sentinel
+    ) -> aiohttp.ClientSession:  # pragma: no cover - simple sentinel
         raise PandaScoreError("PandaScore client is disabled (no API key)")
 
     # skipcq: PYL-R0201
@@ -546,9 +544,7 @@ class DisabledPandaScoreClient:
         return []
 
     # skipcq: PYL-R0201
-    async def fetch_match_by_id(
-        self, match_id: int
-    ) -> Optional[JSONType]:
+    async def fetch_match_by_id(self, match_id: int) -> Optional[JSONType]:
         return None
 
     # skipcq: PYL-R0201
