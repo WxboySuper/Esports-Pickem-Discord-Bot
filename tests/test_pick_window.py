@@ -26,10 +26,12 @@ async def test_pick_uses_pick_window(mock_datetime, mock_get_session):
         captured["stmt"] = stmt
 
         class R:
-            def all(self):
+            @staticmethod
+            def all():
                 return []
 
-            def first(self):
+            @staticmethod
+            def first():
                 return None
 
         return R()
