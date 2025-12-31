@@ -21,11 +21,25 @@ class WipeConfirmModal(ui.Modal, title="Confirm Wipe Database"):
         max_length=64,
     )
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self):
         super().__init__()
-        self.bot = bot
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, *args, **kwargs):
+        # Accept flexible args/kwargs to remain compatible with different
+        # discord.py versions / type stubs that may vary the signature of
+        # Modal.on_submit. Extract the interaction if provided.
+        interaction = None
+        if args:
+            interaction = args[0]
+        else:
+            interaction = kwargs.get("interaction")
+
+        if interaction is None:
+            logger.error(
+                "WipeConfirmModal.on_submit called without interaction"
+            )
+            return
+
         await interaction.response.defer(ephemeral=True)
 
         if self.confirm_text.value.strip().upper() != CONFIRM_PHRASE:
@@ -80,7 +94,7 @@ class Wipe(commands.Cog):
     @is_admin()
     async def wipe_data(self, interaction: discord.Interaction):
         """Show a confirmation modal before wiping all contest data."""
-        modal = WipeConfirmModal(self.bot)
+        modal = WipeConfirmModal()
         await interaction.response.send_modal(modal)
 
 
