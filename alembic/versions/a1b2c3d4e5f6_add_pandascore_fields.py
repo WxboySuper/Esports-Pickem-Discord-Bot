@@ -10,27 +10,117 @@ from alembic import op
 import sqlalchemy as sa
 import sqlmodel
 import logging
+from typing import Optional, Set
 
 logger = logging.getLogger(__name__)
 
 
-def _assert_no_duplicate_team_pandascore_id() -> None:
-    """Check for duplicate non-NULL `team.pandascore_id` values.
+def _count_duplicates_for_team_column(conn, column_name: str) -> int:
+    """Count duplicate non-NULL values for a validated `column_name` on `team`.
 
-    Uses a static query string (no identifier interpolation) to avoid
-    SQL-injection warnings from static analyzers.
+    Uses SQLAlchemy Core constructs and validates the column name against
+    a whitelist to avoid duplication and SQL-injection concerns.
     """
-    conn = op.get_bind()
-    dup = conn.execute(
-        sa.text(
-            "SELECT COUNT(1) FROM ("
-            "SELECT pandascore_id FROM team WHERE pandascore_id IS NOT NULL "
-            "GROUP BY pandascore_id HAVING COUNT(1) > 1) AS t"
-        )
-    ).scalar()
-    if dup and int(dup) > 0:
+    allowed = {"pandascore_id", "leaguepedia_id"}
+    if column_name not in allowed:
+        raise ValueError("Unsupported column for duplicate counting")
+
+    col = sa.column(column_name)
+    subq = (
+        sa.select(col)
+        .where(col.isnot(None))
+        .group_by(col)
+        .having(sa.func.count() > 1)
+        .subquery()
+    )
+    stmt = sa.select(sa.func.count()).select_from(subq)
+    try:
+        return int(conn.execute(stmt).scalar() or 0)
+    except Exception:
+        logger.exception("Failed to count %s duplicates on team", column_name)
+        raise
+
+
+def _count_non_null_duplicates(conn, column: str, table: str = "team") -> int:
+    """Return count of duplicate non-NULL values for `column` in `table`.
+
+    This dispatcher validates inputs and delegates to the small,
+    column-specific helpers defined above to keep complexity low.
+    """
+    if table != "team":
+        raise ValueError("Unsafe table for duplicate check")
+    return _count_duplicates_for_team_column(conn, column)
+
+
+def _inspect_names(conn, table: str, fetcher: str) -> Optional[Set[str]]:
+    """Generic inspector helper.
+
+    `fetcher` is the inspector method name to call (e.g. 'get_indexes'
+    or 'get_columns'). Returns a set of names or None on failure.
+    """
+    try:
+        inspector = sa.inspect(conn)
+        fn = getattr(inspector, fetcher)
+        items = fn(table)
+        return {item["name"] for item in items}
+    except Exception:
+        logger.exception("Failed to inspect %s for table %s", fetcher, table)
+        return None
+
+
+def _inspect_indexes(conn, table: str) -> Optional[Set[str]]:
+    return _inspect_names(conn, table, "get_indexes")
+
+
+def _inspect_columns(conn, table: str) -> Optional[Set[str]]:
+    return _inspect_names(conn, table, "get_columns")
+
+
+def _drop_index_if_exists(op_obj, conn, index_name: str, table: str) -> None:
+    """Drop an index if it exists (defensive, logs on failure)."""
+    existing = _inspect_indexes(conn, table)
+    if existing is None:
         raise RuntimeError(
-            f"Cannot create unique index on team.pandascore_id: found {int(dup)} duplicate pandascore_id values. "
+            f"Failed to inspect indexes for table {table}; aborting migration"
+        )
+
+    if index_name in existing or index_name.replace('"', "") in existing:
+        try:
+            op_obj.drop_index(index_name, table_name=table)
+        except Exception:
+            logger.exception(
+                "Failed to drop index %s on table %s", index_name, table
+            )
+
+
+def _drop_column_if_exists(op_obj, conn, table: str, column: str) -> None:
+    """Drop a column if present (defensive, logs on failure)."""
+    existing_cols = _inspect_columns(conn, table)
+    if existing_cols is None:
+        raise RuntimeError(
+            f"Failed to inspect columns for table {table}; aborting migration"
+        )
+
+    if column in existing_cols:
+        try:
+            op_obj.drop_column(table, column)
+        except Exception:
+            logger.exception(
+                "Failed to drop column %s on table %s", column, table
+            )
+    else:
+        logger.debug(
+            "Column %s not present on %s; skipping drop", column, table
+        )
+
+
+def _assert_no_duplicate_team_pandascore_id() -> None:
+    """Check for duplicate non-NULL `team.pandascore_id` values."""
+    conn = op.get_bind()
+    dup = _count_non_null_duplicates(conn, "pandascore_id", table="team")
+    if dup > 0:
+        raise RuntimeError(
+            f"Cannot create unique index on team.pandascore_id: found {dup} duplicate pandascore_id values. "
             "Please deduplicate these rows before running this migration."
         )
 
@@ -38,16 +128,10 @@ def _assert_no_duplicate_team_pandascore_id() -> None:
 def _assert_no_duplicate_team_leaguepedia_id() -> None:
     """Check for duplicate non-NULL `team.leaguepedia_id` values."""
     conn = op.get_bind()
-    dup = conn.execute(
-        sa.text(
-            "SELECT COUNT(1) FROM ("
-            "SELECT leaguepedia_id FROM team WHERE leaguepedia_id IS NOT NULL "
-            "GROUP BY leaguepedia_id HAVING COUNT(1) > 1) AS t"
-        )
-    ).scalar()
-    if dup and int(dup) > 0:
+    dup = _count_non_null_duplicates(conn, "leaguepedia_id", table="team")
+    if dup > 0:
         raise RuntimeError(
-            f"Cannot create unique index on team.leaguepedia_id: found {int(dup)} duplicate leaguepedia_id values. "
+            f"Cannot create unique index on team.leaguepedia_id: found {dup} duplicate leaguepedia_id values. "
             "Please deduplicate these rows before running this migration."
         )
 
@@ -97,39 +181,9 @@ def _upgrade_team_table() -> None:
 
     # Remove legacy Leaguepedia identifier column and its unique index.
     conn = op.get_bind()
-    try:
-        inspector = sa.inspect(conn)
-        existing_indexes = {idx["name"] for idx in inspector.get_indexes("team")}
-    except Exception as e:  # pragma: no cover - defensive for odd DB drivers
-        logger.exception("Failed to inspect indexes for table 'team': %s", e)
-        existing_indexes = set()
-
     ix_name = op.f("ix_team_leaguepedia_id")
-    if ix_name in existing_indexes or "ix_team_leaguepedia_id" in existing_indexes:
-        try:
-            op.drop_index(ix_name, table_name="team")
-        except Exception as e:
-            logger.exception(
-                "Failed to drop index %s on table 'team': %s", ix_name, e
-            )
-
-    try:
-        # Check columns before attempting to drop to avoid masking real errors
-        try:
-            inspector = sa.inspect(conn)
-            existing_columns = {col["name"] for col in inspector.get_columns("team")}
-        except Exception as e:  # pragma: no cover - defensive
-            logger.exception("Failed to inspect columns for table 'team': %s", e)
-            existing_columns = set()
-
-        if "leaguepedia_id" in existing_columns:
-            op.drop_column("team", "leaguepedia_id")
-        else:
-            logger.debug("Column 'leaguepedia_id' not present on 'team'; skipping drop")
-    except Exception as e:
-        logger.exception(
-            "Unexpected error while dropping 'leaguepedia_id' from 'team': %s", e
-        )
+    _drop_index_if_exists(op, conn, ix_name, "team")
+    _drop_column_if_exists(op, conn, "team", "leaguepedia_id")
 
 
 def _upgrade_contest_table() -> None:

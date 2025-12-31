@@ -58,9 +58,7 @@ def _compute_timed_out_for_match(m: Match) -> bool:
     try:
         return now > m.scheduled_time + timedelta(hours=12)
     except (TypeError, AttributeError) as e:
-        logger.warning(
-            "Could not compute timeout for match %s: %s", m.id, e
-        )
+        logger.warning("Could not compute timeout for match %s: %s", m.id, e)
         return False
 
 

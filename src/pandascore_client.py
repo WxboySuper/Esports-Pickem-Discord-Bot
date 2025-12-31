@@ -110,10 +110,7 @@ class PandaScoreClient:
             return headers
 
         raise PandaScoreError(
-            (
-                "Attempted to create aiohttp session without "
-                "API key"
-            )
+            ("Attempted to create aiohttp session without " "API key")
         )
 
     @staticmethod
@@ -504,50 +501,58 @@ class DisabledPandaScoreClient:
         self._request_count = 0
         self._window_start = datetime.now(timezone.utc)
 
+    # skipcq: PYL-R0201
     async def _get_session(
         self,
     ) -> (
         aiohttp.ClientSession
-    ):  # pragma: no cover - simple sentinel  # skipcq: PYL-R0201
+    ):  # pragma: no cover - simple sentinel
         raise PandaScoreError("PandaScore client is disabled (no API key)")
 
+    # skipcq: PYL-R0201
     async def _make_request(
         self,
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
         max_retries: int = 0,
-    ) -> JSONType:  # skipcq: PYL-R0201
+    ) -> JSONType:
         raise PandaScoreError("PandaScore client is disabled (no API key)")
 
+    # skipcq: PYL-R0201
     async def fetch_matches(
         self, kind: str, options: Optional[Dict[str, Any]] = None
-    ) -> List[JSONType]:  # skipcq: PYL-R0201
+    ) -> List[JSONType]:
         return []
 
+    # skipcq: PYL-R0201
     async def fetch_upcoming_matches(
         self,
         league_ids: Optional[List[int]] = None,
         page_size: int = DEFAULT_PAGE_SIZE,
         page: int = 1,
-    ) -> List[JSONType]:  # skipcq: PYL-R0201
+    ) -> List[JSONType]:
         return []
 
+    # skipcq: PYL-R0201
     async def fetch_running_matches(
         self, page_size: int = DEFAULT_PAGE_SIZE, page: int = 1
-    ) -> List[JSONType]:  # skipcq: PYL-R0201
+    ) -> List[JSONType]:
         return []
 
+    # skipcq: PYL-R0201
     async def fetch_all_upcoming_matches(
         self, league_ids: Optional[List[int]] = None, max_pages: int = 5
-    ) -> List[JSONType]:  # skipcq: PYL-R0201
+    ) -> List[JSONType]:
         return []
 
+    # skipcq: PYL-R0201
     async def fetch_match_by_id(
         self, match_id: int
-    ) -> Optional[JSONType]:  # skipcq: PYL-R0201
+    ) -> Optional[JSONType]:
         return None
 
-    async def close(self) -> None:  # skipcq: PYL-R0201
+    # skipcq: PYL-R0201
+    async def close(self) -> None:
         return None
 
 
