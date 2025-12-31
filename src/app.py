@@ -96,7 +96,8 @@ class EsportsBot(commands.Bot):
         await pandascore_client.close()
         await super().close()
 
-    def _resolve_commands_package(self):
+    @staticmethod
+    def _resolve_commands_package():
         if __package__:
             pkg_name = f"{__package__}.commands"
             try:
