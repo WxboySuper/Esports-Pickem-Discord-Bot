@@ -2,122 +2,149 @@
 
 ## Overview
 
-MatchPoint v1.0 is a production Discord bot for picks/contests (currently supports League of Legends). This roadmap captures planned refactors, feature milestones, and priorities to expand supported titles, improve reliability, and build admin/user-facing web tooling.
+MatchPoint v1.0 is a production Discord bot for picks and contests (currently supports League of Legends).
+
+This document is a concise, versioned roadmap describing refactors, feature milestones, priorities for additional titles, and release procedures.
 
 ## Goals
 
 - Expand PandaScore-backed title support (CS2, Valorant, Rocket League, Dota2) using a reusable adapter template.
-- Improve reliability: accurate rate-limit tracking, internal feature flags, stronger test coverage.
-- Provide admin operations tooling (internal dashboard) and later a public-facing website.
-- Defer advanced live/paid statistics until feasibility/cost is evaluated.
+- Improve reliability: accurate rate-limit handling, feature flags, and stronger test coverage.
+- Provide operational tooling (internal admin dashboard) and, later, a public-facing site for users.
+- Defer advanced live/play-by-play features until feasibility, cost, and data-source options are evaluated.
 
 ## Versioning Policy
 
-- Follow a lightweight semantic approach: `MAJOR.MINOR.PATCH`.
-  - MINOR bump for each new supported title or large feature (e.g., v1.1 = CS2).
-  - PATCH for small command changes, bugfixes, tests.
-  - MAJOR only for breaking changes.
+- Use a lightweight semantic scheme: `MAJOR.MINOR.PATCH`.
 
-## Milestones
+  - MINOR: add a supported title or a substantial feature (e.g., v1.1 = CS2).
+  - PATCH: small command changes, bugfixes, or tests.
+  - MAJOR: breaking changes.
 
-### Milestone A — Refactor & Hardening (Adapter Template)
+## Milestones & Releases
 
-Purpose: create a robust, testable foundation so new titles can be added quickly and safely.
+Milestones are scoped for fast, incremental releases. Each milestone below maps to a target release.
 
-Scope:
+### v1.0 — Baseline (released)
 
-- Refactor parsing into modular pieces: core parsing helpers + per-game parser files. Use the current LoL parser as the adapter template.
-- Move game-specific logic into `parsers/` (or equivalent) files (example: `parsers/lol.py`).
-- Fix rate-limit monitor: track the actual reset/lift time from API responses (not inferred counters), persist across restarts if needed, and add automatic backoff/retry.
-- Implement internal feature flags (config-driven, toggle per-title or per-feature) for quick rollback or staged rollout.
-- Strengthen tests: add unit/integration tests for parser modules, rate-limit behavior, and feature-flag gating. Add fixtures/mocked PandaScore responses.
+- Production LoL support: picks, contests, announcements
 
-Deliverables:
+- Core scheduler, PandaScore ingestion, DB models, baseline tests
 
-- New parser structure and LoL adapter refactor.
-- Reliable rate-limit monitor with tests and documented behavior.
-- Feature-flag implementation and toggle examples.
-- Test coverage improved to cover parsing, polling, and edge-cases.
+### v1.1 — Refactor & Hardening (Milestone A)
 
-Acceptance criteria:
+**Goal:** provide a reusable adapter and harden polling.
 
-- New parser module used by production flows with no regression on LoL features.
-- Rate-limit monitor reports actual reset times and avoids over-requesting.
-- Tests run in CI with recorded API fixtures; coverage increased for key modules.
+**Checklist:**
 
-Estimated effort: 2–4 weeks (depending on availability and test polish).
+- Split parsing into: core parsing helpers and per-game adapters (e.g., `parsers/core.py`, `parsers/lol.py`).
 
-### Milestone B — Title Expansion (Incremental)
+- Define a per-game parser interface and helper utilities.
 
-Purpose: add new games using the LoL adapter template and established patterns.
+- Replace inferred rate-limit counters with real reset/lift tracking from API responses; persist reset state as needed and add backoff/retry logic.
 
-Scope (per-title pipeline):
+- Implement feature flags (config-driven per-title/feature toggles) for staged rollouts and quick rollback.
 
-- Implement `parsers/<title>.py` using the LoL adapter as a template.
-- Add per-title config (enable/disable, pick window defaults, BO rules).
-- Add necessary DB migrations for title-specific fields (if any, e.g., map-level results).
-- Add tests and recorded fixtures for each title.
+- Add fixtures and mocked PandaScore responses; extend unit/integration tests and CI to run them.
 
-Suggested order: Valorant, Rocket League, CS2, Dota2.
+**Acceptance:** no regressions vs v1.0; CI passing; documented rollback path.
 
-Deliverables:
+**Estimate:** 2–4 weeks.
 
-- Reuseable rollout checklist for each subsequent title.
+### v1.2 — CS2 (Counter-Strike)
 
-Estimated effort: 1–3 weeks per title for MVP each (CS2 may require extra work for map/series parsing).
+**Goal:** CS2 MVP using the adapter template.
 
-### Milestone C — Admin Operations Dashboard (Internal)
+**Checklist:**
 
-Purpose: give operators control, visibility, and tools to recover/override jobs quickly.
+- Implement `parsers/cs2.py` following the LoL adapter.
 
-Scope:
+- Add per-title configuration and enable flag.
 
-- Internal auth (Discord OAuth or local admin accounts).
-- Match list and detail view, manual match overrides, job retry/cancel controls.
-- PandaScore usage dashboard (hourly quotas, history), job logs, error list, health checks.
-- Manual pick window adjustments and per-title toggles (feature flags UI).
+- Apply DB/Alembic migrations for map/series fields if required.
 
-Deliverables:
+- Add recorded fixtures and tests.
 
-- Internal web app (MVP) accessible to maintainers.
-- Basic operational runbook documented.
+**Estimate:** 1–3 weeks (CS2 may need extra work for map/series parsing).
 
-Estimated effort: 4–6 weeks (MVP).
+### v1.3 — Valorant
 
-### Milestone D — Public-Facing Site (User Experience)
+- Same pipeline as v1.2 using `parsers/valorant.py`.
 
-Purpose: provide end-users with leaderboards, pick history, match pages, and account linking.
+### v1.4 — Rocket League
 
-Scope:
+- Same pipeline as v1.2 using `parsers/rocketleague.py`.
+
+### v1.5 — Dota2
+
+- Same pipeline as v1.2 using `parsers/dota2.py` (Dota2 may require extra fields and validation).
+
+### v2.0 — Admin Operations Dashboard (Milestone C)
+
+**Goal:** internal ops tooling for visibility and recovery.
+
+**Checklist:**
+
+- Select lightweight stack (FastAPI/Flask + minimal frontend) and admin auth (Discord OAuth or local accounts).
+
+- Views: match list/detail, job queue, logs, errors, feature-flag controls.
+
+- Panels: PandaScore quota/usage, health checks, manual override and retry/cancel actions.
+
+- Tests for key admin flows and documented runbook.
+
+**Estimate:** 4–6 weeks (MVP).
+
+### v3.0 — Public-Facing Site (Milestone D)
+
+**Goal:** user-facing site with leaderboards, pick history, and account linking.
+
+**Checklist (MVP):**
 
 - Public match pages and leaderboards.
-- User account linking (Discord) and opt-in notifications.
-- Pick history and basic analytics (no live-play-by-play initially).
 
-Deliverables:
+- Discord account linking and user settings.
 
-- User-facing web app and basic signup/link flow.
+- Pick history and basic exports.
 
-Estimated effort: 6–12 weeks (MVP), depending on scope.
+- Opt-in notifications and privacy review (TOS/Privacy policy).
 
-## Advanced / Deferred Features
+**Estimate:** 6–12 weeks (MVP depending on scope).
 
-- Live, play-by-play statistics and advanced in-game analytics (deferred). These are expensive with PandaScore — evaluate alternate providers, scraping options, or funding before committing.
-- Monetization or premium tiers to cover API costs (if needed later).
+## Advanced / Deferred Items
 
-## Implementation Notes & Constraints
+- Live, play-by-play statistics and deep in-game analytics are deferred due to cost and data availability. Evaluate alternate providers, scraping legality, or funding before implementation.
 
-- PandaScore rate limits: implement request batching, caching, and backoff. Prefer scheduled prefetching around reset windows.
-- Parser modularity: keep a small, stable core parsing helper library and move only game-specific transformations into adapters.
-- DB changes: create Alembic migrations for any schema changes; keep migrations small and incremental per title.
-- Tests & CI: use recorded API fixtures and mocks to avoid hitting PandaScore in CI; aim to cover parser edge-cases and polling loops.
-- Observability: add health endpoints, logs, and optional Sentry/metrics as part of the admin dashboard milestone.
+- Monetization or premium tiers can be considered later to offset paid-data costs.
+
+## Implementation Notes
+
+- Rate limits: batch requests, cache results, prefetch around reset windows, and use exponential backoff.
+
+- Parser pattern: keep a lean core and move only game-specific transforms into adapters.
+
+- DB changes: create small, incremental Alembic migrations per title.
+
+- Testing: use recorded API fixtures and mocks for CI to avoid hitting PandaScore directly.
+
+- Observability: add health endpoints, structured logs, and optional Sentry/metrics during Milestone C.
+
+## Release Procedure (template)
+
+For each release:
+
+- Update `pyproject.toml` or version source.
+
+- Add changelog entry and release notes with acceptance criteria met.
+
+- Run full test suite in CI (including parser fixtures).
+
+- Tag release and open PR with release notes.
+
+- Smoke test in staging if available before merging to `main`.
 
 ## Next Steps
 
-1. Finalize acceptance criteria for Milestone A and schedule a sprint.
-2. Implement parser refactor for LoL and the improved rate-limit monitor.
-3. Iterate adding CS2 using the new adapter template.
-
----
-If you want, I can convert this to a Git commit and open a PR, or tweak estimates and scope per your available time.
+1. Finalize acceptance criteria for v1.1 and schedule a sprint.
+2. Begin parser refactor for LoL and implement improved rate-limit tracking.
+3. Start v1.2 (CS2) once v1.1 is validated in CI.
