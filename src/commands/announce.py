@@ -99,14 +99,18 @@ class AnnouncementModal(ui.Modal, title="Create Announcement"):
         )
         embed.set_author(
             name=f"Announcement from {interaction.user.display_name}",
-            icon_url=interaction.user.avatar.url,
+            icon_url=(
+                interaction.user.avatar.url
+                if interaction.user.avatar
+                else None
+            ),
         )
         embed.set_footer(text=announcement_details["label"])
 
-        # Send the announcement
+        # Send the announcement immediately (preserve existing behavior/tests)
         await channel.send(embed=embed)
 
-        # Send confirmation
+        # Send confirmation to the admin
         await interaction.followup.send(
             f"Announcement successfully sent to #{channel.name}!",
             ephemeral=True,

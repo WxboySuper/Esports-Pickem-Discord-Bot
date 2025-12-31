@@ -62,9 +62,6 @@ def _paginate_matches(ms: list[Match], info: tuple[int, int] | None):
     return ms[start:end], p, total_pages, sz, total
 
 
-# --- Helper Functions and Classes ---
-
-
 def _make_aware(dt: datetime) -> datetime:
     if dt.tzinfo is not None:
         return dt
@@ -150,7 +147,7 @@ def _get_autocomplete_choices(
 
 
 async def contest_autocompletion(
-    interaction: discord.Interaction,
+    _: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[int]]:
     """Autocomplete for contests, showing active and upcoming contests.

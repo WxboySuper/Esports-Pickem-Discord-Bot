@@ -1,7 +1,7 @@
 # src/commands/pick.py
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import discord
 from discord import app_commands
@@ -12,6 +12,10 @@ from src.models import Match, Pick
 from src import crud
 
 logger = logging.getLogger("esports-bot.commands.pick")
+
+# Number of days in advance (from now) that matches are available for picking.
+# The pick window extends this many days into the future.
+PICK_WINDOW_DAYS = 5
 
 
 class MatchSelect(discord.ui.Select):
@@ -165,11 +169,13 @@ async def pick(interaction: discord.Interaction):
             picks = crud.list_picks_for_user(session, db_user.id)
             user_picks = {pick.match_id: pick.chosen_team for pick in picks}
 
-        # Fetch active matches (not yet started)
+        # Fetch active matches that are within the pick window
         now_utc = datetime.now(timezone.utc)
+        pick_cutoff = now_utc + timedelta(days=PICK_WINDOW_DAYS)
         active_matches_stmt = (
             select(Match)
             .where(Match.scheduled_time > now_utc)
+            .where(Match.scheduled_time <= pick_cutoff)
             .where(Match.team1 != "TBD")
             .where(Match.team2 != "TBD")
             .order_by(Match.scheduled_time)
