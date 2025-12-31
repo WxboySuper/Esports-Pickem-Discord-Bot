@@ -1,6 +1,7 @@
 # Temporary/local-friendly DB path handling:
 import os
 import logging
+from urllib.parse import urlparse, urlunparse
 from contextlib import asynccontextmanager, contextmanager
 from typing import AsyncGenerator
 from pathlib import Path
@@ -39,7 +40,36 @@ else:
 raw_db_url = raw_db_url.replace("esports_pickem", "esports-pickem")
 DATABASE_URL = raw_db_url
 
-logger.info("Using database at: %s", DATABASE_URL)
+
+def _sanitize_database_url(raw: str) -> str:
+    """Return a sanitized representation of a database URL.
+
+    Removes any embedded userinfo (username/password) and returns a
+    reconstructed URL using only scheme, host[:port], and path. For
+    SQLite URLs the local file path is preserved but no credentials
+    are included.
+    """
+    try:
+        p = urlparse(raw)
+    except Exception:
+        return "<invalid-database-url>"
+
+    scheme = p.scheme or ""
+    # Preserve sqlite paths but do not reveal other secrets
+    if scheme.startswith("sqlite"):
+        # Reconstruct as scheme:///path or scheme://<path>
+        if p.path:
+            return f"{scheme}://{p.path}"
+        return scheme
+
+    host = p.hostname or ""
+    port = f":{p.port}" if p.port else ""
+    path = p.path or ""
+    sanitized = urlunparse((scheme, f"{host}{port}", path, "", "", ""))
+    return sanitized
+
+
+logger.info("Using database at: %s", _sanitize_database_url(DATABASE_URL))
 
 _sql_echo = os.getenv("SQL_ECHO", "False").lower() in ("true", "1", "t")
 
@@ -107,25 +137,34 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.close()
 
 
-try:
-    event.listen(engine, "connect", _set_sqlite_pragma)
-except Exception:
-    logger.exception(
-        (
-            "Could not register connect event listener on sync engine; "
-            "continuing without PRAGMA setup"
-        )
-    )
+def _is_sqlite() -> bool:
+    """Return True if the configured DATABASE_URL targets SQLite."""
+    try:
+        return "sqlite" in (DATABASE_URL or "")
+    except Exception:
+        return False
 
-try:
-    event.listen(async_engine.sync_engine, "connect", _set_sqlite_pragma)
-except Exception:
-    logger.exception(
-        (
-            "Could not register connect event listener on async engine; "
-            "continuing without PRAGMA setup"
+
+if _is_sqlite():
+    try:
+        event.listen(engine, "connect", _set_sqlite_pragma)
+    except Exception:
+        logger.exception(
+            (
+                "Could not register connect event listener on sync engine; "
+                "continuing without PRAGMA setup"
+            )
         )
-    )
+
+    try:
+        event.listen(async_engine.sync_engine, "connect", _set_sqlite_pragma)
+    except Exception:
+        logger.exception(
+            (
+                "Could not register connect event listener on async engine; "
+                "continuing without PRAGMA setup"
+            )
+        )
 
 
 @asynccontextmanager
