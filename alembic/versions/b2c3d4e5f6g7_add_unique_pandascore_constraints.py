@@ -40,21 +40,13 @@ def upgrade():
             f"found {int(dup_contest)} duplicate pairs. Please deduplicate these rows before running this migration."
         )
 
-    # Create composite unique index for contest (league_id, serie_id)
-    op.create_index(
-        op.f("ix_contest_pandascore_league_serie"),
-        "contest",
-        ["pandascore_league_id", "pandascore_serie_id"],
-        unique=True,
-    )
+    # The `Contest` model already defines a UniqueConstraint on
+    # (pandascore_league_id, pandascore_serie_id). To avoid creating a
+    # redundant database-level uniqueness index/constraint here we only
+    # perform the duplicate-check; the actual constraint/index is managed
+    # by the model's schema definition and its migration.
 
 
 def downgrade():
-    # Drop composite unique index
-    op.drop_index(
-        op.f("ix_contest_pandascore_league_serie"), table_name="contest"
-    )
-    # No other indexes changed in this migration; the team pandascore index
-    # is managed in the earlier migration and intentionally left unchanged here.
-
-    # No-op for team pandascore index (created in earlier migration)
+    """No-op downgrade: uniqueness is managed by the model schema."""
+    pass

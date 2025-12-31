@@ -91,7 +91,6 @@ class PandaScoreClient:
 
         return self._session
 
-
     def _build_headers(self) -> Dict[str, Any]:
         """Construct and validate headers for aiohttp sessions.
 
@@ -100,14 +99,22 @@ class PandaScoreClient:
         """
         if getattr(self, "_disabled", False):
             raise PandaScoreError(
-                "PandaScore client is disabled because no API key is configured"
+                (
+                    "PandaScore client is disabled because no API key "
+                    "is configured"
+                )
             )
         headers: Dict[str, Any] = {"Accept": "application/json"}
         if isinstance(self.api_key, str) and self.api_key.strip():
             headers["Authorization"] = f"Bearer {self.api_key}"
             return headers
 
-        raise PandaScoreError("Attempted to create aiohttp session without API key")
+        raise PandaScoreError(
+            (
+                "Attempted to create aiohttp session without "
+                "API key"
+            )
+        )
 
     @staticmethod
     def _build_url(endpoint: str) -> str:
@@ -299,7 +306,7 @@ class PandaScoreClient:
 
     @staticmethod
     def _build_params(
-        options: Optional[Dict[str, Any]] = None
+        options: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Build query params for PandaScore match endpoints from options.
 
@@ -479,4 +486,94 @@ class PandaScoreClient:
 
 
 # Module-level singleton instance
-pandascore_client = PandaScoreClient()
+
+
+class DisabledPandaScoreClient:
+    """A minimal, import-safe disabled client used when the real client
+    cannot be constructed (e.g. missing API key during test collection).
+
+    This provides harmless defaults for high-level methods so importing
+    modules and tests won't fail. Network methods return empty results or
+    None and attempting to open a session raises `PandaScoreError`.
+    """
+
+    def __init__(self) -> None:
+        self._disabled = True
+        self.api_key = None
+        self._session = None
+        self._request_count = 0
+        self._window_start = datetime.now(timezone.utc)
+
+    async def _get_session(
+        self,
+    ) -> (
+        aiohttp.ClientSession
+    ):  # pragma: no cover - simple sentinel  # skipcq: PYL-R0201
+        raise PandaScoreError("PandaScore client is disabled (no API key)")
+
+    async def _make_request(
+        self,
+        endpoint: str,
+        params: Optional[Dict[str, Any]] = None,
+        max_retries: int = 0,
+    ) -> JSONType:  # skipcq: PYL-R0201
+        raise PandaScoreError("PandaScore client is disabled (no API key)")
+
+    async def fetch_matches(
+        self, kind: str, options: Optional[Dict[str, Any]] = None
+    ) -> List[JSONType]:  # skipcq: PYL-R0201
+        return []
+
+    async def fetch_upcoming_matches(
+        self,
+        league_ids: Optional[List[int]] = None,
+        page_size: int = DEFAULT_PAGE_SIZE,
+        page: int = 1,
+    ) -> List[JSONType]:  # skipcq: PYL-R0201
+        return []
+
+    async def fetch_running_matches(
+        self, page_size: int = DEFAULT_PAGE_SIZE, page: int = 1
+    ) -> List[JSONType]:  # skipcq: PYL-R0201
+        return []
+
+    async def fetch_all_upcoming_matches(
+        self, league_ids: Optional[List[int]] = None, max_pages: int = 5
+    ) -> List[JSONType]:  # skipcq: PYL-R0201
+        return []
+
+    async def fetch_match_by_id(
+        self, match_id: int
+    ) -> Optional[JSONType]:  # skipcq: PYL-R0201
+        return None
+
+    async def close(self) -> None:  # skipcq: PYL-R0201
+        return None
+
+
+class _LazyPandaScoreClientProxy:
+    """Proxy that lazily constructs the real PandaScore client on first use.
+
+    This preserves the module-level `pandascore_client` object shape so
+    existing call sites can continue to use `pandascore_client.method(...)`
+    without triggering client construction during import.
+    """
+
+    def __init__(self) -> None:
+        self._client = None
+
+    def _construct(self):
+        if self._client is None:
+            try:
+                self._client = PandaScoreClient()
+            except Exception:
+                self._client = DisabledPandaScoreClient()
+
+    def __getattr__(self, item):
+        self._construct()
+        return getattr(self._client, item)
+
+
+# Export a module-level proxy instance that will construct the real
+# client lazily when first accessed.
+pandascore_client = _LazyPandaScoreClientProxy()

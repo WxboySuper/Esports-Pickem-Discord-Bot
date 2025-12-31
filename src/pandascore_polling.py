@@ -19,6 +19,7 @@ from src.pandascore_polling_core import (
     _fetch_match_from_pandascore,
     get_known_running_matches,
     remove_known_running_matches,
+    remove_known_running_match_by_match_id,
     _remove_job_if_exists as _core_remove,
 )
 
@@ -50,6 +51,31 @@ async def poll_live_match_job(match_db_id: int) -> None:
                 "Match %s has no pandascore_id, cannot poll. Unscheduling.",
                 match.id,
             )
+            # Ensure any stale Pandascore IDs that referenced this match
+            # are removed from the known-running set to avoid leaks.
+            # If the match no longer has a pandascore_id, remove any stale
+            # entry directly using the reverse mapping (O(1)). This avoids
+            # scanning all known running IDs and issuing a DB query per id.
+            try:
+                try:
+                    await remove_known_running_match_by_match_id(match.id)
+                except Exception:
+                    logger.exception(
+                        (
+                            "Failed to remove stale pandascore mapping for "
+                            "match %s"
+                        ),
+                        match.id,
+                    )
+            except Exception:
+                logger.exception(
+                    (
+                        "Unexpected error removing stale running mapping "
+                        "for match %s"
+                    ),
+                    match.id,
+                )
+
             await _unschedule_job(job_id)
             return
 
@@ -161,7 +187,10 @@ async def _finalize_session_commit(
             try:
                 setattr(session, "_committed", True)
             except Exception:
-                pass
+                logger.exception(
+                    "Failed to set _committed on session for match %s",
+                    match_id,
+                )
     except Exception:
         logger.exception(
             "Failed to commit session after processing match %s", match_id

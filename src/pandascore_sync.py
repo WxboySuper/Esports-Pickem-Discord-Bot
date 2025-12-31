@@ -98,8 +98,11 @@ async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
 
 async def _process_matches_and_commit(
     matches_data: List[Any], db_session
-) -> Tuple[List[Any], List[Tuple[int, int]]]:
-    """Process matches; commit DB changes; return schedules/notifications."""
+) -> Tuple[List[Any], List[Tuple[int, int]], Dict[str, int]]:
+    """
+    Process matches; commit DB changes; return schedules/notifications
+    and summary.
+    """
     summary = {"contests": 0, "matches": 0, "teams": 0}
     ctx = PandaScoreSyncContext(db_session=db_session, summary=summary)
 
@@ -115,7 +118,7 @@ async def _process_matches_and_commit(
             await asyncio.sleep(0)
 
     await db_session.commit()
-    return ctx.matches_to_schedule, ctx.notifications
+    return ctx.matches_to_schedule, ctx.notifications, ctx.summary
 
 
 async def perform_pandascore_sync(
@@ -148,13 +151,12 @@ async def perform_pandascore_sync(
     )
 
     async with get_async_session() as db_session:
-        all_matches_to_schedule, all_notifications = (
+        all_matches_to_schedule, all_notifications, summary = (
             await _process_matches_and_commit(matches_data, db_session)
         )
 
     await _run_post_sync_actions(all_matches_to_schedule, all_notifications)
-    # summary is logged inside processing helper via the context
-    return {"contests": 0, "matches": 0, "teams": 0}
+    return summary
 
 
 async def sync_running_matches() -> Dict[str, Any]:

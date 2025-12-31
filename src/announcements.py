@@ -52,7 +52,10 @@ def _get_bot_member(guild: discord.Guild) -> Optional[discord.Member]:
         try:
             return guild.get_member(bot.user.id)
         except Exception:
-            pass
+            logger.exception(
+                "Failed to resolve bot member for guild %s",
+                getattr(guild, "id", "unknown"),
+            )
     return None
 
 
@@ -146,7 +149,10 @@ async def _try_create_announcement_channel(
             e,
         )
     except Exception:
-        pass
+        logger.exception(
+            "Unexpected error while creating announcement channel in guild %s",
+            getattr(guild, "id", "unknown"),
+        )
     return None
 
 
@@ -252,7 +258,10 @@ async def get_admin_channel(
             e,
         )
     except Exception:
-        pass
+        logger.exception(
+            "Unexpected error while creating admin channel in guild %s",
+            getattr(guild, "id", "unknown"),
+        )
     return None
 
 
@@ -277,7 +286,7 @@ def _resolve_dev_guild(
     except (ValueError, TypeError):
         logger.warning("Invalid DEVELOPER_GUILD_ID: %s", guild_id_str)
     except Exception:
-        pass
+        logger.exception("Failed to resolve developer guild %s", guild_id_str)
     return None
 
 

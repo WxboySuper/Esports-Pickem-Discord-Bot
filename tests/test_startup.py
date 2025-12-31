@@ -1,6 +1,4 @@
-from unittest.mock import patch, MagicMock
-
-from src.pandascore_sync import perform_pandascore_sync
+from unittest.mock import patch, MagicMock, AsyncMock
 from src.scheduler import (
     start_scheduler,
 )
@@ -14,11 +12,12 @@ def test_start_scheduler_adds_jobs_with_replace_existing():
     mock_scheduler = MagicMock()
     mock_scheduler.running = False
 
-    # Since perform_pandascore_sync is now imported locally within
-    # start_scheduler, we need to patch it in the scheduler module's context.
+    # Since `perform_pandascore_sync` is imported locally within
+    # `start_scheduler`, avoid importing it here at collection time and
+    # patch the symbol in the scheduler module with an AsyncMock instead.
     with patch("src.scheduler.scheduler", mock_scheduler), patch(
         "src.scheduler.perform_pandascore_sync",
-        new=perform_pandascore_sync,
+        new=AsyncMock(),
         create=True,
     ):
         # Call the function that configures and starts the scheduler

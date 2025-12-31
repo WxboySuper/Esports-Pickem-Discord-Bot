@@ -220,7 +220,9 @@ class LeaguepediaClient:
                         retry_after = self._extract_retry_after(resp)
                         return True, retry_after
         except Exception:
-            pass
+            logger.exception(
+                "Failed to inspect JSON body for rate-limit detection"
+            )
 
         return False, None
 

@@ -6,7 +6,7 @@ pandascore_polling.py to reduce file-level complexity.
 import logging
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Set
+from typing import Any, Optional, Set, Dict
 
 from sqlmodel import select
 from src.models import Match, Result
@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 # Shared running set protected by an asyncio lock
 _known_running_matches: Set[int] = set()
+# Map DB match id -> pandascore_id for O(1) removals when a match loses
+# its pandascore_id (avoids scanning the entire running set).
+_known_running_map: Dict[int, int] = {}
 _known_running_lock = asyncio.Lock()
 
 
@@ -27,17 +30,45 @@ async def get_known_running_matches() -> Set[int]:
         return set(_known_running_matches)
 
 
-async def add_known_running_match(pandascore_id: int) -> None:
-    """Add a pandascore id to the known-running set under the lock."""
+async def add_known_running_match(
+    pandascore_id: int, match_id: Optional[int] = None
+) -> None:
+    """Add a pandascore id to the known-running set under the lock.
+
+    If `match_id` is provided, record a mapping from match_id -> pandascore_id
+    to allow O(1) removal later when the match loses its pandascore_id.
+    """
     async with _known_running_lock:
         _known_running_matches.add(pandascore_id)
+        if match_id is not None:
+            _known_running_map[match_id] = pandascore_id
 
 
 async def remove_known_running_matches(ids) -> None:
-    """Remove a collection of pandascore ids from the known-running set."""
+    """Remove a collection of pandascore ids from the known-running set.
+
+    Also clear any reverse mappings that reference the removed pandascore ids.
+    """
     async with _known_running_lock:
         for i in ids:
             _known_running_matches.discard(i)
+        # Remove any match_id -> pandascore_id entries that pointed to
+        # removed ids
+        to_delete = [m for m, pid in _known_running_map.items() if pid in ids]
+        for m in to_delete:
+            del _known_running_map[m]
+
+
+async def remove_known_running_match_by_match_id(match_id: int) -> None:
+    """Remove a known-running pandascore id using the DB `match_id`.
+
+    This provides an O(1) path to clear stale entries when a match's
+    `pandascore_id` is cleared from the DB.
+    """
+    async with _known_running_lock:
+        pid = _known_running_map.pop(match_id, None)
+        if pid is not None:
+            _known_running_matches.discard(pid)
 
 
 def _remove_job_if_exists(job_id: str) -> None:
@@ -80,7 +111,10 @@ async def _persist_result(match: Match, winner: str, current_score_str: str):
             try:
                 setattr(session, "_committed", True)
             except Exception:
-                pass
+                logger.exception(
+                    "Failed to set _committed on session for match %s",
+                    match.id,
+                )
             return result, True
     except Exception:
         logger.exception("Failed to persist result for match %s", match.id)
@@ -122,7 +156,18 @@ async def _handle_winner(
         current_score_str,
     )
 
-    result, committed = await _persist_result(match, winner, current_score_str)
+    committed = False
+    result = None
+    try:
+        result, committed = await _persist_result(
+            match, winner, current_score_str
+        )
+    except Exception:
+        # _persist_result already logs; ensure we don't crash here and
+        # preserve `committed=False` semantics for the caller.
+        logger.exception(
+            "Exception while persisting result for match %s", match.id
+        )
     if result:
         logger.info("Saved result and updated picks for match %s.", match.id)
         await _notify_result(match.id, result.id)
@@ -144,7 +189,7 @@ async def _handle_winner(
                 "Failed to remove pandascore_id %s from running set",
                 match.pandascore_id,
             )
-    return bool(locals().get("committed", False))
+    return bool(committed)
 
 
 async def _should_continue_polling(
@@ -257,7 +302,10 @@ async def _update_match_score(
     try:
         setattr(session, "_committed", True)
     except Exception:
-        pass
+        logger.exception(
+            "Failed to set _committed on session for match %s",
+            match.id,
+        )
     await _notify_mid_series(match, current_score_str)
     return True
 
@@ -310,7 +358,7 @@ async def _persist_running_flag(session, match, pandascore_id: int) -> bool:
         match.team2,
     )
     try:
-        await add_known_running_match(pandascore_id)
+        await add_known_running_match(pandascore_id, match.id)
     except Exception:
         logger.exception(
             "Failed to add pandascore_id %s to running set",
@@ -324,7 +372,10 @@ async def _persist_running_flag(session, match, pandascore_id: int) -> bool:
         try:
             setattr(session, "_committed", True)
         except Exception:
-            pass
+            logger.exception(
+                "Failed to set _committed on session for match %s",
+                match.id,
+            )
         return True
     except Exception:
         logger.exception(

@@ -110,14 +110,22 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
 try:
     event.listen(engine, "connect", _set_sqlite_pragma)
 except Exception:
-    # In test environments with engine stubs, event listening may not
-    # be supported. Silently ignore to allow imports.
-    pass
+    logger.exception(
+        (
+            "Could not register connect event listener on sync engine; "
+            "continuing without PRAGMA setup"
+        )
+    )
 
 try:
     event.listen(async_engine.sync_engine, "connect", _set_sqlite_pragma)
 except Exception:
-    pass
+    logger.exception(
+        (
+            "Could not register connect event listener on async engine; "
+            "continuing without PRAGMA setup"
+        )
+    )
 
 
 @asynccontextmanager
