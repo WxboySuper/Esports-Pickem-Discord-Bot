@@ -30,6 +30,40 @@ async def get_known_running_matches() -> Set[int]:
         return set(_known_running_matches)
 
 
+async def _result_exists_in_db(m: Match, sess: Optional[Any]) -> bool:
+    """Check whether a Result exists for match `m` using `sess` when
+    provided, otherwise open a temporary session.
+    """
+    if sess:
+        stmt = select(Result).where(Result.match_id == m.id)
+        res = await sess.exec(stmt)
+        return bool(res.first())
+
+    from src.db import get_async_session
+
+    async with get_async_session() as new_session:
+        stmt = select(Result).where(Result.match_id == m.id)
+        res = await new_session.exec(stmt)
+        return bool(res.first())
+
+
+def _compute_timed_out_for_match(m: Match) -> bool:
+    """Return True if match `m` considered timed out (scheduled_time > 12h)."""
+    now = datetime.now(timezone.utc)
+    if getattr(m, "scheduled_time", None) is None:
+        logger.warning(
+            "Match %s has no scheduled_time; skipping timeout check.", m.id
+        )
+        return False
+    try:
+        return now > m.scheduled_time + timedelta(hours=12)
+    except (TypeError, AttributeError) as e:
+        logger.warning(
+            "Could not compute timeout for match %s: %s", m.id, e
+        )
+        return False
+
+
 async def add_known_running_match(
     pandascore_id: int, match_id: Optional[int] = None
 ) -> None:
@@ -200,38 +234,10 @@ async def _should_continue_polling(
         _remove_job_if_exists(job_id)
         return False
 
-    async def _result_exists(m: Match, sess: Optional[Any]) -> bool:
-        # Check result existence without lazy load (MissingGreenlet-safe)
-        if sess:
-            stmt = select(Result).where(Result.match_id == m.id)
-            res = await sess.exec(stmt)
-            return bool(res.first())
+    # Use extracted module-level helpers for result existence and timeout
+    # computations to reduce nested branching and cyclomatic complexity.
 
-        from src.db import get_async_session
-
-        async with get_async_session() as new_session:
-            stmt = select(Result).where(Result.match_id == m.id)
-            res = await new_session.exec(stmt)
-            return bool(res.first())
-
-    def _compute_timed_out(m: Match) -> bool:
-        now = datetime.now(timezone.utc)
-        if getattr(m, "scheduled_time", None) is None:
-            logger.warning(
-                "Match %s has no scheduled_time; skipping timeout check.", m.id
-            )
-            return False
-        try:
-            return now > m.scheduled_time + timedelta(hours=12)
-        except (TypeError, AttributeError) as e:
-            logger.warning(
-                "Could not compute timeout for match %s: %s",
-                m.id,
-                e,
-            )
-            return False
-
-    if await _result_exists(match, session):
+    if await _result_exists_in_db(match, session):
         logger.info(
             "Match %s result exists. Unscheduling '%s'.",
             match.id,
@@ -240,7 +246,7 @@ async def _should_continue_polling(
         _remove_job_if_exists(job_id)
         return False
 
-    if _compute_timed_out(match):
+    if _compute_timed_out_for_match(match):
         logger.warning(
             "Job %s for match %s timed out; unscheduling.", job_id, match.id
         )
