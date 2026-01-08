@@ -31,7 +31,25 @@ Milestones are scoped for fast, incremental releases. Each milestone below maps 
 
 - Core scheduler, PandaScore ingestion, DB models, baseline tests
 
-### v1.1 — Refactor & Hardening (Milestone A)
+### v1.1 — Short-term UX & Reminders
+
+**Goal:** quick, high-impact UX improvements: 24-hour reminders and a bulk-friendly `/pick` redesign.
+
+**Checklist:**
+
+- Add configurable 24-hour reminders (server opt-in, per-user opt-out) and scheduler integration.
+
+- Redesign `/pick` output for faster multi-match picking (compact, bulk-friendly UI using Discord components).
+
+- Audit primary command UX and apply small quick wins (consistent ordering, shorter messages, clearer help text).
+
+- Update docs/changelog and release notes for v1.1.
+
+**Acceptance:** increased engagement via reminders and a more usable `/pick` flow; tests and docs updated.
+
+**Estimate:** 1–3 weeks.
+
+### v1.2 — Refactor & Hardening (Milestone A)
 
 **Goal:** provide a reusable adapter and harden polling.
 
@@ -51,13 +69,13 @@ Milestones are scoped for fast, incremental releases. Each milestone below maps 
 
 **Estimate:** 2–4 weeks.
 
-### v1.2 — CS2 (Counter-Strike)
+### v1.3 — CS2 (Counter-Strike)
 
 **Goal:** CS2 MVP using the adapter template.
 
 **Checklist:**
 
-- Implement `parsers/cs2.py` following the LoL adapter.
+- Implement `parsers/cs2.py` following the adapter interface.
 
 - Add per-title configuration and enable flag.
 
@@ -67,17 +85,61 @@ Milestones are scoped for fast, incremental releases. Each milestone below maps 
 
 **Estimate:** 1–3 weeks (CS2 may need extra work for map/series parsing).
 
-### v1.3 — Valorant
+### v1.4 — Fan Experience: Watchlist & Catchup (feature)
 
-- Same pipeline as v1.2 using `parsers/valorant.py`.
+**Goal:** personal watchlist and spoiler-free catchups to increase engagement and reduce announcement noise.
 
-### v1.4 — Rocket League
+**Checklist:**
 
-- Same pipeline as v1.2 using `parsers/rocketleague.py`.
+- Implement `user_watchlist` DB table and `/watch` command for bookmarking matches or teams.
 
-### v1.5 — Dota2
+- Implement DM reminders when a bookmarked match is starting and an opt-in `reminder_channel` preference (DM vs channel).
 
-- Same pipeline as v1.2 using `parsers/dota2.py` (Dota2 may require extra fields and validation).
+- Implement `/catchup` command that lists finished bookmarked matches with scores hidden behind spoilers and a `Mark as Watched` action.
+
+**Acceptance:** users can bookmark matches, receive DM start reminders, and view spoiler-free catchup lists.
+
+**Estimate:** 2–4 weeks.
+
+### v1.5 — Valorant
+
+- Same pipeline as v1.3 using `parsers/valorant.py`.
+
+### v1.6 — Subscriptions & Role-Based Pings (feature)
+
+**Goal:** granular subscriptions (team/tournament/tier/region/country) and role-based notifications to reduce global spam.
+
+**Checklist:**
+
+- Implement subscriptions DB and a lightweight rules engine to match announcements to subscribers.
+
+- Admin-facing role mapping (map a `league.slug` or `region` to a Discord Role for opt-in pings).
+
+- Per-user preference for DM vs channel notifications and tier filters (e.g., S-tier only).
+
+**Estimate:** 2–4 weeks.
+
+### v1.7 — Rocket League
+
+- Same pipeline as v1.3 using `parsers/rocketleague.py`.
+
+### v1.8 — Stream & Engagement Features (feature)
+
+**Goal:** improve announcements and in-chat engagement: smart stream selection, upset/highlight badges, real-time result DMs.
+
+**Checklist:**
+
+- Implement `streams_list` priority logic (official+en/main) and replace raw lists with a single `Watch Live` action + `All Streams` view.
+
+- Add upset/highlight heuristics (tier-based badges, playoff color accents).
+
+- Trigger instant result DMs to users who picked correctly or subscribed to a match for immediate feedback.
+
+**Estimate:** 2–4 weeks.
+
+### v1.9 — Dota2
+
+- Same pipeline as v1.3 using `parsers/dota2.py` (Dota2 may require extra fields and validation).
 
 ### v2.0 — Admin Operations Dashboard (Milestone C)
 
