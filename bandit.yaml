@@ -1,7 +1,0 @@
-# Bandit configuration to ignore use-of-assert warnings in tests
-# This file disables the B101 check (use of assert) and excludes the tests
-# directory from scanning to avoid false positives in test code.
-skips:
-  - B101
-exclude_dirs:
-  - tests
