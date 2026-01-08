@@ -69,14 +69,18 @@ def _parse_minutes_from_raw(raw) -> list:
         return []
 
 
-def _validate_minutes(minutes_list: list) -> tuple[list[int] | None, Exception | None]:
+def _validate_minutes(
+    minutes_list: list,
+) -> tuple[list[int] | None, Exception | None]:
     """Convert items to ints, ensure positive, deduplicate, and sort.
 
     Returns `(list, None)` on success or `(None, Exception)` on failure so the
     caller can log the original exception context without raising here.
     """
     if not minutes_list:
-        return None, ValueError("no reminder minutes configured")
+        return None, ValueError(
+            "no reminder minutes configured",
+        )
     converted: list[int] = []
     for item in minutes_list:
         try:
@@ -84,12 +88,16 @@ def _validate_minutes(minutes_list: list) -> tuple[list[int] | None, Exception |
         except Exception as exc:
             return None, exc
         if m <= 0:
-            return None, ValueError("reminder minutes must be positive non-zero integers")
+            return None, ValueError(
+                "reminder minutes must be positive non-zero integers",
+            )
         converted.append(m)
     return sorted(set(converted)), None
 
 
-def _should_send_immediately(minutes_int: int, minutes_list: list[int], now_dt: datetime, match: Match) -> bool:
+def _should_send_immediately(
+    minutes_int: int, minutes_list: list[int], now_dt: datetime, match: Match
+) -> bool:
     """Return True if this reminder should be sent immediately.
 
     If a smaller (closer) reminder is configured, only send this larger
@@ -97,7 +105,10 @@ def _should_send_immediately(minutes_int: int, minutes_list: list[int], now_dt: 
     If there is no smaller reminder, fall back to sending if the match
     hasn't started.
     """
-    smaller = max((m for m in minutes_list if m < minutes_int), default=None)
+    smaller = max(
+        (m for m in minutes_list if m < minutes_int),
+        default=None,
+    )
     if smaller is None:
         return now_dt < match.scheduled_time
     smaller_time = match.scheduled_time - timedelta(minutes=smaller)
@@ -111,7 +122,12 @@ def _schedule(job_minutes: int, run_dt: datetime, match: Match) -> None:
     `patch("src.reminders.scheduler", mock_scheduler)`.
     """
     job_id = f"reminder_{job_minutes}_{match.id}"
-    logger.info("Scheduling %s-minute reminder for match %s (run=%s)", job_minutes, match.id, run_dt)
+    logger.info(
+        "Scheduling %s-minute reminder for match %s (run=%s)",
+        job_minutes,
+        match.id,
+        run_dt,
+    )
     scheduler.add_job(
         send_reminder,
         "date",

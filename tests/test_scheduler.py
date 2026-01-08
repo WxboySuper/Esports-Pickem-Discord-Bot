@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch  # noqa: F401
+from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta, timezone
 from src.reminders import schedule_reminders, send_reminder
 from src.models import Match, Team
@@ -23,7 +23,9 @@ async def _run_schedule(scheduler, now, match):
         await schedule_reminders(match)
 
 
-def _collect_title_desc_errors(obj, title_sub: str, desc_list: list[str]) -> list[str]:
+def _collect_title_desc_errors(
+    obj, title_sub: str, desc_list: list[str]
+) -> list[str]:
     errs: list[str] = []
     title = getattr(obj, "title", "") or ""
     if title_sub not in title:
@@ -41,8 +43,15 @@ def _collect_thumbnail_error(obj, expected_url: str) -> list[str]:
     return ["unexpected thumbnail URL"] if url != expected_url else []
 
 
-def _validate_embed(sent_embed, title_contains: str, desc_contains_list: list[str], thumbnail_url: str | None = None):
-    errors = _collect_title_desc_errors(sent_embed, title_contains, desc_contains_list)
+def _validate_embed(
+    sent_embed,
+    title_contains: str,
+    desc_contains_list: list[str],
+    thumbnail_url: str | None = None,
+):
+    errors = _collect_title_desc_errors(
+        sent_embed, title_contains, desc_contains_list
+    )
     if thumbnail_url is not None:
         errors += _collect_thumbnail_error(sent_embed, thumbnail_url)
     if errors:
@@ -76,14 +85,30 @@ async def test_schedule_far_future_match(mock_scheduler):
             kwargs = call_obj.kwargs
         else:
             kwargs = call_obj[1]
-        actual.add((kwargs.get("id"), kwargs.get("run_date"), tuple(kwargs.get("args", []))))
+        id_ = kwargs.get("id")
+        run_date = kwargs.get("run_date")
+        args_t = tuple(kwargs.get("args", []))
+        actual.add((id_, run_date, args_t))
     expected = {
-        ("reminder_30_1", match_time - timedelta(minutes=30), (1, 30)),
-        ("reminder_5_1", match_time - timedelta(minutes=5), (1, 5)),
-        ("reminder_1440_1", now, (1, 1440)),
+        (
+            "reminder_30_1",
+            match_time - timedelta(minutes=30),
+            (1, 30),
+        ),
+        (
+            "reminder_5_1",
+            match_time - timedelta(minutes=5),
+            (1, 5),
+        ),
+        (
+            "reminder_1440_1",
+            now,
+            (1, 1440),
+        ),
     }
-    if not expected.issubset(actual):
-        raise AssertionError(f"missing expected add_job calls: {expected - actual}")
+    missing = expected - actual
+    if missing:
+        raise AssertionError(f"missing expected add_job calls: {missing}")
 
 
 @pytest.mark.asyncio
@@ -114,13 +139,25 @@ async def test_schedule_late_30_min_reminder(mock_scheduler):
             kwargs = call_obj.kwargs
         else:
             kwargs = call_obj[1]
-        actual.add((kwargs.get("id"), kwargs.get("run_date"), tuple(kwargs.get("args", []))))
+        id_ = kwargs.get("id")
+        run_date = kwargs.get("run_date")
+        args_t = tuple(kwargs.get("args", []))
+        actual.add((id_, run_date, args_t))
     expected = {
-        ("reminder_30_2", now, (2, 30)),
-        ("reminder_5_2", match_time - timedelta(minutes=5), (2, 5)),
+        (
+            "reminder_30_2",
+            now,
+            (2, 30),
+        ),
+        (
+            "reminder_5_2",
+            match_time - timedelta(minutes=5),
+            (2, 5),
+        ),
     }
-    if not expected.issubset(actual):
-        raise AssertionError(f"missing expected add_job calls: {expected - actual}")
+    missing = expected - actual
+    if missing:
+        raise AssertionError(f"missing expected add_job calls: {missing}")
 
 
 @pytest.mark.asyncio
@@ -143,8 +180,11 @@ async def test_schedule_late_5_min_reminder(mock_scheduler):
     await _run_schedule(mock_scheduler, now, match)
 
     # Check that only the 5-minute reminder is scheduled immediately
-    if mock_scheduler.add_job.call_count != 1:
-        raise AssertionError(f"expected exactly 1 add_job call, got {mock_scheduler.add_job.call_count}")
+    call_count = mock_scheduler.add_job.call_count
+    if call_count != 1:
+        raise AssertionError(
+            f"expected exactly 1 add_job call, got {call_count}"
+        )
 
     call_obj = mock_scheduler.add_job.call_args_list[0]
     if hasattr(call_obj, "kwargs"):
@@ -194,8 +234,18 @@ def _prepare_send_reminder_mocks(mock_get_bot, mock_get_session, match):
 @pytest.mark.parametrize(
     "case",
     [
-        (30, "Upcoming Match Reminder", ["Team Liquid", "100 Thieves"], "http://team_liquid.png"),
-        (5, "Match Starting Soon", ["Last chance"], None),
+        (
+            30,
+            "Upcoming Match Reminder",
+            ["Team Liquid", "100 Thieves"],
+            "http://team_liquid.png",
+        ),
+        (
+            5,
+            "Match Starting Soon",
+            ["Last chance"],
+            None,
+        ),
     ],
 )
 @patch("src.reminders.get_bot_instance")
@@ -221,7 +271,8 @@ async def test_send_reminder_embed_content(
 
     await send_reminder(match_id=1, minutes=minutes)
 
-    if len(mock_broadcast.call_args_list) != 1:
-        raise AssertionError(f"expected 1 broadcast call, got {len(mock_broadcast.call_args_list)}")
+    call_count = len(mock_broadcast.call_args_list)
+    if call_count != 1:
+        raise AssertionError(f"expected 1 broadcast call, got {call_count}")
     sent_embed = mock_broadcast.call_args[0][1]
     _validate_embed(sent_embed, title, expected_desc, thumbnail)
