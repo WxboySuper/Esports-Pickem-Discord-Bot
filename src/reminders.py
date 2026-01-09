@@ -39,7 +39,7 @@ async def schedule_reminders(match: Match):
 
 def _normalize_minutes(raw):
     # Delegate parsing and validation to small helpers to keep complexity low
-    safe_default = [5, 30]
+    safe_default = [5, 30, 1440]
     minutes = _parse_minutes_from_raw(raw)
     validated, err = _validate_minutes(minutes)
     if validated is None:
