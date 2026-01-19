@@ -308,6 +308,61 @@ def test_pick_update_delete_missing(session: Session):
     assert crud.delete_pick(session, 7777) is False
 
 
+def test_score_picks_for_match(session: Session):
+    user1, contest, match = _mk_user_contest_match(session)
+    user2 = crud.create_user(session, discord_id="u2", username="u2")
+    user3 = crud.create_user(session, discord_id="u3", username="u3")
+
+    # User 1 picks correctly
+    crud.create_pick(
+        session,
+        crud.PickCreateParams(
+            user_id=user1.id,
+            contest_id=contest.id,
+            match_id=match.id,
+            chosen_team="A",
+        ),
+    )
+    # User 2 picks incorrectly
+    crud.create_pick(
+        session,
+        crud.PickCreateParams(
+            user_id=user2.id,
+            contest_id=contest.id,
+            match_id=match.id,
+            chosen_team="B",
+        ),
+    )
+    # User 3 also picks correctly
+    crud.create_pick(
+        session,
+        crud.PickCreateParams(
+            user_id=user3.id,
+            contest_id=contest.id,
+            match_id=match.id,
+            chosen_team="A",
+        ),
+    )
+
+    # Score picks with "A" as winner
+    updated_count = crud.score_picks_for_match(
+        session, match_id=match.id, winner="A", score=15
+    )
+    session.commit()
+
+    assert updated_count == 3
+
+    # Verify statuses and scores
+    picks = crud.list_picks_for_match(session, match.id)
+    for p in picks:
+        if p.user_id in [user1.id, user3.id]:
+            assert p.status == "correct"
+            assert p.score == 15
+        elif p.user_id == user2.id:
+            assert p.status == "incorrect"
+            assert p.score == 0
+
+
 # ---- RESULT ----
 def test_result_crud_and_queries(session: Session):
     contest = _mk_contest(session)
