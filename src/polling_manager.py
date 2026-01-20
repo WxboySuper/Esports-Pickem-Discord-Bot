@@ -89,9 +89,9 @@ def _schedule_poll_for_match(match):
     not already scheduled.
 
     Schedules a job named "poll_match_<match.id>" that calls
-    poll_live_match_job(match.id) every 5 minutes with a 60-second
+    poll_live_match_job(match.id) every 1 minute with a 60-second
     misfire grace period. If a job with the same id already exists,
-    no changes are made.
+    it is replaced to ensure the correct interval.
 
     Parameters:
         match: Match-like object with at least `id`, `team1`, and
@@ -100,9 +100,10 @@ def _schedule_poll_for_match(match):
     job_id = f"poll_match_{match.id}"
     if scheduler.get_job(job_id):
         logger.debug(
-            "Job '%s' for match %s already exists. Skipping.", job_id, match.id
+            "Job '%s' for match %s already exists. Ensuring it is active.",
+            job_id,
+            match.id,
         )
-        return
 
     logger.info(
         "Match %s (%s vs %s) is starting soon. Scheduling job '%s'.",

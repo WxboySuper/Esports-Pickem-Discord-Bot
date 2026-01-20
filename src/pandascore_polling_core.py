@@ -122,6 +122,9 @@ def _ensure_match_polling_job(match_id: int) -> None:
     This helper is used when a match is detected as running by the list
     poller but might not have been scheduled yet (or was scheduled with
     a slower interval). It forces a 1-minute interval job.
+
+    The function uses `replace_existing=True` to update any existing job
+    with the new high-frequency interval.
     """
     try:
         from src.scheduler_instance import scheduler
