@@ -114,7 +114,7 @@ def _schedule_poll_for_match(match):
     scheduler.add_job(
         poll_live_match_job,
         "interval",
-        minutes=5,
+        minutes=1,
         id=job_id,
         args=[match.id],
         misfire_grace_time=60,

@@ -116,6 +116,36 @@ def _remove_job_if_exists(job_id: str) -> None:
         logger.exception("Failed to remove job %s via scheduler", job_id)
 
 
+def _ensure_match_polling_job(match_id: int) -> None:
+    """Ensure a 1-minute polling job exists for the given match ID.
+
+    This helper is used when a match is detected as running by the list
+    poller but might not have been scheduled yet (or was scheduled with
+    a slower interval). It forces a 1-minute interval job.
+    """
+    try:
+        from src.scheduler_instance import scheduler
+        from src.pandascore_polling import poll_live_match_job
+
+        job_id = f"poll_match_{match_id}"
+        logger.info(
+            "Ensuring 1-minute polling job %s for running match %s",
+            job_id,
+            match_id,
+        )
+        scheduler.add_job(
+            poll_live_match_job,
+            "interval",
+            minutes=1,
+            id=job_id,
+            args=[match_id],
+            misfire_grace_time=60,
+            replace_existing=True,
+        )
+    except Exception:
+        logger.exception("Failed to ensure polling job for match %s", match_id)
+
+
 async def _fetch_match_from_pandascore(pandascore_id: int) -> Optional[dict]:
     try:
         return await pandascore_client.fetch_match_by_id(pandascore_id)
@@ -368,6 +398,10 @@ async def _persist_running_flag(session, match, pandascore_id: int) -> bool:
             "Failed to add pandascore_id %s to running set",
             pandascore_id,
         )
+
+    # Force immediate high-frequency polling for this confirmed running match
+    _ensure_match_polling_job(match.id)
+
     match.status = "running"
     session.add(match)
 
