@@ -170,7 +170,7 @@ def _create_match_table():
                 "status",
                 sqlmodel.sql.sqltypes.AutoString(),
                 nullable=True,
-                server_default="not_started",
+                server_default=sa.text("'not_started'"),
             ),
             sa.Column(
                 "last_announced_score",
@@ -223,11 +223,17 @@ def _create_pick_table():
                 nullable=False,
             ),
             sa.Column(
-                "status", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+                "status",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
+                server_default=sa.text("'pending'"),
             ),
             sa.Column("is_correct", sa.Boolean(), nullable=True),
             sa.Column(
-                "score", sa.Integer(), nullable=True, server_default="0"
+                "score",
+                sa.Integer(),
+                nullable=True,
+                server_default=sa.text("0"),
             ),
             sa.Column(
                 "timestamp", models.TZDateTime(length=64), nullable=False
@@ -306,44 +312,24 @@ def _drop_result_table():
 
 def _drop_pick_table():
     if _table_exists("pick"):
-        op.drop_index(op.f("ix_pick_user_id"), table_name="pick")
-        op.drop_index(op.f("ix_pick_status"), table_name="pick")
-        op.drop_index(op.f("ix_pick_match_id"), table_name="pick")
-        op.drop_index(op.f("ix_pick_contest_id"), table_name="pick")
         op.drop_table("pick")
 
 
 def _drop_match_table():
     if _table_exists("match"):
-        op.drop_index(op.f("ix_match_scheduled_time"), table_name="match")
-        op.drop_index(op.f("ix_match_pandascore_id"), table_name="match")
-        op.drop_index(op.f("ix_match_leaguepedia_id"), table_name="match")
-        op.drop_index(op.f("ix_match_contest_id"), table_name="match")
         op.drop_table("match")
 
 
 def _drop_user_table():
     if _table_exists("user"):
-        op.drop_index(op.f("ix_user_discord_id"), table_name="user")
         op.drop_table("user")
 
 
 def _drop_team_table():
     if _table_exists("team"):
-        op.drop_index(op.f("ix_team_name"), table_name="team")
-        op.drop_index(op.f("ix_team_pandascore_id"), table_name="team")
-        op.drop_index(op.f("ix_team_leaguepedia_id"), table_name="team")
         op.drop_table("team")
 
 
 def _drop_contest_table():
     if _table_exists("contest"):
-        op.drop_index(op.f("ix_contest_name"), table_name="contest")
-        op.drop_index(
-            op.f("ix_contest_pandascore_serie_id"), table_name="contest"
-        )
-        op.drop_index(
-            op.f("ix_contest_pandascore_league_id"), table_name="contest"
-        )
-        op.drop_index(op.f("ix_contest_leaguepedia_id"), table_name="contest")
         op.drop_table("contest")
