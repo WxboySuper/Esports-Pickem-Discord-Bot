@@ -10,6 +10,9 @@ name: Deploy Bot to VPS
 # - BOT_TOKEN, DATABASE_URL, SECRET_KEY, ... (individual keys, optional)
 
 on:
+  push:
+    branches:
+      - prod
   workflow_dispatch:
     inputs:
       deployment_branch:
@@ -43,7 +46,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.deployment_branch }}
+          ref: ${{ github.event.inputs.deployment_branch || github.ref }}
 
       - name: Install tools
         run: |

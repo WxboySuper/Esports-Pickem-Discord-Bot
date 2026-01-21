@@ -141,7 +141,7 @@ def _assert_no_duplicate_team_leaguepedia_id() -> None:
 
 # revision identifiers, used by Alembic.
 revision = "a1b2c3d4e5f6"
-down_revision = "f0d70cdc3b5a"
+down_revision = "4ac06dd31afa"
 branch_labels = None
 depends_on = None
 
@@ -189,10 +189,8 @@ def _upgrade_team_table() -> None:
         op.f("ix_team_pandascore_id"), "team", ["pandascore_id"], unique=True
     )
 
-    # Remove legacy Leaguepedia identifier column and its unique index.
-    ix_name = op.f("ix_team_leaguepedia_id")
-    _drop_index_if_exists(op, conn, ix_name, "team")
-    _drop_column_if_exists(op, conn, "team", "leaguepedia_id")
+    # Legacy Leaguepedia identifier column is NOT removed to avoid breaking existing code.
+    pass
 
 
 def _upgrade_contest_table() -> None:
@@ -224,15 +222,8 @@ def _upgrade_contest_table() -> None:
         unique=False,
     )
 
-    # Remove legacy Leaguepedia identifier column and its index from contests
-    try:
-        op.drop_index(op.f("ix_contest_leaguepedia_id"), table_name="contest")
-    except Exception:
-        pass
-    try:
-        op.drop_column("contest", "leaguepedia_id")
-    except Exception:
-        pass
+    # Legacy Leaguepedia identifier column is NOT removed to avoid breaking existing code.
+    pass
 
 
 def _upgrade_match_table() -> None:
@@ -289,15 +280,8 @@ def _upgrade_match_table() -> None:
         ["pandascore_id"],
         unique=True,
     )
-    # Remove legacy Leaguepedia identifier column and its unique index from matches
-    try:
-        op.drop_index(op.f("ix_match_leaguepedia_id"), table_name="match")
-    except Exception:
-        pass
-    try:
-        op.drop_column("match", "leaguepedia_id")
-    except Exception:
-        pass
+    # Legacy Leaguepedia identifier column is NOT removed to avoid breaking existing code.
+    pass
 
 
 def _safe_drop_fk(conn, dialect, name: str, table: str) -> None:
@@ -403,19 +387,8 @@ def _downgrade_match_table() -> None:
     _try_drop_column(op, "match", "team1_id")
     _try_drop_column(op, "match", "pandascore_id")
 
-    # Re-create the legacy `leaguepedia_id` column as nullable and recreate
-    # its unique index as a best-effort restore for downgrades.
-    _try_add_column(
-        op,
-        "match",
-        sa.Column("leaguepedia_id", sa.String(), nullable=True),
-    )
-    _try_create_index(
-        op.f("ix_match_leaguepedia_id"),
-        "match",
-        ["leaguepedia_id"],
-        unique=True,
-    )
+    # Legacy Leaguepedia identifier was not removed in upgrade, so no need to restore.
+    pass
 
 
 def _downgrade_contest_table() -> None:
@@ -426,18 +399,8 @@ def _downgrade_contest_table() -> None:
     _try_drop_column(op, "contest", "pandascore_serie_id")
     _try_drop_column(op, "contest", "pandascore_league_id")
 
-    # Re-create the legacy `leaguepedia_id` column as nullable so downgrades
-    # are non-destructive and won't fail on existing rows. Recreate the
-    # index as best-effort.
-    _try_add_column(
-        op, "contest", sa.Column("leaguepedia_id", sa.String(), nullable=True)
-    )
-    _try_create_index(
-        op.f("ix_contest_leaguepedia_id"),
-        "contest",
-        ["leaguepedia_id"],
-        unique=True,
-    )
+    # Legacy Leaguepedia identifier was not removed in upgrade, so no need to restore.
+    pass
 
 
 def _downgrade_team_table() -> None:
@@ -450,23 +413,12 @@ def _downgrade_team_table() -> None:
     _try_drop_constraint(op, "ck_team_has_pandascore_id", "team", "check")
     _try_drop_index(op, op.f("ix_team_pandascore_id"), "team")
 
-    # Re-create the legacy `leaguepedia_id` column as nullable to support downgrades.
-    # We add it as nullable to avoid failing on existing rows; callers can
-    # optionally populate or enforce NOT NULL afterward if desired.
-    _try_add_column(
-        op, "team", sa.Column("leaguepedia_id", sa.String(), nullable=True)
-    )
-
     # Drop the new columns added during upgrade.
     _try_drop_column(op, "team", "acronym")
     _try_drop_column(op, "team", "pandascore_id")
 
-    # Restore leaguepedia_id unique index (nullable unique index behavior
-    # depends on DB; this mirrors prior intent but may be non-strict on
-    # some platforms). If an index already exists, ignore errors.
-    _try_create_index(
-        op.f("ix_team_leaguepedia_id"), "team", ["leaguepedia_id"], unique=True
-    )
+    # Legacy Leaguepedia identifier was not removed in upgrade, so no need to restore.
+    pass
 
 
 def downgrade():
