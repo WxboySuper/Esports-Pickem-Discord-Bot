@@ -42,7 +42,7 @@ def _create_contest_table():
             sa.Column(
                 "leaguepedia_id",
                 sqlmodel.sql.sqltypes.AutoString(),
-                nullable=False,
+                nullable=True,
             ),
             sa.Column(
                 "name", sqlmodel.sql.sqltypes.AutoString(), nullable=False
@@ -77,7 +77,7 @@ def _create_team_table():
             sa.Column(
                 "leaguepedia_id",
                 sqlmodel.sql.sqltypes.AutoString(),
-                nullable=False,
+                nullable=True,
             ),
             sa.Column(
                 "image_url", sqlmodel.sql.sqltypes.AutoString(), nullable=True
@@ -124,7 +124,7 @@ def _create_match_table():
             sa.Column(
                 "leaguepedia_id",
                 sqlmodel.sql.sqltypes.AutoString(),
-                nullable=False,
+                nullable=True,
             ),
             sa.Column("contest_id", sa.Integer(), nullable=False),
             sa.Column(
