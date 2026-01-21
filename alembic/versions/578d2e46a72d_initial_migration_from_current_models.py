@@ -44,6 +44,8 @@ def _create_contest_table():
                 sqlmodel.sql.sqltypes.AutoString(),
                 nullable=True,
             ),
+            sa.Column("pandascore_league_id", sa.Integer(), nullable=True),
+            sa.Column("pandascore_serie_id", sa.Integer(), nullable=True),
             sa.Column(
                 "name", sqlmodel.sql.sqltypes.AutoString(), nullable=False
             ),
@@ -54,12 +56,29 @@ def _create_contest_table():
                 "end_date", models.TZDateTime(length=64), nullable=False
             ),
             sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint(
+                "pandascore_league_id",
+                "pandascore_serie_id",
+                name="uq_contest_pandascore_league_serie",
+            ),
         )
         op.create_index(
             op.f("ix_contest_leaguepedia_id"),
             "contest",
             ["leaguepedia_id"],
             unique=True,
+        )
+        op.create_index(
+            op.f("ix_contest_pandascore_league_id"),
+            "contest",
+            ["pandascore_league_id"],
+            unique=False,
+        )
+        op.create_index(
+            op.f("ix_contest_pandascore_serie_id"),
+            "contest",
+            ["pandascore_serie_id"],
+            unique=False,
         )
         op.create_index(
             op.f("ix_contest_name"), "contest", ["name"], unique=False
@@ -79,8 +98,12 @@ def _create_team_table():
                 sqlmodel.sql.sqltypes.AutoString(),
                 nullable=True,
             ),
+            sa.Column("pandascore_id", sa.Integer(), nullable=True),
             sa.Column(
                 "image_url", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
+            sa.Column(
+                "acronym", sqlmodel.sql.sqltypes.AutoString(), nullable=True
             ),
             sa.Column(
                 "roster", sqlmodel.sql.sqltypes.AutoString(), nullable=True
@@ -91,6 +114,12 @@ def _create_team_table():
             op.f("ix_team_leaguepedia_id"),
             "team",
             ["leaguepedia_id"],
+            unique=True,
+        )
+        op.create_index(
+            op.f("ix_team_pandascore_id"),
+            "team",
+            ["pandascore_id"],
             unique=True,
         )
         op.create_index(op.f("ix_team_name"), "team", ["name"], unique=True)
@@ -126,12 +155,24 @@ def _create_match_table():
                 sqlmodel.sql.sqltypes.AutoString(),
                 nullable=True,
             ),
+            sa.Column("pandascore_id", sa.Integer(), nullable=True),
             sa.Column("contest_id", sa.Integer(), nullable=False),
             sa.Column(
                 "team1", sqlmodel.sql.sqltypes.AutoString(), nullable=False
             ),
             sa.Column(
                 "team2", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            ),
+            sa.Column("team1_id", sa.Integer(), nullable=True),
+            sa.Column("team2_id", sa.Integer(), nullable=True),
+            sa.Column("best_of", sa.Integer(), nullable=True),
+            sa.Column(
+                "status", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
+            sa.Column(
+                "last_announced_score",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
             ),
             sa.Column(
                 "scheduled_time", models.TZDateTime(length=64), nullable=False
@@ -149,6 +190,12 @@ def _create_match_table():
             op.f("ix_match_leaguepedia_id"),
             "match",
             ["leaguepedia_id"],
+            unique=True,
+        )
+        op.create_index(
+            op.f("ix_match_pandascore_id"),
+            "match",
+            ["pandascore_id"],
             unique=True,
         )
         op.create_index(
@@ -175,6 +222,7 @@ def _create_pick_table():
             sa.Column(
                 "status", sqlmodel.sql.sqltypes.AutoString(), nullable=True
             ),
+            sa.Column("is_correct", sa.Boolean(), nullable=True),
             sa.Column("score", sa.Integer(), nullable=True),
             sa.Column(
                 "timestamp", models.TZDateTime(length=64), nullable=False
@@ -263,6 +311,7 @@ def _drop_pick_table():
 def _drop_match_table():
     if _table_exists("match"):
         op.drop_index(op.f("ix_match_scheduled_time"), table_name="match")
+        op.drop_index(op.f("ix_match_pandascore_id"), table_name="match")
         op.drop_index(op.f("ix_match_leaguepedia_id"), table_name="match")
         op.drop_index(op.f("ix_match_contest_id"), table_name="match")
         op.drop_table("match")
@@ -277,6 +326,7 @@ def _drop_user_table():
 def _drop_team_table():
     if _table_exists("team"):
         op.drop_index(op.f("ix_team_name"), table_name="team")
+        op.drop_index(op.f("ix_team_pandascore_id"), table_name="team")
         op.drop_index(op.f("ix_team_leaguepedia_id"), table_name="team")
         op.drop_table("team")
 
@@ -284,5 +334,11 @@ def _drop_team_table():
 def _drop_contest_table():
     if _table_exists("contest"):
         op.drop_index(op.f("ix_contest_name"), table_name="contest")
+        op.drop_index(
+            op.f("ix_contest_pandascore_serie_id"), table_name="contest"
+        )
+        op.drop_index(
+            op.f("ix_contest_pandascore_league_id"), table_name="contest"
+        )
         op.drop_index(op.f("ix_contest_leaguepedia_id"), table_name="contest")
         op.drop_table("contest")
