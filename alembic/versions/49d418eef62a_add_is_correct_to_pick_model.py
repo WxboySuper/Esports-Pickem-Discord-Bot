@@ -10,7 +10,6 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
 
-
 # revision identifiers, used by Alembic.
 revision = "49d418eef62a"
 down_revision = "f0d70cdc3b5a"
@@ -25,7 +24,9 @@ def upgrade():
     columns = [col["name"] for col in inspector.get_columns("pick")]
 
     if "is_correct" not in columns:
-        op.add_column("pick", sa.Column("is_correct", sa.Boolean(), nullable=True))
+        op.add_column(
+            "pick", sa.Column("is_correct", sa.Boolean(), nullable=True)
+        )
     # ### end Alembic commands ###
 
 
