@@ -123,7 +123,8 @@ def _assert_no_duplicate_team_pandascore_id() -> None:
     dup = _count_non_null_duplicates(conn, "pandascore_id", table="team")
     if dup > 0:
         raise RuntimeError(
-            f"Cannot create unique index on team.pandascore_id: found {dup} duplicate pandascore_id values. "
+            f"Cannot create unique index on team.pandascore_id: "
+            f"found {dup} duplicate pandascore_id values. "
             "Please deduplicate these rows before running this migration."
         )
 
@@ -134,7 +135,8 @@ def _assert_no_duplicate_team_leaguepedia_id() -> None:
     dup = _count_non_null_duplicates(conn, "leaguepedia_id", table="team")
     if dup > 0:
         raise RuntimeError(
-            f"Cannot create unique index on team.leaguepedia_id: found {dup} duplicate leaguepedia_id values. "
+            f"Cannot create unique index on team.leaguepedia_id: "
+            f"found {dup} duplicate leaguepedia_id values. "
             "Please deduplicate these rows before running this migration."
         )
 
@@ -189,7 +191,10 @@ def _upgrade_team_table() -> None:
         op.f("ix_team_pandascore_id"), "team", ["pandascore_id"], unique=True
     )
 
-    # Legacy Leaguepedia identifier column is NOT removed to avoid breaking existing code.
+    # Legacy Leaguepedia identifier column is NOT removed to avoid
+    # breaking existing code.
+    # Legacy Leaguepedia identifier column is NOT removed to avoid
+    # breaking existing code.
     pass
 
 
@@ -222,7 +227,8 @@ def _upgrade_contest_table() -> None:
         unique=False,
     )
 
-    # Legacy Leaguepedia identifier column is NOT removed to avoid breaking existing code.
+    # Legacy Leaguepedia identifier column is NOT removed to avoid
+    # breaking existing code.
     pass
 
 
@@ -259,8 +265,8 @@ def _upgrade_match_table() -> None:
         )
 
     # Clean up potentially incorrectly named columns from previous failed runs.
-    # These columns would have been created empty in a failed previous run of this
-    # same migration, so dropping them causes no data loss.
+    # These columns would have been created empty in a failed previous run of
+    # this same migration, so dropping them causes no data loss.
     _try_drop_column(op, "match", "pandascore_team1_id")
     _try_drop_column(op, "match", "pandascore_team2_id")
     if "status" not in existing_cols:
@@ -280,7 +286,8 @@ def _upgrade_match_table() -> None:
         ["pandascore_id"],
         unique=True,
     )
-    # Legacy Leaguepedia identifier column is NOT removed to avoid breaking existing code.
+    # Legacy Leaguepedia identifier column is NOT removed to avoid
+    # breaking existing code.
     pass
 
 
@@ -293,7 +300,8 @@ def _safe_drop_fk(conn, dialect, name: str, table: str) -> None:
     if dialect == "postgresql":
         exists = conn.execute(
             sa.text(
-                "SELECT constraint_name FROM information_schema.table_constraints "
+                "SELECT constraint_name "
+                "FROM information_schema.table_constraints "
                 "WHERE table_name = :table AND constraint_name = :name"
             ),
             {"table": table, "name": name},
@@ -387,7 +395,12 @@ def _downgrade_match_table() -> None:
     _try_drop_column(op, "match", "team1_id")
     _try_drop_column(op, "match", "pandascore_id")
 
-    # Legacy Leaguepedia identifier was not removed in upgrade, so no need to restore.
+    # Legacy Leaguepedia identifier was not removed in upgrade,
+    # so no need to restore.
+    # Legacy Leaguepedia identifier was not removed in upgrade,
+    # so no need to restore.
+    # Legacy Leaguepedia identifier was not removed in upgrade,
+    # so no need to restore.
     pass
 
 
@@ -399,7 +412,8 @@ def _downgrade_contest_table() -> None:
     _try_drop_column(op, "contest", "pandascore_serie_id")
     _try_drop_column(op, "contest", "pandascore_league_id")
 
-    # Legacy Leaguepedia identifier was not removed in upgrade, so no need to restore.
+    # Legacy Leaguepedia identifier was not removed in upgrade,
+    # so no need to restore.
     pass
 
 
@@ -417,7 +431,8 @@ def _downgrade_team_table() -> None:
     _try_drop_column(op, "team", "acronym")
     _try_drop_column(op, "team", "pandascore_id")
 
-    # Legacy Leaguepedia identifier was not removed in upgrade, so no need to restore.
+    # Legacy Leaguepedia identifier was not removed in upgrade,
+    # so no need to restore.
     pass
 
 

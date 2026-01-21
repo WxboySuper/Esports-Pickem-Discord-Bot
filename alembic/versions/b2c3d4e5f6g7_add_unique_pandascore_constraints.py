@@ -9,7 +9,6 @@ Create Date: 2025-12-29 12:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
 revision = "b2c3d4e5f6g7"
 down_revision = "a1b2c3d4e5f6"
@@ -30,14 +29,18 @@ def upgrade():
         sa.text(
             "SELECT COUNT(1) FROM ("
             "SELECT pandascore_league_id, pandascore_serie_id FROM contest "
-            "WHERE pandascore_league_id IS NOT NULL AND pandascore_serie_id IS NOT NULL "
-            "GROUP BY pandascore_league_id, pandascore_serie_id HAVING COUNT(1) > 1) AS t"
+            "WHERE pandascore_league_id IS NOT NULL "
+            "AND pandascore_serie_id IS NOT NULL "
+            "GROUP BY pandascore_league_id, pandascore_serie_id "
+            "HAVING COUNT(1) > 1) AS t"
         )
     ).scalar()
     if dup_contest and int(dup_contest) > 0:
         raise RuntimeError(
-            f"Cannot create unique composite index on contest(pandascore_league_id, pandascore_serie_id): "
-            f"found {int(dup_contest)} duplicate pairs. Please deduplicate these rows before running this migration."
+            "Cannot create unique composite index on "
+            "contest(pandascore_league_id, pandascore_serie_id): "
+            f"found {int(dup_contest)} duplicate pairs. "
+            "Please deduplicate these rows before running this migration."
         )
 
     # The `Contest` model already defines a UniqueConstraint on
