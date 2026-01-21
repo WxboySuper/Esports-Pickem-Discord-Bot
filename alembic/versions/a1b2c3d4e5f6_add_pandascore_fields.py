@@ -25,7 +25,10 @@ def _count_duplicates_for_team_column(conn, column_name: str) -> int:
     if column_name not in allowed:
         raise ValueError("Unsupported column for duplicate counting")
 
-    col = sa.column(column_name)
+    # Use sa.table to ensure the FROM clause is correctly generated
+    team_table = sa.table("team", sa.column(column_name))
+    col = team_table.c[column_name]
+
     subq = (
         sa.select(col)
         .where(col.isnot(None))
@@ -151,16 +154,22 @@ def upgrade():
 
 def _upgrade_team_table() -> None:
     """Perform schema changes for the `team` table."""
-    op.add_column(
-        "team",
-        sa.Column("pandascore_id", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "team",
-        sa.Column(
-            "acronym", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-    )
+    conn = op.get_bind()
+    existing_cols = _inspect_columns(conn, "team") or set()
+
+    if "pandascore_id" not in existing_cols:
+        op.add_column(
+            "team",
+            sa.Column("pandascore_id", sa.Integer(), nullable=True),
+        )
+    if "acronym" not in existing_cols:
+        op.add_column(
+            "team",
+            sa.Column(
+                "acronym", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
+        )
+
     # Before creating unique indexes, ensure the database contains no
     # duplicates for pandascore_id or leaguepedia_id. If duplicates are
     # present, abort the migration with a clear error instructing manual
@@ -176,12 +185,11 @@ def _upgrade_team_table() -> None:
     logger.debug(
         "Postponing creation of ck_team_has_pandascore_id until data backfill"
     )
-    op.create_index(
+    _try_create_index(
         op.f("ix_team_pandascore_id"), "team", ["pandascore_id"], unique=True
     )
 
     # Remove legacy Leaguepedia identifier column and its unique index.
-    conn = op.get_bind()
     ix_name = op.f("ix_team_leaguepedia_id")
     _drop_index_if_exists(op, conn, ix_name, "team")
     _drop_column_if_exists(op, conn, "team", "leaguepedia_id")
@@ -189,26 +197,33 @@ def _upgrade_team_table() -> None:
 
 def _upgrade_contest_table() -> None:
     """Perform schema changes for the `contest` table."""
-    op.add_column(
-        "contest",
-        sa.Column("pandascore_league_id", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "contest",
-        sa.Column("pandascore_serie_id", sa.Integer(), nullable=True),
-    )
-    op.create_index(
+    conn = op.get_bind()
+    existing_cols = _inspect_columns(conn, "contest") or set()
+
+    if "pandascore_league_id" not in existing_cols:
+        op.add_column(
+            "contest",
+            sa.Column("pandascore_league_id", sa.Integer(), nullable=True),
+        )
+    if "pandascore_serie_id" not in existing_cols:
+        op.add_column(
+            "contest",
+            sa.Column("pandascore_serie_id", sa.Integer(), nullable=True),
+        )
+
+    _try_create_index(
         op.f("ix_contest_pandascore_league_id"),
         "contest",
         ["pandascore_league_id"],
         unique=False,
     )
-    op.create_index(
+    _try_create_index(
         op.f("ix_contest_pandascore_serie_id"),
         "contest",
         ["pandascore_serie_id"],
         unique=False,
     )
+
     # Remove legacy Leaguepedia identifier column and its index from contests
     try:
         op.drop_index(op.f("ix_contest_leaguepedia_id"), table_name="contest")
@@ -222,39 +237,47 @@ def _upgrade_contest_table() -> None:
 
 def _upgrade_match_table() -> None:
     """Perform schema changes for the `match` table."""
-    op.add_column(
-        "match",
-        sa.Column("pandascore_id", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "match",
-        sa.Column(
-            "pandascore_team1_id",
-            sa.Integer(),
-            nullable=True,
-        ),
-    )
+    conn = op.get_bind()
+    existing_cols = _inspect_columns(conn, "match") or set()
+
+    if "pandascore_id" not in existing_cols:
+        op.add_column(
+            "match",
+            sa.Column("pandascore_id", sa.Integer(), nullable=True),
+        )
+    if "pandascore_team1_id" not in existing_cols:
+        op.add_column(
+            "match",
+            sa.Column(
+                "pandascore_team1_id",
+                sa.Integer(),
+                nullable=True,
+            ),
+        )
     # These columns store PandaScore team IDs (external identifiers).
     # Do NOT add foreign-key constraints to `team.id` because the values
     # reference external PandaScore IDs rather than local DB primary keys.
-    op.add_column(
-        "match",
-        sa.Column(
-            "pandascore_team2_id",
-            sa.Integer(),
-            nullable=True,
-        ),
-    )
-    op.add_column(
-        "match",
-        sa.Column(
-            "status",
-            sqlmodel.sql.sqltypes.AutoString(),
-            nullable=True,
-            server_default="not_started",
-        ),
-    )
-    op.create_index(
+    if "pandascore_team2_id" not in existing_cols:
+        op.add_column(
+            "match",
+            sa.Column(
+                "pandascore_team2_id",
+                sa.Integer(),
+                nullable=True,
+            ),
+        )
+    if "status" not in existing_cols:
+        op.add_column(
+            "match",
+            sa.Column(
+                "status",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
+                server_default="not_started",
+            ),
+        )
+
+    _try_create_index(
         op.f("ix_match_pandascore_id"),
         "match",
         ["pandascore_id"],
