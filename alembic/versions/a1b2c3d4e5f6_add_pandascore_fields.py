@@ -28,6 +28,7 @@ def _count_duplicates_for_team_column(conn, column_name: str) -> int:
     col = sa.column(column_name)
     subq = (
         sa.select(col)
+        .select_from(sa.table("team"))
         .where(col.isnot(None))
         .group_by(col)
         .having(sa.func.count() > 1)
@@ -138,7 +139,7 @@ def _assert_no_duplicate_team_leaguepedia_id() -> None:
 
 # revision identifiers, used by Alembic.
 revision = "a1b2c3d4e5f6"
-down_revision = "f0d70cdc3b5a"
+down_revision = "4ac06dd31afa"
 branch_labels = None
 depends_on = None
 
@@ -151,11 +152,13 @@ def upgrade():
 
 def _upgrade_team_table() -> None:
     """Perform schema changes for the `team` table."""
-    op.add_column(
+    _try_add_column(
+        op,
         "team",
         sa.Column("pandascore_id", sa.Integer(), nullable=True),
     )
-    op.add_column(
+    _try_add_column(
+        op,
         "team",
         sa.Column(
             "acronym", sqlmodel.sql.sqltypes.AutoString(), nullable=True
@@ -176,7 +179,7 @@ def _upgrade_team_table() -> None:
     logger.debug(
         "Postponing creation of ck_team_has_pandascore_id until data backfill"
     )
-    op.create_index(
+    _try_create_index(
         op.f("ix_team_pandascore_id"), "team", ["pandascore_id"], unique=True
     )
 
@@ -189,21 +192,23 @@ def _upgrade_team_table() -> None:
 
 def _upgrade_contest_table() -> None:
     """Perform schema changes for the `contest` table."""
-    op.add_column(
+    _try_add_column(
+        op,
         "contest",
         sa.Column("pandascore_league_id", sa.Integer(), nullable=True),
     )
-    op.add_column(
+    _try_add_column(
+        op,
         "contest",
         sa.Column("pandascore_serie_id", sa.Integer(), nullable=True),
     )
-    op.create_index(
+    _try_create_index(
         op.f("ix_contest_pandascore_league_id"),
         "contest",
         ["pandascore_league_id"],
         unique=False,
     )
-    op.create_index(
+    _try_create_index(
         op.f("ix_contest_pandascore_serie_id"),
         "contest",
         ["pandascore_serie_id"],
@@ -222,11 +227,13 @@ def _upgrade_contest_table() -> None:
 
 def _upgrade_match_table() -> None:
     """Perform schema changes for the `match` table."""
-    op.add_column(
+    _try_add_column(
+        op,
         "match",
         sa.Column("pandascore_id", sa.Integer(), nullable=True),
     )
-    op.add_column(
+    _try_add_column(
+        op,
         "match",
         sa.Column(
             "pandascore_team1_id",
@@ -237,7 +244,8 @@ def _upgrade_match_table() -> None:
     # These columns store PandaScore team IDs (external identifiers).
     # Do NOT add foreign-key constraints to `team.id` because the values
     # reference external PandaScore IDs rather than local DB primary keys.
-    op.add_column(
+    _try_add_column(
+        op,
         "match",
         sa.Column(
             "pandascore_team2_id",
@@ -245,7 +253,8 @@ def _upgrade_match_table() -> None:
             nullable=True,
         ),
     )
-    op.add_column(
+    _try_add_column(
+        op,
         "match",
         sa.Column(
             "status",
@@ -254,7 +263,7 @@ def _upgrade_match_table() -> None:
             server_default="not_started",
         ),
     )
-    op.create_index(
+    _try_create_index(
         op.f("ix_match_pandascore_id"),
         "match",
         ["pandascore_id"],
