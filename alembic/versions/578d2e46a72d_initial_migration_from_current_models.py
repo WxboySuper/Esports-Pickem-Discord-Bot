@@ -167,7 +167,10 @@ def _create_match_table():
             sa.Column("team2_id", sa.Integer(), nullable=True),
             sa.Column("best_of", sa.Integer(), nullable=True),
             sa.Column(
-                "status", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+                "status",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
+                server_default="not_started",
             ),
             sa.Column(
                 "last_announced_score",
@@ -223,7 +226,9 @@ def _create_pick_table():
                 "status", sqlmodel.sql.sqltypes.AutoString(), nullable=True
             ),
             sa.Column("is_correct", sa.Boolean(), nullable=True),
-            sa.Column("score", sa.Integer(), nullable=True),
+            sa.Column(
+                "score", sa.Integer(), nullable=True, server_default="0"
+            ),
             sa.Column(
                 "timestamp", models.TZDateTime(length=64), nullable=False
             ),
