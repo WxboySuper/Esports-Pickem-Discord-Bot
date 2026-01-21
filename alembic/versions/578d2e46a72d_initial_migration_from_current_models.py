@@ -31,6 +31,8 @@ def upgrade():
 
 
 def _create_contest_table():
+    if op.get_context().dialect.has_table(op.get_bind(), "contest"):
+        return
     op.create_table(
         "contest",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -54,6 +56,8 @@ def _create_contest_table():
 
 
 def _create_team_table():
+    if op.get_context().dialect.has_table(op.get_bind(), "team"):
+        return
     op.create_table(
         "team",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -76,6 +80,8 @@ def _create_team_table():
 
 
 def _create_user_table():
+    if op.get_context().dialect.has_table(op.get_bind(), "user"):
+        return
     op.create_table(
         "user",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -93,6 +99,8 @@ def _create_user_table():
 
 
 def _create_match_table():
+    if op.get_context().dialect.has_table(op.get_bind(), "match"):
+        return
     op.create_table(
         "match",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -131,6 +139,8 @@ def _create_match_table():
 
 
 def _create_pick_table():
+    if op.get_context().dialect.has_table(op.get_bind(), "pick"):
+        return
     op.create_table(
         "pick",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -168,6 +178,8 @@ def _create_pick_table():
 
 
 def _create_result_table():
+    if op.get_context().dialect.has_table(op.get_bind(), "result"):
+        return
     op.create_table(
         "result",
         sa.Column("id", sa.Integer(), nullable=False),

@@ -25,7 +25,10 @@ def _count_duplicates_for_team_column(conn, column_name: str) -> int:
     if column_name not in allowed:
         raise ValueError("Unsupported column for duplicate counting")
 
-    col = sa.column(column_name)
+    # Use sa.table to ensure the FROM clause is correctly generated
+    team_table = sa.table("team", sa.column(column_name))
+    col = team_table.c[column_name]
+
     subq = (
         sa.select(col)
         .where(col.isnot(None))
@@ -138,7 +141,7 @@ def _assert_no_duplicate_team_leaguepedia_id() -> None:
 
 # revision identifiers, used by Alembic.
 revision = "a1b2c3d4e5f6"
-down_revision = "f0d70cdc3b5a"
+down_revision = "4ac06dd31afa"
 branch_labels = None
 depends_on = None
 
@@ -151,16 +154,22 @@ def upgrade():
 
 def _upgrade_team_table() -> None:
     """Perform schema changes for the `team` table."""
-    op.add_column(
-        "team",
-        sa.Column("pandascore_id", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "team",
-        sa.Column(
-            "acronym", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-    )
+    conn = op.get_bind()
+    existing_cols = _inspect_columns(conn, "team") or set()
+
+    if "pandascore_id" not in existing_cols:
+        op.add_column(
+            "team",
+            sa.Column("pandascore_id", sa.Integer(), nullable=True),
+        )
+    if "acronym" not in existing_cols:
+        op.add_column(
+            "team",
+            sa.Column(
+                "acronym", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
+        )
+
     # Before creating unique indexes, ensure the database contains no
     # duplicates for pandascore_id or leaguepedia_id. If duplicates are
     # present, abort the migration with a clear error instructing manual
@@ -176,99 +185,103 @@ def _upgrade_team_table() -> None:
     logger.debug(
         "Postponing creation of ck_team_has_pandascore_id until data backfill"
     )
-    op.create_index(
+    _try_create_index(
         op.f("ix_team_pandascore_id"), "team", ["pandascore_id"], unique=True
     )
 
-    # Remove legacy Leaguepedia identifier column and its unique index.
-    conn = op.get_bind()
-    ix_name = op.f("ix_team_leaguepedia_id")
-    _drop_index_if_exists(op, conn, ix_name, "team")
-    _drop_column_if_exists(op, conn, "team", "leaguepedia_id")
+    # Legacy Leaguepedia identifier column is NOT removed to avoid breaking existing code.
+    pass
 
 
 def _upgrade_contest_table() -> None:
     """Perform schema changes for the `contest` table."""
-    op.add_column(
-        "contest",
-        sa.Column("pandascore_league_id", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "contest",
-        sa.Column("pandascore_serie_id", sa.Integer(), nullable=True),
-    )
-    op.create_index(
+    conn = op.get_bind()
+    existing_cols = _inspect_columns(conn, "contest") or set()
+
+    if "pandascore_league_id" not in existing_cols:
+        op.add_column(
+            "contest",
+            sa.Column("pandascore_league_id", sa.Integer(), nullable=True),
+        )
+    if "pandascore_serie_id" not in existing_cols:
+        op.add_column(
+            "contest",
+            sa.Column("pandascore_serie_id", sa.Integer(), nullable=True),
+        )
+
+    _try_create_index(
         op.f("ix_contest_pandascore_league_id"),
         "contest",
         ["pandascore_league_id"],
         unique=False,
     )
-    op.create_index(
+    _try_create_index(
         op.f("ix_contest_pandascore_serie_id"),
         "contest",
         ["pandascore_serie_id"],
         unique=False,
     )
-    # Remove legacy Leaguepedia identifier column and its index from contests
-    try:
-        op.drop_index(op.f("ix_contest_leaguepedia_id"), table_name="contest")
-    except Exception:
-        pass
-    try:
-        op.drop_column("contest", "leaguepedia_id")
-    except Exception:
-        pass
+
+    # Legacy Leaguepedia identifier column is NOT removed to avoid breaking existing code.
+    pass
 
 
 def _upgrade_match_table() -> None:
     """Perform schema changes for the `match` table."""
-    op.add_column(
-        "match",
-        sa.Column("pandascore_id", sa.Integer(), nullable=True),
-    )
-    op.add_column(
-        "match",
-        sa.Column(
-            "pandascore_team1_id",
-            sa.Integer(),
-            nullable=True,
-        ),
-    )
+    conn = op.get_bind()
+    existing_cols = _inspect_columns(conn, "match") or set()
+
+    if "pandascore_id" not in existing_cols:
+        op.add_column(
+            "match",
+            sa.Column("pandascore_id", sa.Integer(), nullable=True),
+        )
+    if "team1_id" not in existing_cols:
+        op.add_column(
+            "match",
+            sa.Column(
+                "team1_id",
+                sa.Integer(),
+                nullable=True,
+            ),
+        )
     # These columns store PandaScore team IDs (external identifiers).
     # Do NOT add foreign-key constraints to `team.id` because the values
     # reference external PandaScore IDs rather than local DB primary keys.
-    op.add_column(
-        "match",
-        sa.Column(
-            "pandascore_team2_id",
-            sa.Integer(),
-            nullable=True,
-        ),
-    )
-    op.add_column(
-        "match",
-        sa.Column(
-            "status",
-            sqlmodel.sql.sqltypes.AutoString(),
-            nullable=True,
-            server_default="not_started",
-        ),
-    )
-    op.create_index(
+    if "team2_id" not in existing_cols:
+        op.add_column(
+            "match",
+            sa.Column(
+                "team2_id",
+                sa.Integer(),
+                nullable=True,
+            ),
+        )
+
+    # Clean up potentially incorrectly named columns from previous failed runs.
+    # These columns would have been created empty in a failed previous run of this
+    # same migration, so dropping them causes no data loss.
+    _try_drop_column(op, "match", "pandascore_team1_id")
+    _try_drop_column(op, "match", "pandascore_team2_id")
+    if "status" not in existing_cols:
+        op.add_column(
+            "match",
+            sa.Column(
+                "status",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
+                server_default="not_started",
+            ),
+        )
+
+    _try_create_index(
         op.f("ix_match_pandascore_id"),
         "match",
         ["pandascore_id"],
         unique=True,
     )
-    # Remove legacy Leaguepedia identifier column and its unique index from matches
-    try:
-        op.drop_index(op.f("ix_match_leaguepedia_id"), table_name="match")
-    except Exception:
-        pass
-    try:
-        op.drop_column("match", "leaguepedia_id")
-    except Exception:
-        pass
+    # Legacy Leaguepedia identifier column is NOT removed to avoid breaking existing code.
+    pass
 
 
 def _safe_drop_fk(conn, dialect, name: str, table: str) -> None:
@@ -370,23 +383,12 @@ def _downgrade_match_table() -> None:
     _try_drop_column(op, "match", "status")
 
     # Remove PandaScore team ID columns and pandascore_id
-    _try_drop_column(op, "match", "pandascore_team2_id")
-    _try_drop_column(op, "match", "pandascore_team1_id")
+    _try_drop_column(op, "match", "team2_id")
+    _try_drop_column(op, "match", "team1_id")
     _try_drop_column(op, "match", "pandascore_id")
 
-    # Re-create the legacy `leaguepedia_id` column as nullable and recreate
-    # its unique index as a best-effort restore for downgrades.
-    _try_add_column(
-        op,
-        "match",
-        sa.Column("leaguepedia_id", sa.String(), nullable=True),
-    )
-    _try_create_index(
-        op.f("ix_match_leaguepedia_id"),
-        "match",
-        ["leaguepedia_id"],
-        unique=True,
-    )
+    # Legacy Leaguepedia identifier was not removed in upgrade, so no need to restore.
+    pass
 
 
 def _downgrade_contest_table() -> None:
@@ -397,18 +399,8 @@ def _downgrade_contest_table() -> None:
     _try_drop_column(op, "contest", "pandascore_serie_id")
     _try_drop_column(op, "contest", "pandascore_league_id")
 
-    # Re-create the legacy `leaguepedia_id` column as nullable so downgrades
-    # are non-destructive and won't fail on existing rows. Recreate the
-    # index as best-effort.
-    _try_add_column(
-        op, "contest", sa.Column("leaguepedia_id", sa.String(), nullable=True)
-    )
-    _try_create_index(
-        op.f("ix_contest_leaguepedia_id"),
-        "contest",
-        ["leaguepedia_id"],
-        unique=True,
-    )
+    # Legacy Leaguepedia identifier was not removed in upgrade, so no need to restore.
+    pass
 
 
 def _downgrade_team_table() -> None:
@@ -421,23 +413,12 @@ def _downgrade_team_table() -> None:
     _try_drop_constraint(op, "ck_team_has_pandascore_id", "team", "check")
     _try_drop_index(op, op.f("ix_team_pandascore_id"), "team")
 
-    # Re-create the legacy `leaguepedia_id` column as nullable to support downgrades.
-    # We add it as nullable to avoid failing on existing rows; callers can
-    # optionally populate or enforce NOT NULL afterward if desired.
-    _try_add_column(
-        op, "team", sa.Column("leaguepedia_id", sa.String(), nullable=True)
-    )
-
     # Drop the new columns added during upgrade.
     _try_drop_column(op, "team", "acronym")
     _try_drop_column(op, "team", "pandascore_id")
 
-    # Restore leaguepedia_id unique index (nullable unique index behavior
-    # depends on DB; this mirrors prior intent but may be non-strict on
-    # some platforms). If an index already exists, ignore errors.
-    _try_create_index(
-        op.f("ix_team_leaguepedia_id"), "team", ["leaguepedia_id"], unique=True
-    )
+    # Legacy Leaguepedia identifier was not removed in upgrade, so no need to restore.
+    pass
 
 
 def downgrade():
