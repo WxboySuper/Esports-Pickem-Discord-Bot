@@ -11,7 +11,6 @@ import sqlalchemy as sa
 import sqlmodel
 from src import models
 
-
 # revision identifiers, used by Alembic.
 revision = "578d2e46a72d"
 down_revision = None
@@ -45,9 +44,15 @@ def _create_contest_table():
                 sqlmodel.sql.sqltypes.AutoString(),
                 nullable=False,
             ),
-            sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-            sa.Column("start_date", models.TZDateTime(length=64), nullable=False),
-            sa.Column("end_date", models.TZDateTime(length=64), nullable=False),
+            sa.Column(
+                "name", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            ),
+            sa.Column(
+                "start_date", models.TZDateTime(length=64), nullable=False
+            ),
+            sa.Column(
+                "end_date", models.TZDateTime(length=64), nullable=False
+            ),
             sa.PrimaryKeyConstraint("id"),
         )
         op.create_index(
@@ -56,7 +61,9 @@ def _create_contest_table():
             ["leaguepedia_id"],
             unique=True,
         )
-        op.create_index(op.f("ix_contest_name"), "contest", ["name"], unique=False)
+        op.create_index(
+            op.f("ix_contest_name"), "contest", ["name"], unique=False
+        )
 
 
 def _create_team_table():
@@ -64,7 +71,9 @@ def _create_team_table():
         op.create_table(
             "team",
             sa.Column("id", sa.Integer(), nullable=False),
-            sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+            sa.Column(
+                "name", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            ),
             sa.Column(
                 "leaguepedia_id",
                 sqlmodel.sql.sqltypes.AutoString(),
@@ -73,11 +82,16 @@ def _create_team_table():
             sa.Column(
                 "image_url", sqlmodel.sql.sqltypes.AutoString(), nullable=True
             ),
-            sa.Column("roster", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+            sa.Column(
+                "roster", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
             sa.PrimaryKeyConstraint("id"),
         )
         op.create_index(
-            op.f("ix_team_leaguepedia_id"), "team", ["leaguepedia_id"], unique=True
+            op.f("ix_team_leaguepedia_id"),
+            "team",
+            ["leaguepedia_id"],
+            unique=True,
         )
         op.create_index(op.f("ix_team_name"), "team", ["name"], unique=True)
 
@@ -88,7 +102,9 @@ def _create_user_table():
             "user",
             sa.Column("id", sa.Integer(), nullable=False),
             sa.Column(
-                "discord_id", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+                "discord_id",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=False,
             ),
             sa.Column(
                 "username", sqlmodel.sql.sqltypes.AutoString(), nullable=True
@@ -111,8 +127,12 @@ def _create_match_table():
                 nullable=False,
             ),
             sa.Column("contest_id", sa.Integer(), nullable=False),
-            sa.Column("team1", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-            sa.Column("team2", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+            sa.Column(
+                "team1", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            ),
+            sa.Column(
+                "team2", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            ),
             sa.Column(
                 "scheduled_time", models.TZDateTime(length=64), nullable=False
             ),
@@ -148,11 +168,17 @@ def _create_pick_table():
             sa.Column("contest_id", sa.Integer(), nullable=False),
             sa.Column("match_id", sa.Integer(), nullable=False),
             sa.Column(
-                "chosen_team", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+                "chosen_team",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=False,
             ),
-            sa.Column("status", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+            sa.Column(
+                "status", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
             sa.Column("score", sa.Integer(), nullable=True),
-            sa.Column("timestamp", models.TZDateTime(length=64), nullable=False),
+            sa.Column(
+                "timestamp", models.TZDateTime(length=64), nullable=False
+            ),
             sa.ForeignKeyConstraint(
                 ["contest_id"],
                 ["contest.id"],
@@ -173,8 +199,12 @@ def _create_pick_table():
         op.create_index(
             op.f("ix_pick_match_id"), "pick", ["match_id"], unique=False
         )
-        op.create_index(op.f("ix_pick_status"), "pick", ["status"], unique=False)
-        op.create_index(op.f("ix_pick_user_id"), "pick", ["user_id"], unique=False)
+        op.create_index(
+            op.f("ix_pick_status"), "pick", ["status"], unique=False
+        )
+        op.create_index(
+            op.f("ix_pick_user_id"), "pick", ["user_id"], unique=False
+        )
 
 
 def _create_result_table():
@@ -186,7 +216,9 @@ def _create_result_table():
             sa.Column(
                 "winner", sqlmodel.sql.sqltypes.AutoString(), nullable=False
             ),
-            sa.Column("score", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+            sa.Column(
+                "score", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
             sa.ForeignKeyConstraint(
                 ["match_id"],
                 ["match.id"],
