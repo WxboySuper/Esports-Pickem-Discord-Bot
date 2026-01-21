@@ -245,11 +245,11 @@ def _upgrade_match_table() -> None:
             "match",
             sa.Column("pandascore_id", sa.Integer(), nullable=True),
         )
-    if "pandascore_team1_id" not in existing_cols:
+    if "team1_id" not in existing_cols:
         op.add_column(
             "match",
             sa.Column(
-                "pandascore_team1_id",
+                "team1_id",
                 sa.Integer(),
                 nullable=True,
             ),
@@ -257,15 +257,19 @@ def _upgrade_match_table() -> None:
     # These columns store PandaScore team IDs (external identifiers).
     # Do NOT add foreign-key constraints to `team.id` because the values
     # reference external PandaScore IDs rather than local DB primary keys.
-    if "pandascore_team2_id" not in existing_cols:
+    if "team2_id" not in existing_cols:
         op.add_column(
             "match",
             sa.Column(
-                "pandascore_team2_id",
+                "team2_id",
                 sa.Integer(),
                 nullable=True,
             ),
         )
+
+    # Clean up potentially incorrectly named columns from previous failed runs
+    _try_drop_column(op, "match", "pandascore_team1_id")
+    _try_drop_column(op, "match", "pandascore_team2_id")
     if "status" not in existing_cols:
         op.add_column(
             "match",
@@ -393,8 +397,8 @@ def _downgrade_match_table() -> None:
     _try_drop_column(op, "match", "status")
 
     # Remove PandaScore team ID columns and pandascore_id
-    _try_drop_column(op, "match", "pandascore_team2_id")
-    _try_drop_column(op, "match", "pandascore_team1_id")
+    _try_drop_column(op, "match", "team2_id")
+    _try_drop_column(op, "match", "team1_id")
     _try_drop_column(op, "match", "pandascore_id")
 
     # Re-create the legacy `leaguepedia_id` column as nullable and recreate
