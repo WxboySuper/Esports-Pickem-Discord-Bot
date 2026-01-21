@@ -267,7 +267,9 @@ def _upgrade_match_table() -> None:
             ),
         )
 
-    # Clean up potentially incorrectly named columns from previous failed runs
+    # Clean up potentially incorrectly named columns from previous failed runs.
+    # These columns would have been created empty in a failed previous run of this
+    # same migration, so dropping them causes no data loss.
     _try_drop_column(op, "match", "pandascore_team1_id")
     _try_drop_column(op, "match", "pandascore_team2_id")
     if "status" not in existing_cols:
