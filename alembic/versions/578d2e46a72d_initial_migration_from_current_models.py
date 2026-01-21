@@ -6,11 +6,11 @@ Create Date: 2025-10-13 22:56:40.246759
 
 """
 
+import os
 from alembic import op
 import sqlalchemy as sa
 import sqlmodel
 from src import models
-
 
 # revision identifiers, used by Alembic.
 revision = "578d2e46a72d"
@@ -30,179 +30,317 @@ def upgrade():
     # ### end Alembic commands ###
 
 
+def _table_exists(table_name):
+    inspector = sa.inspect(op.get_bind())
+    return inspector.has_table(table_name)
+
+
 def _create_contest_table():
-    op.create_table(
-        "contest",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column(
-            "leaguepedia_id",
-            sqlmodel.sql.sqltypes.AutoString(),
-            nullable=False,
-        ),
-        sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("start_date", models.TZDateTime(length=64), nullable=False),
-        sa.Column("end_date", models.TZDateTime(length=64), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_contest_leaguepedia_id"),
-        "contest",
-        ["leaguepedia_id"],
-        unique=True,
-    )
-    op.create_index(op.f("ix_contest_name"), "contest", ["name"], unique=False)
+    if not _table_exists("contest"):
+        op.create_table(
+            "contest",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column(
+                "leaguepedia_id",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
+            ),
+            sa.Column("pandascore_league_id", sa.Integer(), nullable=True),
+            sa.Column("pandascore_serie_id", sa.Integer(), nullable=True),
+            sa.Column(
+                "name", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            ),
+            sa.Column(
+                "start_date", models.TZDateTime(length=64), nullable=False
+            ),
+            sa.Column(
+                "end_date", models.TZDateTime(length=64), nullable=False
+            ),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint(
+                "pandascore_league_id",
+                "pandascore_serie_id",
+                name="uq_contest_pandascore_league_serie",
+            ),
+        )
+        op.create_index(
+            op.f("ix_contest_leaguepedia_id"),
+            "contest",
+            ["leaguepedia_id"],
+            unique=True,
+        )
+        op.create_index(
+            op.f("ix_contest_pandascore_league_id"),
+            "contest",
+            ["pandascore_league_id"],
+            unique=False,
+        )
+        op.create_index(
+            op.f("ix_contest_pandascore_serie_id"),
+            "contest",
+            ["pandascore_serie_id"],
+            unique=False,
+        )
+        op.create_index(
+            op.f("ix_contest_name"), "contest", ["name"], unique=False
+        )
 
 
 def _create_team_table():
-    op.create_table(
-        "team",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column(
-            "leaguepedia_id",
-            sqlmodel.sql.sqltypes.AutoString(),
-            nullable=False,
-        ),
-        sa.Column(
-            "image_url", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.Column("roster", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_team_leaguepedia_id"), "team", ["leaguepedia_id"], unique=True
-    )
-    op.create_index(op.f("ix_team_name"), "team", ["name"], unique=True)
+    if not _table_exists("team"):
+        op.create_table(
+            "team",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column(
+                "name", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            ),
+            sa.Column(
+                "leaguepedia_id",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
+            ),
+            sa.Column("pandascore_id", sa.Integer(), nullable=True),
+            sa.Column(
+                "image_url", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
+            sa.Column(
+                "acronym", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
+            sa.Column(
+                "roster", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index(
+            op.f("ix_team_leaguepedia_id"),
+            "team",
+            ["leaguepedia_id"],
+            unique=True,
+        )
+        op.create_index(
+            op.f("ix_team_pandascore_id"),
+            "team",
+            ["pandascore_id"],
+            unique=True,
+        )
+        op.create_index(op.f("ix_team_name"), "team", ["name"], unique=True)
 
 
 def _create_user_table():
-    op.create_table(
-        "user",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column(
-            "discord_id", sqlmodel.sql.sqltypes.AutoString(), nullable=False
-        ),
-        sa.Column(
-            "username", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_user_discord_id"), "user", ["discord_id"], unique=True
-    )
+    if not _table_exists("user"):
+        op.create_table(
+            "user",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column(
+                "discord_id",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=False,
+            ),
+            sa.Column(
+                "username", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index(
+            op.f("ix_user_discord_id"), "user", ["discord_id"], unique=True
+        )
 
 
 def _create_match_table():
-    op.create_table(
-        "match",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column(
-            "leaguepedia_id",
-            sqlmodel.sql.sqltypes.AutoString(),
-            nullable=False,
-        ),
-        sa.Column("contest_id", sa.Integer(), nullable=False),
-        sa.Column("team1", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("team2", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column(
-            "scheduled_time", models.TZDateTime(length=64), nullable=False
-        ),
-        sa.ForeignKeyConstraint(
-            ["contest_id"],
-            ["contest.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_match_contest_id"), "match", ["contest_id"], unique=False
-    )
-    op.create_index(
-        op.f("ix_match_leaguepedia_id"),
-        "match",
-        ["leaguepedia_id"],
-        unique=True,
-    )
-    op.create_index(
-        op.f("ix_match_scheduled_time"),
-        "match",
-        ["scheduled_time"],
-        unique=False,
-    )
+    if not _table_exists("match"):
+        op.create_table(
+            "match",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column(
+                "leaguepedia_id",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
+            ),
+            sa.Column("pandascore_id", sa.Integer(), nullable=True),
+            sa.Column("contest_id", sa.Integer(), nullable=False),
+            sa.Column(
+                "team1", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            ),
+            sa.Column(
+                "team2", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            ),
+            sa.Column("team1_id", sa.Integer(), nullable=True),
+            sa.Column("team2_id", sa.Integer(), nullable=True),
+            sa.Column("best_of", sa.Integer(), nullable=True),
+            sa.Column(
+                "status",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
+                server_default=sa.text("'not_started'"),
+            ),
+            sa.Column(
+                "last_announced_score",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
+            ),
+            sa.Column(
+                "scheduled_time", models.TZDateTime(length=64), nullable=False
+            ),
+            sa.ForeignKeyConstraint(
+                ["contest_id"],
+                ["contest.id"],
+            ),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index(
+            op.f("ix_match_contest_id"), "match", ["contest_id"], unique=False
+        )
+        op.create_index(
+            op.f("ix_match_leaguepedia_id"),
+            "match",
+            ["leaguepedia_id"],
+            unique=True,
+        )
+        op.create_index(
+            op.f("ix_match_pandascore_id"),
+            "match",
+            ["pandascore_id"],
+            unique=True,
+        )
+        op.create_index(
+            op.f("ix_match_scheduled_time"),
+            "match",
+            ["scheduled_time"],
+            unique=False,
+        )
 
 
 def _create_pick_table():
-    op.create_table(
-        "pick",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("contest_id", sa.Integer(), nullable=False),
-        sa.Column("match_id", sa.Integer(), nullable=False),
-        sa.Column(
-            "chosen_team", sqlmodel.sql.sqltypes.AutoString(), nullable=False
-        ),
-        sa.Column("status", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-        sa.Column("score", sa.Integer(), nullable=True),
-        sa.Column("timestamp", models.TZDateTime(length=64), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["contest_id"],
-            ["contest.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["match_id"],
-            ["match.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["user_id"],
-            ["user.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_pick_contest_id"), "pick", ["contest_id"], unique=False
-    )
-    op.create_index(
-        op.f("ix_pick_match_id"), "pick", ["match_id"], unique=False
-    )
-    op.create_index(op.f("ix_pick_status"), "pick", ["status"], unique=False)
-    op.create_index(op.f("ix_pick_user_id"), "pick", ["user_id"], unique=False)
+    if not _table_exists("pick"):
+        op.create_table(
+            "pick",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("user_id", sa.Integer(), nullable=False),
+            sa.Column("contest_id", sa.Integer(), nullable=False),
+            sa.Column("match_id", sa.Integer(), nullable=False),
+            sa.Column(
+                "chosen_team",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=False,
+            ),
+            sa.Column(
+                "status",
+                sqlmodel.sql.sqltypes.AutoString(),
+                nullable=True,
+                server_default=sa.text("'pending'"),
+            ),
+            sa.Column("is_correct", sa.Boolean(), nullable=True),
+            sa.Column(
+                "score",
+                sa.Integer(),
+                nullable=True,
+                server_default=sa.text("0"),
+            ),
+            sa.Column(
+                "timestamp", models.TZDateTime(length=64), nullable=False
+            ),
+            sa.ForeignKeyConstraint(
+                ["contest_id"],
+                ["contest.id"],
+            ),
+            sa.ForeignKeyConstraint(
+                ["match_id"],
+                ["match.id"],
+            ),
+            sa.ForeignKeyConstraint(
+                ["user_id"],
+                ["user.id"],
+            ),
+            sa.PrimaryKeyConstraint("id"),
+        )
+        op.create_index(
+            op.f("ix_pick_contest_id"), "pick", ["contest_id"], unique=False
+        )
+        op.create_index(
+            op.f("ix_pick_match_id"), "pick", ["match_id"], unique=False
+        )
+        op.create_index(
+            op.f("ix_pick_status"), "pick", ["status"], unique=False
+        )
+        op.create_index(
+            op.f("ix_pick_user_id"), "pick", ["user_id"], unique=False
+        )
 
 
 def _create_result_table():
-    op.create_table(
-        "result",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("match_id", sa.Integer(), nullable=False),
-        sa.Column(
-            "winner", sqlmodel.sql.sqltypes.AutoString(), nullable=False
-        ),
-        sa.Column("score", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["match_id"],
-            ["match.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("match_id"),
-    )
+    if not _table_exists("result"):
+        op.create_table(
+            "result",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("match_id", sa.Integer(), nullable=False),
+            sa.Column(
+                "winner", sqlmodel.sql.sqltypes.AutoString(), nullable=False
+            ),
+            sa.Column(
+                "score", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            ),
+            sa.ForeignKeyConstraint(
+                ["match_id"],
+                ["match.id"],
+            ),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("match_id"),
+        )
 
 
 def downgrade():
+    """Downgrade schema.
+
+    Warning:
+        This downgrade will drop tables even if they were not created by this
+        migration (e.g., if upgrade() skipped creation because they already
+        existed). Downgrading this initial migration is destructive.
+
+        To prevent accidental data loss, downgrade is disabled by default.
+        Set environment variable FORCE_INITIAL_DOWNGRADE=1 to override.
+    """
+    if not os.environ.get("FORCE_INITIAL_DOWNGRADE"):
+        raise RuntimeError(
+            "Downgrading this initial migration is destructive and disabled "
+            "by default to protect pre-existing data. Set the environment "
+            "variable FORCE_INITIAL_DOWNGRADE=1 to force execution."
+        )
+
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_table("result")
-    op.drop_index(op.f("ix_pick_user_id"), table_name="pick")
-    op.drop_index(op.f("ix_pick_status"), table_name="pick")
-    op.drop_index(op.f("ix_pick_match_id"), table_name="pick")
-    op.drop_index(op.f("ix_pick_contest_id"), table_name="pick")
-    op.drop_table("pick")
-    op.drop_index(op.f("ix_match_scheduled_time"), table_name="match")
-    op.drop_index(op.f("ix_match_leaguepedia_id"), table_name="match")
-    op.drop_index(op.f("ix_match_contest_id"), table_name="match")
-    op.drop_table("match")
-    op.drop_index(op.f("ix_user_discord_id"), table_name="user")
-    op.drop_table("user")
-    op.drop_index(op.f("ix_team_name"), table_name="team")
-    op.drop_index(op.f("ix_team_leaguepedia_id"), table_name="team")
-    op.drop_table("team")
-    op.drop_index(op.f("ix_contest_name"), table_name="contest")
-    op.drop_index(op.f("ix_contest_leaguepedia_id"), table_name="contest")
-    op.drop_table("contest")
+    _drop_result_table()
+    _drop_pick_table()
+    _drop_match_table()
+    _drop_user_table()
+    _drop_team_table()
+    _drop_contest_table()
     # ### end Alembic commands ###
+
+
+def _drop_result_table():
+    if _table_exists("result"):
+        op.drop_table("result")
+
+
+def _drop_pick_table():
+    if _table_exists("pick"):
+        op.drop_table("pick")
+
+
+def _drop_match_table():
+    if _table_exists("match"):
+        op.drop_table("match")
+
+
+def _drop_user_table():
+    if _table_exists("user"):
+        op.drop_table("user")
+
+
+def _drop_team_table():
+    if _table_exists("team"):
+        op.drop_table("team")
+
+
+def _drop_contest_table():
+    if _table_exists("contest"):
+        op.drop_table("contest")
