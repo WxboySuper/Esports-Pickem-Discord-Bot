@@ -50,6 +50,7 @@ def _extract_contest_data(match_data: Dict[str, Any]) -> Dict[str, Any]:
         "name": contest_name,
         "start_date": scheduled_at or now,
         "end_date": scheduled_at or now,
+        "image_url": league.get("image_url"),
     }
 
 

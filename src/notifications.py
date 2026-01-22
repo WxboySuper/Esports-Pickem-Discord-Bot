@@ -96,7 +96,7 @@ def _score_value(match: Match, result: Result) -> str:
     score_val = f"**{result.score}**"
     if getattr(match, "best_of", None):
         score_val += f" (Best of {match.best_of})"
-    return score_val
+    return f"||{score_val}||"
 
 
 def _stats_value(stats: Tuple[int, int, float]) -> str:
@@ -110,6 +110,27 @@ def _stats_value(stats: Tuple[int, int, float]) -> str:
     return "No picks were made."
 
 
+def _select_thumbnail_url(
+    match: Match, winner_obj: Optional[Team]
+) -> Optional[str]:
+    contest = getattr(match, "contest", None)
+    if contest and getattr(contest, "image_url", None):
+        return contest.image_url
+    if winner_obj and getattr(winner_obj, "image_url", None):
+        return winner_obj.image_url
+    return None
+
+
+def _determine_winner_loser(
+    match: Match, result: Result, teams: Tuple[Optional[Team], Optional[Team]]
+) -> Tuple[Tuple[str, Optional[Team]], Tuple[str, Optional[Team]]]:
+    team1_obj, team2_obj = teams
+    if result.winner == match.team1:
+        return (match.team1, team1_obj), (match.team2, team2_obj)
+    else:
+        return (match.team2, team2_obj), (match.team1, team1_obj)
+
+
 def _build_result_embed(
     match: Match,
     result: Result,
@@ -119,16 +140,12 @@ def _build_result_embed(
     """
     Build the revamped result notification embed.
     """
-    team1_obj, team2_obj = teams
     _, _, _ = stats
 
     # Determine winner and loser info
-    if result.winner == match.team1:
-        winner_obj, loser_obj = team1_obj, team2_obj
-        winner_name, loser_name = match.team1, match.team2
-    else:
-        winner_obj, loser_obj = team2_obj, team1_obj
-        winner_name, loser_name = match.team2, match.team1
+    (winner_name, winner_obj), (loser_name, loser_obj) = (
+        _determine_winner_loser(match, result, teams)
+    )
 
     winner_display = _fmt_team_name(winner_name, winner_obj)
     loser_display = _fmt_team_name(loser_name, loser_obj)
@@ -137,7 +154,7 @@ def _build_result_embed(
 
     embed = discord.Embed(
         title=f"🏆 {contest_name} - Match Result",
-        description=f"**{winner_display}** has defeated **{loser_display}**!",
+        description=f"||**{winner_display}** has defeated **{loser_display}**!||",  # noqa: E501
         color=discord.Color.gold(),
         timestamp=datetime.now(timezone.utc),
     )
@@ -149,8 +166,9 @@ def _build_result_embed(
         name="Pick'em Stats", value=_stats_value(stats), inline=True
     )
 
-    if winner_obj and getattr(winner_obj, "image_url", None):
-        embed.set_thumbnail(url=winner_obj.image_url)
+    thumbnail_url = _select_thumbnail_url(match, winner_obj)
+    if thumbnail_url:
+        embed.set_thumbnail(url=thumbnail_url)
 
     footer = f"Match ID: {match.id}"
     if getattr(match, "pandascore_id", None):
