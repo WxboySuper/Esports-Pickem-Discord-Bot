@@ -6,5 +6,3 @@ apscheduler
 aiohttp
 aiosqlite
 tenacity
-mwcleric @ git+https://github.com/RheingoldRiver/mwcleric
-mwrogue==0.1.5
