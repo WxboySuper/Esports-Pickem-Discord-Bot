@@ -37,6 +37,5 @@ def downgrade():
     columns = [col["name"] for col in inspector.get_columns("pick")]
 
     if "is_correct" in columns:
-        with op.batch_alter_table("pick") as batch_op:
-            batch_op.drop_column("is_correct")
+        op.drop_column("pick", "is_correct")
     # ### end Alembic commands ###
