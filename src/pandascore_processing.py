@@ -70,7 +70,7 @@ async def _get_or_create_contest(
     return contest
 
 
-async def _should_notify_time_change(
+def _should_notify_time_change(
     is_new: bool,
     time_changed: bool,
     old_time: Optional[datetime],
@@ -106,7 +106,7 @@ async def _process_single_match(
         if time_changed or is_new:
             ctx.matches_to_schedule.append(match)
 
-        if await _should_notify_time_change(
+        if _should_notify_time_change(
             is_new, time_changed, old_time, match.scheduled_time
         ):
             ctx.time_change_notifications.append(

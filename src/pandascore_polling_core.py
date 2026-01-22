@@ -230,7 +230,7 @@ async def _handle_winner(
 
         # Schedule slightly in the future to allow DB to settle if needed,
         # but "earliest convenience" essentially means now-ish.
-        run_date = datetime.now() + timedelta(seconds=10)
+        run_date = datetime.now(timezone.utc) + timedelta(seconds=10)
         scheduler.add_job(
             perform_pandascore_sync,
             "date",
