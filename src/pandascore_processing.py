@@ -71,7 +71,10 @@ async def _get_or_create_contest(
 
 
 async def _should_notify_time_change(
-    is_new: bool, time_changed: bool, old_time: Optional[datetime], new_time: Optional[datetime]
+    is_new: bool,
+    time_changed: bool,
+    old_time: Optional[datetime],
+    new_time: Optional[datetime],
 ):
     is_existing_time_changed = not is_new and time_changed
     has_old_and_new_time = old_time is not None and new_time is not None
@@ -79,6 +82,7 @@ async def _should_notify_time_change(
     if is_existing_time_changed and has_old_and_new_time:
         return True
     return False
+
 
 async def _process_single_match(
     match_data: Dict[str, Any], ctx: PandaScoreSyncContext
@@ -102,7 +106,9 @@ async def _process_single_match(
         if time_changed or is_new:
             ctx.matches_to_schedule.append(match)
 
-        if await _should_notify_time_change(is_new, time_changed, old_time, match.scheduled_time):
+        if await _should_notify_time_change(
+            is_new, time_changed, old_time, match.scheduled_time
+        ):
             ctx.time_change_notifications.append(
                 (match, old_time, match.scheduled_time)
             )
