@@ -5,13 +5,10 @@ Revises: 4ac06dd31afa, b2c3d4e5f6g7
 Create Date: 2026-01-22 03:53:12.197843
 
 """
-from alembic import op
-import sqlalchemy as sa
-
 
 # revision identifiers, used by Alembic.
-revision = 'e2e55f9f15dd'
-down_revision = ('4ac06dd31afa', 'b2c3d4e5f6g7')
+revision = "e2e55f9f15dd"
+down_revision = ("4ac06dd31afa", "b2c3d4e5f6g7")
 branch_labels = None
 depends_on = None
 
