@@ -240,7 +240,9 @@ async def send_match_time_change_notification(
 
     embed.set_footer(text=f"Match ID: {match.id}")
     if getattr(match, "pandascore_id", None):
-        footer_text = embed.footer.text + f" | PandaScore: {match.pandascore_id}"
+        footer_text = (
+            embed.footer.text + f" | PandaScore: {match.pandascore_id}"
+        )
         embed.set_footer(text=footer_text)
 
     context = f"time change notification for match {match.id}"

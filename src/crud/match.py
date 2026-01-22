@@ -106,7 +106,8 @@ async def upsert_match_by_pandascore(
             May include `best_of`, `status`, `team1_id`, `team2_id`.
 
     Returns:
-        tuple[Optional[Match], bool, bool, Optional[datetime]]: A tuple containing:
+        tuple[Optional[Match], bool, bool, Optional[datetime]]:
+        A tuple containing:
             1. The upserted Match (or None on failure)
             2. A boolean indicating if the match is newly created
             3. A boolean indicating if the match's scheduled time changed
@@ -153,7 +154,10 @@ async def upsert_match_by_pandascore(
 def _update_match_from_data(
     match: Match, match_data: dict
 ) -> Tuple[bool, Optional[datetime]]:
-    """Updates existing match fields and returns (time_changed, original_time)."""
+    """
+    Updates existing match fields and returns
+    (time_changed, original_time).
+    """
     logger.info(
         "Updating existing match (PandaScore ID: %s)", match.pandascore_id
     )

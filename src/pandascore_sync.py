@@ -132,7 +132,10 @@ async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
 async def _process_matches_and_commit(
     matches_data: List[Any], db_session
 ) -> Tuple[
-    List[Any], List[Tuple[int, int]], List[Tuple[Any, Any, Any]], Dict[str, int]
+    List[Any],
+    List[Tuple[int, int]],
+    List[Tuple[Any, Any, Any]],
+    Dict[str, int],
 ]:
     """
     Process matches; commit DB changes; return schedules/notifications

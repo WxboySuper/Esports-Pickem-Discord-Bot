@@ -120,7 +120,8 @@ def _assert_no_duplicate_team_pandascore_id() -> None:
     dup = _count_non_null_duplicates(conn, "pandascore_id", table="team")
     if dup > 0:
         raise RuntimeError(
-            f"Cannot create unique index on team.pandascore_id: found {dup} duplicate pandascore_id values. "
+            "Cannot create unique index on team.pandascore_id: "
+            f"found {dup} duplicate pandascore_id values. "
             "Please deduplicate these rows before running this migration."
         )
 
@@ -131,7 +132,8 @@ def _assert_no_duplicate_team_leaguepedia_id() -> None:
     dup = _count_non_null_duplicates(conn, "leaguepedia_id", table="team")
     if dup > 0:
         raise RuntimeError(
-            f"Cannot create unique index on team.leaguepedia_id: found {dup} duplicate leaguepedia_id values. "
+            "Cannot create unique index on team.leaguepedia_id: "
+            f"found {dup} duplicate leaguepedia_id values. "
             "Please deduplicate these rows before running this migration."
         )
 
@@ -260,7 +262,8 @@ def _upgrade_match_table() -> None:
         ["pandascore_id"],
         unique=True,
     )
-    # Remove legacy Leaguepedia identifier column and its unique index from matches
+    # Remove legacy Leaguepedia identifier column
+    # and its unique index from matches
     try:
         op.drop_index(op.f("ix_match_leaguepedia_id"), table_name="match")
     except Exception:
@@ -280,7 +283,7 @@ def _safe_drop_fk(conn, dialect, name: str, table: str) -> None:
     if dialect == "postgresql":
         exists = conn.execute(
             sa.text(
-                "SELECT constraint_name FROM information_schema.table_constraints "
+                "SELECT constraint_name FROM information_schema.table_constraints "  # noqa: E501
                 "WHERE table_name = :table AND constraint_name = :name"
             ),
             {"table": table, "name": name},
@@ -421,7 +424,8 @@ def _downgrade_team_table() -> None:
     _try_drop_constraint(op, "ck_team_has_pandascore_id", "team", "check")
     _try_drop_index(op, op.f("ix_team_pandascore_id"), "team")
 
-    # Re-create the legacy `leaguepedia_id` column as nullable to support downgrades.
+    # Re-create the legacy `leaguepedia_id` column as nullable
+    # to support downgrades.
     # We add it as nullable to avoid failing on existing rows; callers can
     # optionally populate or enforce NOT NULL afterward if desired.
     _try_add_column(

@@ -227,7 +227,6 @@ async def _handle_winner(
     try:
         from src.scheduler_instance import scheduler
         from src.pandascore_sync import perform_pandascore_sync
-        from datetime import datetime, timedelta
 
         # Schedule slightly in the future to allow DB to settle if needed,
         # but "earliest convenience" essentially means now-ish.
