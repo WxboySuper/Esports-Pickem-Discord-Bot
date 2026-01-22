@@ -2,150 +2,220 @@
 
 import logging
 from datetime import datetime, timezone, timedelta
+from typing import List, Dict, Optional
 
 import discord
 from discord import app_commands
 from sqlmodel import select
+from sqlalchemy.orm import selectinload
 
 from src.db import get_session
-from src.models import Match, Pick
+from src.models import Match, Pick, Contest
 from src import crud
 
 logger = logging.getLogger("esports-bot.commands.pick")
 
 # Number of days in advance (from now) that matches are available for picking.
-# The pick window extends this many days into the future.
 PICK_WINDOW_DAYS = 5
 
 
-class MatchSelect(discord.ui.Select):
-    """A dropdown to select a match."""
+class PickView(discord.ui.View):
+    """
+    A persistent view that allows users to browse matches and make picks.
+    """
 
-    def __init__(self, matches: list[Match], user_picks: dict[int, str]):
-        options = []
-        for match in matches:
-            # Indicate if the user has already picked this match
-            picked_indicator = " (✓ Picked)" if match.id in user_picks else ""
-            label = f"{match.team1} vs {match.team2}{picked_indicator}"
-            time_str = match.scheduled_time.strftime("%Y-%m-%d %H:%M UTC")
-            description = f"Scheduled: {time_str}"
-            options.append(
-                discord.SelectOption(
-                    label=label, value=str(match.id), description=description
-                )
-            )
+    def __init__(
+        self,
+        matches: List[Match],
+        user_picks: Dict[int, str],
+        user_id: int,
+        interaction_user_id: int
+    ):
+        super().__init__(timeout=None)
+        self.matches = matches
+        self.user_picks = user_picks
+        self.db_user_id = user_id # Database ID of the user
+        self.interaction_user_id = interaction_user_id # Discord ID of the user
+        self.current_index = 0
+        self.message: Optional[discord.Message] = None
 
-        super().__init__(
-            placeholder="Choose a match...",
-            min_values=1,
-            max_values=1,
-            options=options,
+        # Initialize the view state
+        self._update_components()
+
+    def _get_current_match(self) -> Match:
+        return self.matches[self.current_index]
+
+    def _update_components(self):
+        """Updates the state of buttons based on the current match."""
+        match = self._get_current_match()
+        current_pick = self.user_picks.get(match.id)
+
+        # Clear existing items to rebuild them
+        self.clear_items()
+
+        # Row 1: Team Buttons
+        # Team 1 Button
+        style_t1 = discord.ButtonStyle.secondary
+        if current_pick == match.team1:
+            style_t1 = discord.ButtonStyle.success
+
+        button_t1 = discord.ui.Button(
+            label=match.team1,
+            style=style_t1,
+            custom_id=f"pick_t1_{match.id}",
+            row=0
+        )
+        button_t1.callback = self.pick_team1_callback
+        self.add_item(button_t1)
+
+        # VS Label (disabled button or just implicit by position)
+        # We can't put text between buttons easily, so just Team 1 | Team 2
+
+        # Team 2 Button
+        style_t2 = discord.ButtonStyle.secondary
+        if current_pick == match.team2:
+            style_t2 = discord.ButtonStyle.success
+
+        button_t2 = discord.ui.Button(
+            label=match.team2,
+            style=style_t2,
+            custom_id=f"pick_t2_{match.id}",
+            row=0
+        )
+        button_t2.callback = self.pick_team2_callback
+        self.add_item(button_t2)
+
+        # Row 2: Navigation
+        prev_disabled = self.current_index == 0
+        next_disabled = self.current_index == len(self.matches) - 1
+
+        btn_prev = discord.ui.Button(
+            label="Previous Match",
+            style=discord.ButtonStyle.primary,
+            disabled=prev_disabled,
+            row=1
+        )
+        btn_prev.callback = self.prev_match_callback
+        self.add_item(btn_prev)
+
+        btn_next = discord.ui.Button(
+            label="Next Match",
+            style=discord.ButtonStyle.primary,
+            disabled=next_disabled,
+            row=1
+        )
+        btn_next.callback = self.next_match_callback
+        self.add_item(btn_next)
+
+    def _build_embed(self) -> discord.Embed:
+        match = self._get_current_match()
+        contest_name = match.contest.name if match.contest else "Unknown Contest"
+
+        # Determine current pick status for display
+        pick_status = self.user_picks.get(match.id)
+        if pick_status:
+            status_text = f"✅ You have picked **{pick_status}**"
+        else:
+            status_text = "⚠️ No pick made yet"
+
+        embed = discord.Embed(
+            title=f"Match {self.current_index + 1} of {len(self.matches)}",
+            description=f"**{match.team1}** vs **{match.team2}**",
+            color=discord.Color.blue()
         )
 
-    async def callback(self, interaction: discord.Interaction):
-        # Defer to allow time for processing
-        await interaction.response.defer()
+        embed.add_field(name="Tournament", value=contest_name, inline=False)
 
-        match_id = int(self.values[0])
+        time_str = match.scheduled_time.strftime("%Y-%m-%d %H:%M UTC")
+        embed.add_field(name="Scheduled Time", value=time_str, inline=True)
+
+        if match.best_of:
+            embed.add_field(name="Format", value=f"Best of {match.best_of}", inline=True)
+
+        embed.add_field(name="Your Pick", value=status_text, inline=False)
+
+        embed.set_footer(text=f"Match ID: {match.id}")
+        return embed
+
+    async def _handle_pick(self, interaction: discord.Interaction, team: str):
+        if interaction.user.id != self.interaction_user_id:
+            await interaction.response.send_message(
+                "This pick session is not for you.", ephemeral=True
+            )
+            return
+
+        match = self._get_current_match()
+
+        # DB Operation
         with get_session() as session:
-            match = crud.get_match_by_id(session, match_id)
+            # Re-fetch user to ensure attached to session (though we have ID)
+            # Actually we can just query directly or use the ID.
+            # We need to make sure we don't duplicate logic unnecessarily.
 
-            if not match:
-                await interaction.followup.send(
-                    "This match could not be found.", ephemeral=True
-                )
-                return
-
-            # Show the team selection view
-            view = discord.ui.View()
-            view.add_item(TeamSelect(match=match))
-            msg = (
-                f"You selected: **{match.team1} vs {match.team2}**. "
-                "Who will win?"
+            # Check for existing pick
+            stmt = select(Pick).where(
+                Pick.user_id == self.db_user_id,
+                Pick.match_id == match.id
             )
-            await interaction.followup.send(
-                msg,
-                view=view,
-                ephemeral=True,
-            )
-
-
-class TeamSelect(discord.ui.Select):
-    """A dropdown to select a team for a given match."""
-
-    def __init__(self, match: Match):
-        self.match = match
-        options = [
-            discord.SelectOption(label=match.team1, value=match.team1),
-            discord.SelectOption(label=match.team2, value=match.team2),
-        ]
-        super().__init__(
-            placeholder="Select the winning team...",
-            min_values=1,
-            max_values=1,
-            options=options,
-        )
-
-    async def callback(self, interaction: discord.Interaction):
-        """
-        Handle a team selection from the TeamSelect UI by creating or
-        updating the invoking user's Pick for the associated match,
-        sending an ephemeral confirmation message, and removing the
-        interactive view from the original message.
-
-        Parameters:
-            interaction (discord.Interaction): The interaction
-                triggered by the user's selection.
-        """
-        chosen_team = self.values[0]
-        with get_session() as session:
-            # Get or create the user
-            db_user = crud.get_user_by_discord_id(
-                session,
-                str(interaction.user.id),
-            )
-            if not db_user:
-                db_user = crud.create_user(
-                    session, str(interaction.user.id), interaction.user.name
-                )
-
-            # Check if a pick already exists for this user and match
-            existing_pick_stmt = (
-                select(Pick)
-                .where(Pick.user_id == db_user.id)
-                .where(Pick.match_id == self.match.id)
-            )
-            existing_pick = session.exec(existing_pick_stmt).first()
+            existing_pick = session.exec(stmt).first()
 
             if existing_pick:
-                # Update the existing pick
-                existing_pick.chosen_team = chosen_team
+                existing_pick.chosen_team = team
                 session.add(existing_pick)
-                session.commit()
-                match_str = f"**{self.match.team1} vs {self.match.team2}**"
-                message = (
-                    f"Your pick for {match_str} "
-                    f"has been updated to **{chosen_team}**."
-                )
             else:
-                # Create a new pick
-                crud.create_pick(
-                    session,
-                    crud.PickCreateParams(
-                        user_id=db_user.id,
-                        contest_id=self.match.contest_id,
-                        match_id=self.match.id,
-                        chosen_team=chosen_team,
-                    ),
+                # Create new pick
+                new_pick = Pick(
+                    user_id=self.db_user_id,
+                    contest_id=match.contest_id,
+                    match_id=match.id,
+                    chosen_team=team
                 )
-                message = (
-                    f"You have picked **{chosen_team}** to win the match: "
-                    f"**{self.match.team1} vs {self.match.team2}**."
-                )
+                session.add(new_pick)
 
-        await interaction.response.send_message(message, ephemeral=True)
-        # Remove the view after selection
-        await interaction.edit_original_response(view=None)
+            session.commit()
+
+            # Update local state
+            self.user_picks[match.id] = team
+
+        # Update UI
+        self._update_components()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
+    async def pick_team1_callback(self, interaction: discord.Interaction):
+        match = self._get_current_match()
+        await self._handle_pick(interaction, match.team1)
+
+    async def pick_team2_callback(self, interaction: discord.Interaction):
+        match = self._get_current_match()
+        await self._handle_pick(interaction, match.team2)
+
+    async def prev_match_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.interaction_user_id:
+            await interaction.response.send_message(
+                "This controls are not for you.", ephemeral=True
+            )
+            return
+
+        if self.current_index > 0:
+            self.current_index -= 1
+            self._update_components()
+            await interaction.response.edit_message(embed=self._build_embed(), view=self)
+        else:
+            await interaction.response.defer()
+
+    async def next_match_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.interaction_user_id:
+            await interaction.response.send_message(
+                "This controls are not for you.", ephemeral=True
+            )
+            return
+
+        if self.current_index < len(self.matches) - 1:
+            self.current_index += 1
+            self._update_components()
+            await interaction.response.edit_message(embed=self._build_embed(), view=self)
+        else:
+            await interaction.response.defer()
 
 
 @app_commands.command(
@@ -158,46 +228,71 @@ async def pick(interaction: discord.Interaction):
         interaction.user.name,
         interaction.user.id,
     )
+
+    await interaction.response.defer(ephemeral=True)
+
     with get_session() as session:
-        # Get user and their existing picks
+        # Get user (create if not exists)
         db_user = crud.get_user_by_discord_id(
             session,
             str(interaction.user.id),
         )
-        user_picks = {}
-        if db_user:
-            picks = crud.list_picks_for_user(session, db_user.id)
-            user_picks = {pick.match_id: pick.chosen_team for pick in picks}
+        if not db_user:
+            db_user = crud.create_user(
+                session, str(interaction.user.id), interaction.user.name
+            )
 
-        # Fetch active matches that are within the pick window
+        # Fetch active matches
         now_utc = datetime.now(timezone.utc)
         pick_cutoff = now_utc + timedelta(days=PICK_WINDOW_DAYS)
+
         active_matches_stmt = (
             select(Match)
             .where(Match.scheduled_time > now_utc)
             .where(Match.scheduled_time <= pick_cutoff)
             .where(Match.team1 != "TBD")
             .where(Match.team2 != "TBD")
+            .options(selectinload(Match.contest))
             .order_by(Match.scheduled_time)
-            .limit(25)
+            # We remove the limit of 25 since we are paging,
+            # though too many matches in memory might be an issue eventually.
+            # For now, let's keep a reasonable limit or no limit if expected volume is low.
+            # Discord limit for select was 25, here we are paging.
+            # Let's cap at 50 to be safe.
+            .limit(50)
         )
         active_matches = session.exec(active_matches_stmt).all()
 
         if not active_matches:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "There are no active matches available to pick.",
                 ephemeral=True,
             )
             return
 
-        view = discord.ui.View()
-        view.add_item(
-            MatchSelect(matches=active_matches, user_picks=user_picks)
+        # Fetch existing picks for these matches
+        match_ids = [m.id for m in active_matches]
+        picks_stmt = select(Pick).where(
+            Pick.user_id == db_user.id,
+            Pick.match_id.in_(match_ids)
         )
-        await interaction.response.send_message(
-            "Please select a match to place your pick:",
+        picks = session.exec(picks_stmt).all()
+        user_picks = {p.match_id: p.chosen_team for p in picks}
+
+        # Create View
+        view = PickView(
+            matches=active_matches,
+            user_picks=user_picks,
+            user_id=db_user.id,
+            interaction_user_id=interaction.user.id
+        )
+
+        embed = view._build_embed()
+
+        await interaction.followup.send(
+            embed=embed,
             view=view,
-            ephemeral=True,
+            ephemeral=True
         )
 
 
