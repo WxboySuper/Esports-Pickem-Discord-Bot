@@ -7,6 +7,7 @@ that operate on PandaScore API payloads and the database session.
 """
 
 import logging
+from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
 
@@ -34,6 +35,9 @@ class PandaScoreSyncContext:
     summary: Dict[str, int]
     matches_to_schedule: List[Any] = field(default_factory=list)
     notifications: List[Tuple[int, int]] = field(default_factory=list)
+    time_change_notifications: List[Tuple[Any, datetime, datetime]] = field(
+        default_factory=list
+    )
 
 
 async def _process_teams_from_match(
@@ -66,6 +70,20 @@ async def _get_or_create_contest(
     return contest
 
 
+def _should_notify_time_change(
+    is_new: bool,
+    time_changed: bool,
+    old_time: Optional[datetime],
+    new_time: Optional[datetime],
+):
+    is_existing_time_changed = not is_new and time_changed
+    has_old_and_new_time = old_time is not None and new_time is not None
+
+    if is_existing_time_changed and has_old_and_new_time:
+        return True
+    return False
+
+
 async def _process_single_match(
     match_data: Dict[str, Any], ctx: PandaScoreSyncContext
 ) -> Optional[Any]:
@@ -79,14 +97,21 @@ async def _process_single_match(
     if not match_info:
         return None
 
-    match, time_changed = await upsert_match_by_pandascore(
+    match, is_new, time_changed, old_time = await upsert_match_by_pandascore(
         ctx.db_session, match_info
     )
 
     if match:
         ctx.summary["matches"] += 1
-        if time_changed:
+        if time_changed or is_new:
             ctx.matches_to_schedule.append(match)
+
+        if _should_notify_time_change(
+            is_new, time_changed, old_time, match.scheduled_time
+        ):
+            ctx.time_change_notifications.append(
+                (match, old_time, match.scheduled_time)
+            )
 
     return match
 
