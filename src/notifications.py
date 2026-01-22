@@ -140,7 +140,6 @@ def _build_result_embed(
     """
     Build the revamped result notification embed.
     """
-    team1_obj, team2_obj = teams
     _, _, _ = stats
 
     # Determine winner and loser info

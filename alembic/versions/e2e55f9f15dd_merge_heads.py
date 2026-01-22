@@ -14,8 +14,8 @@ depends_on = None
 
 
 def upgrade():
-    pass
+    pass  # skipcq: PTC-W0049
 
 
 def downgrade():
-    pass
+    pass  # skipcq: PTC-W0049
