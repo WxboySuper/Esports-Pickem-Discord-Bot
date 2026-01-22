@@ -70,7 +70,7 @@ async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
     Returns combined list or None on failure.
     """
     try:
-        upcoming_coro = pandascore_client.fetch_matches(
+        upcoming = await pandascore_client.fetch_matches(
             "upcoming",
             {
                 "filter_key": "league_id",
@@ -79,10 +79,10 @@ async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
                 "page": 1,
             },
         )
-        running_coro = pandascore_client.fetch_matches(
+        running = await pandascore_client.fetch_matches(
             "running", {"page_size": DEFAULT_PAGE_SIZE}
         )
-        past_coro = pandascore_client.fetch_matches(
+        past = await pandascore_client.fetch_matches(
             "recent_past",
             {
                 "filter_key": "league_id",
@@ -90,11 +90,6 @@ async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
                 "page_size": DEFAULT_PAGE_SIZE,
             },
         )
-
-        upcoming, running, past = await asyncio.gather(
-            upcoming_coro, running_coro, past_coro
-        )
-
         return upcoming + running + past
     except Exception:
         logger.exception("Failed to fetch matches from PandaScore")

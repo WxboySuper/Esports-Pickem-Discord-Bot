@@ -133,12 +133,9 @@ async def _get_team_by_pandascore(
 
 
 async def _get_candidates_by_name(
-    session: AsyncSession, name: str, acronym: Optional[str] = None
+    session: AsyncSession, name: str
 ) -> list[Team]:
-    query = select(Team).where(Team.name == name)
-    if acronym is not None:
-        query = query.where(Team.acronym == acronym)
-    result = await session.exec(query)
+    result = await session.exec(select(Team).where(Team.name == name))
     return result.all()
 
 
@@ -174,7 +171,7 @@ async def _find_valid_candidate_by_name(
     )
     provided_region = None if validation is None else validation.get("region")
 
-    candidates = await _get_candidates_by_name(session, name, provided_acronym)
+    candidates = await _get_candidates_by_name(session, name)
     for cand in candidates:
         if _candidate_matches_validation(
             cand, provided_acronym, provided_region

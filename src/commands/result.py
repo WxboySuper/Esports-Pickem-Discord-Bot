@@ -148,10 +148,20 @@ async def enter_result(
             # 1. Create the result
             crud.create_result(session, match_id=match_id, winner=winner)
 
-            # 2. Score all picks for the match
-            updated_picks_count = crud.score_picks_for_match(
-                session, match_id=match_id, winner=winner
-            )
+            # 2. Get all picks for the match
+            picks = crud.list_picks_for_match(session, match_id)
+
+            updated_picks_count = 0
+            for pick in picks:
+                if pick.chosen_team == winner:
+                    pick.status = "correct"
+                    pick.score = 10  # Award 10 points for a correct pick
+                else:
+                    pick.status = "incorrect"
+                    pick.score = 0
+
+                session.add(pick)
+                updated_picks_count += 1
 
             session.commit()
 

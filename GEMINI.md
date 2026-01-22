@@ -16,7 +16,7 @@ This project is a Discord bot designed for managing esports pick'em contests. It
 - **ORM:** `SQLModel` (SQLAlchemy wrapper)
 - **Migrations:** `Alembic`
 - **Scheduling:** `APScheduler`
-- **External API:** PandaScore
+- **External API:** Leaguepedia (via `mwclient` likely, wrapped in `leaguepedia_client.py`)
 
 ## Key Directories
 
@@ -24,7 +24,7 @@ This project is a Discord bot designed for managing esports pick'em contests. It
   - `commands/`: Discord slash command implementations.
   - `models.py`: Database models (SQLModel).
   - `scheduler.py`: Job scheduling logic (sync, polling).
-  - `pandascore_client.py`: Client for fetching data from PandaScore.
+  - `leaguepedia_client.py`: Client for fetching data from Leaguepedia.
 - `tests/`: Unit and integration tests (`pytest`).
 - `alembic/`: Database migration scripts.
 
@@ -91,9 +91,9 @@ Create new command modules in `src/commands/` and ensure they have a `setup(bot)
 - **Match Lifecycle Logic:**
 The bot synchronizes data in three stages:
 
-1. **Sync (`perform_pandascore_sync`)**: Fetches upcoming matches/tournaments every 6 hours.
+1. **Sync (`perform_leaguepedia_sync`)**: Fetches upcoming matches/tournaments every 6 hours.
 2. **Orchestrator (`schedule_live_polling`)**: Checks every minute for matches starting soon and schedules a poller.
-3. **Poller (`poll_running_matches_job`)**: Polls for results of running matches every 2 minutes.
+3. **Poller (`poll_live_match_job`)**: Polls for results of a specific live match every 5 minutes until completed.
 
 ## Code Style
 

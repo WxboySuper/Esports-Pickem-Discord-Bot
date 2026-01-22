@@ -1,8 +1,10 @@
 discord.py==2.6.4
 python-dotenv==1.2.1
 sqlmodel==0.0.31
-alembic==1.18.1
+alembic==1.17.2
 apscheduler
 aiohttp
 aiosqlite
 tenacity
+mwcleric @ git+https://github.com/RheingoldRiver/mwcleric
+mwrogue==0.1.5

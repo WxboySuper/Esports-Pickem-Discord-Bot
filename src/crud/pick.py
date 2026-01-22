@@ -2,8 +2,6 @@ import logging
 from typing import List, Optional
 from datetime import datetime
 from dataclasses import dataclass
-from sqlalchemy import update
-from sqlalchemy import update
 from sqlmodel import Session, select
 from src.models import Pick
 from .base import _save_and_refresh, _delete_and_commit
@@ -122,97 +120,3 @@ def delete_pick(session: Session, pick_id: int) -> bool:
     _delete_and_commit(session, pick)
     logger.info("Deleted pick ID: %s", pick_id)
     return True
-
-
-def score_picks_for_match(
-    session: Session, match_id: int, winner: str, score: int = 10
-) -> int:
-    """
-    Scores all picks for a given match based on the winning team.
-
-    This function performs a bulk update and does not commit the session.
-
-    Parameters:
-        session (Session): The database session.
-        match_id (int): The ID of the match to score picks for.
-        winner (str): The winning team's name.
-        score (int): The score to award for a correct pick.
-
-    Returns:
-        int: The number of picks that were updated.
-    """
-    # Score correct picks
-    correct_stmt = (
-        update(Pick)
-        .where(Pick.match_id == match_id)
-        .where(Pick.chosen_team == winner)
-        .values(status="correct", score=score)
-    )
-    correct_result = session.exec(correct_stmt)
-    correct_rows = correct_result.rowcount
-
-    # Score incorrect picks
-    incorrect_stmt = (
-        update(Pick)
-        .where(Pick.match_id == match_id)
-        .where(Pick.chosen_team != winner)
-        .values(status="incorrect", score=0)
-    )
-    incorrect_result = session.exec(incorrect_stmt)
-    incorrect_rows = incorrect_result.rowcount
-
-    total_updated = correct_rows + incorrect_rows
-    logger.info(
-        "Scored %d picks for match %d (winner: %s)",
-        total_updated,
-        match_id,
-        winner,
-    )
-    return total_updated
-
-
-def score_picks_for_match(
-    session: Session, match_id: int, winner: str, score: int = 10
-) -> int:
-    """
-    Scores all picks for a given match based on the winning team.
-
-    This function performs a bulk update and does not commit the session.
-
-    Parameters:
-        session (Session): The database session.
-        match_id (int): The ID of the match to score picks for.
-        winner (str): The winning team's name.
-        score (int): The score to award for a correct pick.
-
-    Returns:
-        int: The number of picks that were updated.
-    """
-    # Score correct picks
-    correct_stmt = (
-        update(Pick)
-        .where(Pick.match_id == match_id)
-        .where(Pick.chosen_team == winner)
-        .values(status="correct", score=score)
-    )
-    correct_result = session.exec(correct_stmt)
-    correct_rows = correct_result.rowcount
-
-    # Score incorrect picks
-    incorrect_stmt = (
-        update(Pick)
-        .where(Pick.match_id == match_id)
-        .where(Pick.chosen_team != winner)
-        .values(status="incorrect", score=0)
-    )
-    incorrect_result = session.exec(incorrect_stmt)
-    incorrect_rows = incorrect_result.rowcount
-
-    total_updated = correct_rows + incorrect_rows
-    logger.info(
-        "Scored %d picks for match %d (winner: %s)",
-        total_updated,
-        match_id,
-        winner,
-    )
-    return total_updated
