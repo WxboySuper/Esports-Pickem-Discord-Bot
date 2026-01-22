@@ -30,11 +30,9 @@ def test_start_scheduler_adds_jobs_with_replace_existing():
             and c.kwargs.get("replace_existing") is True
             for c in calls
         )
-        assert any(
-            c.kwargs.get("id") == "schedule_live_polling_job"
-            and c.kwargs.get("replace_existing") is True
-            for c in calls
-        )
+
+        # 'schedule_live_polling_job' was removed in refactor
+
         assert any(
             c.kwargs.get("id") == "poll_running_matches_job"
             and c.kwargs.get("replace_existing") is True

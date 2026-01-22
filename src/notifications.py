@@ -202,6 +202,51 @@ async def send_mid_series_update(match: Match, score: str):
     await broadcast_embed_to_guilds(bot, embed, context)
 
 
+async def send_match_time_change_notification(
+    match: Match, old_time: datetime, new_time: datetime
+):
+    """
+    Builds and broadcasts a Discord embed announcing a match time change
+    to all guilds.
+    """
+    logger.info(
+        "Broadcasting time change for match %s (old: %s, new: %s).",
+        match.id,
+        old_time,
+        new_time,
+    )
+    bot = get_bot_instance()
+    if not bot:
+        logger.error(
+            "Bot instance not available for time change notification: "
+            "match %s",
+            match.id,
+        )
+        return
+
+    contest_name = _get_contest_name(match)
+    timestamp = int(new_time.timestamp())
+
+    embed = discord.Embed(
+        title=f"📅 {contest_name} - Match Rescheduled",
+        description=(
+            f"**{match.team1}** vs **{match.team2}**\n\n"
+            f"The match time has been updated.\n"
+            f"**New Time:** <t:{timestamp}:F> (<t:{timestamp}:R>)"
+        ),
+        color=discord.Color.blue(),
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    embed.set_footer(text=f"Match ID: {match.id}")
+    if getattr(match, "pandascore_id", None):
+        footer_text = embed.footer.text + f" | PandaScore: {match.pandascore_id}"
+        embed.set_footer(text=footer_text)
+
+    context = f"time change notification for match {match.id}"
+    await broadcast_embed_to_guilds(bot, embed, context)
+
+
 async def broadcast_embed_to_guilds(
     bot: discord.Client, embed: discord.Embed, context: str
 ):
