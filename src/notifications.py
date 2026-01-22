@@ -96,7 +96,7 @@ def _score_value(match: Match, result: Result) -> str:
     score_val = f"**{result.score}**"
     if getattr(match, "best_of", None):
         score_val += f" (Best of {match.best_of})"
-    return score_val
+    return f"||{score_val}||"
 
 
 def _stats_value(stats: Tuple[int, int, float]) -> str:
@@ -137,7 +137,7 @@ def _build_result_embed(
 
     embed = discord.Embed(
         title=f"🏆 {contest_name} - Match Result",
-        description=f"**{winner_display}** has defeated **{loser_display}**!",
+        description=f"||**{winner_display}** has defeated **{loser_display}**!||",
         color=discord.Color.gold(),
         timestamp=datetime.now(timezone.utc),
     )
@@ -149,8 +149,16 @@ def _build_result_embed(
         name="Pick'em Stats", value=_stats_value(stats), inline=True
     )
 
-    if winner_obj and getattr(winner_obj, "image_url", None):
-        embed.set_thumbnail(url=winner_obj.image_url)
+    thumbnail_url = None
+    if getattr(match, "contest", None) and getattr(
+        match.contest, "image_url", None
+    ):
+        thumbnail_url = match.contest.image_url
+    elif winner_obj and getattr(winner_obj, "image_url", None):
+        thumbnail_url = winner_obj.image_url
+
+    if thumbnail_url:
+        embed.set_thumbnail(url=thumbnail_url)
 
     footer = f"Match ID: {match.id}"
     if getattr(match, "pandascore_id", None):

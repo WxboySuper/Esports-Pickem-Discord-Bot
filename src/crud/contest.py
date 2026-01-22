@@ -100,7 +100,7 @@ async def upsert_contest_by_pandascore(
 def _update_contest_from_data(contest: Contest, contest_data: dict) -> None:
     """Updates existing contest fields from data."""
     logger.info("Updating existing contest: %s", contest.name)
-    for key in ["name", "start_date", "end_date"]:
+    for key in ["name", "start_date", "end_date", "image_url"]:
         if key in contest_data and contest_data[key] is not None:
             setattr(contest, key, contest_data[key])
 
