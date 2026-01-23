@@ -59,6 +59,27 @@ def get_pick_by_id(session: Session, pick_id: int) -> Optional[Pick]:
     return session.get(Pick, pick_id)
 
 
+def get_pick(session: Session, user_id: int, match_id: int) -> Optional[Pick]:
+    """
+    Retrieve a specific pick for a user and match.
+
+    Parameters:
+        session (Session): Database session.
+        user_id (int): The user's ID.
+        match_id (int): The match's ID.
+
+    Returns:
+        Optional[Pick]: The pick object if found, else None.
+    """
+    logger.debug("Fetching pick for user %s and match %s", user_id, match_id)
+    statement = (
+        select(Pick)
+        .where(Pick.user_id == user_id)
+        .where(Pick.match_id == match_id)
+    )
+    return session.exec(statement).first()
+
+
 def list_picks_for_user(session: Session, user_id: int) -> List[Pick]:
     logger.debug("Listing picks for user ID: %s", user_id)
     statement = select(Pick).where(Pick.user_id == user_id)

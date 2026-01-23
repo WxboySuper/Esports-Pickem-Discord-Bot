@@ -8,7 +8,7 @@ from discord import app_commands
 from sqlmodel import select
 
 from src.db import get_session
-from src.models import Match, Pick
+from src.models import Match
 from src import crud
 
 logger = logging.getLogger("esports-bot.commands.pick")
@@ -56,9 +56,18 @@ class MatchSelect(discord.ui.Select):
                 )
                 return
 
-            # Show the team selection view
-            view = discord.ui.View()
-            view.add_item(TeamSelect(match=match))
+            # Check for existing pick for this match to highlight buttons
+            db_user = crud.get_user_by_discord_id(
+                session, str(interaction.user.id)
+            )
+            current_pick_team = None
+            if db_user:
+                existing_pick = crud.get_pick(session, db_user.id, match.id)
+                if existing_pick:
+                    current_pick_team = existing_pick.chosen_team
+
+            # Show the team selection view (buttons)
+            view = TeamPickView(match=match, current_pick=current_pick_team)
             msg = (
                 f"You selected: **{match.team1} vs {match.team2}**. "
                 "Who will win?"
@@ -70,34 +79,20 @@ class MatchSelect(discord.ui.Select):
             )
 
 
-class TeamSelect(discord.ui.Select):
-    """A dropdown to select a team for a given match."""
+class TeamButton(discord.ui.Button):
+    """A button to select a winning team."""
 
-    def __init__(self, match: Match):
+    def __init__(
+        self, team: str, match: Match, style: discord.ButtonStyle = None
+    ):
+        if style is None:
+            style = discord.ButtonStyle.primary
+        super().__init__(label=team, style=style)
+        self.team = team
         self.match = match
-        options = [
-            discord.SelectOption(label=match.team1, value=match.team1),
-            discord.SelectOption(label=match.team2, value=match.team2),
-        ]
-        super().__init__(
-            placeholder="Select the winning team...",
-            min_values=1,
-            max_values=1,
-            options=options,
-        )
 
     async def callback(self, interaction: discord.Interaction):
-        """
-        Handle a team selection from the TeamSelect UI by creating or
-        updating the invoking user's Pick for the associated match,
-        sending an ephemeral confirmation message, and removing the
-        interactive view from the original message.
-
-        Parameters:
-            interaction (discord.Interaction): The interaction
-                triggered by the user's selection.
-        """
-        chosen_team = self.values[0]
+        chosen_team = self.team
         with get_session() as session:
             # Get or create the user
             db_user = crud.get_user_by_discord_id(
@@ -110,12 +105,7 @@ class TeamSelect(discord.ui.Select):
                 )
 
             # Check if a pick already exists for this user and match
-            existing_pick_stmt = (
-                select(Pick)
-                .where(Pick.user_id == db_user.id)
-                .where(Pick.match_id == self.match.id)
-            )
-            existing_pick = session.exec(existing_pick_stmt).first()
+            existing_pick = crud.get_pick(session, db_user.id, self.match.id)
 
             if existing_pick:
                 # Update the existing pick
@@ -143,9 +133,32 @@ class TeamSelect(discord.ui.Select):
                     f"**{self.match.team1} vs {self.match.team2}**."
                 )
 
-        await interaction.response.send_message(message, ephemeral=True)
-        # Remove the view after selection
-        await interaction.edit_original_response(view=None)
+        # Replace the buttons with the confirmation message
+        await interaction.response.edit_message(content=message, view=None)
+
+
+class TeamPickView(discord.ui.View):
+    """A view with buttons to pick a team."""
+
+    def __init__(self, match: Match, current_pick: str | None = None):
+        super().__init__()
+        # Add buttons for each team
+        # If the user has already picked a team, highlight it (Success/Green)
+        # Otherwise use Primary (Blurple)
+
+        style1 = (
+            discord.ButtonStyle.success
+            if current_pick == match.team1
+            else discord.ButtonStyle.primary
+        )
+        self.add_item(TeamButton(team=match.team1, match=match, style=style1))
+
+        style2 = (
+            discord.ButtonStyle.success
+            if current_pick == match.team2
+            else discord.ButtonStyle.primary
+        )
+        self.add_item(TeamButton(team=match.team2, match=match, style=style2))
 
 
 @app_commands.command(
