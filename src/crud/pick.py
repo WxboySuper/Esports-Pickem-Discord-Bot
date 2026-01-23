@@ -2,6 +2,7 @@ import logging
 from typing import List, Optional
 from datetime import datetime
 from dataclasses import dataclass
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 from src.models import Pick
 from .base import _save_and_refresh, _delete_and_commit
@@ -67,7 +68,11 @@ def list_picks_for_user(session: Session, user_id: int) -> List[Pick]:
 
 def list_picks_for_match(session: Session, match_id: int) -> List[Pick]:
     logger.debug("Listing picks for match ID: %s", match_id)
-    statement = select(Pick).where(Pick.match_id == match_id)
+    statement = (
+        select(Pick)
+        .options(selectinload(Pick.user))
+        .where(Pick.match_id == match_id)
+    )
     return list(session.exec(statement))
 
 
