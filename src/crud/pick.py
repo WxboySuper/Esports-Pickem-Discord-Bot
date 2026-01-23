@@ -3,6 +3,7 @@ from typing import List, Optional
 from datetime import datetime
 from dataclasses import dataclass
 from sqlmodel import Session, select
+from sqlalchemy.orm import selectinload
 from src.models import Pick
 from .base import _save_and_refresh, _delete_and_commit
 
@@ -68,6 +69,21 @@ def list_picks_for_user(session: Session, user_id: int) -> List[Pick]:
 def list_picks_for_match(session: Session, match_id: int) -> List[Pick]:
     logger.debug("Listing picks for match ID: %s", match_id)
     statement = select(Pick).where(Pick.match_id == match_id)
+    return list(session.exec(statement))
+
+
+def list_picks_for_match_with_users(
+    session: Session, match_id: int
+) -> List[Pick]:
+    """
+    List picks for a match, eagerly loading the associated user.
+    """
+    logger.debug("Listing picks (with users) for match ID: %s", match_id)
+    statement = (
+        select(Pick)
+        .where(Pick.match_id == match_id)
+        .options(selectinload(Pick.user))
+    )
     return list(session.exec(statement))
 
 

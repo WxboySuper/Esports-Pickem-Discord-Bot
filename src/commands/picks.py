@@ -84,6 +84,7 @@ async def view_active(interaction: discord.Interaction):
             .join(Match)
             .where(Pick.user_id == db_user.id)
             .where(Match.scheduled_time > now_utc)
+            .options(selectinload(Pick.match))
             .order_by(Match.scheduled_time)
         )
         active_picks = session.exec(active_picks_stmt).all()
@@ -226,7 +227,7 @@ class MatchSelectForPicks(discord.ui.Select):
                 )
                 return
 
-            picks = crud.list_picks_for_match(session, match_id)
+            picks = crud.list_picks_for_match_with_users(session, match_id)
             embed = _build_picks_embed(match, picks)
 
             await interaction.followup.send(embed=embed, ephemeral=True)

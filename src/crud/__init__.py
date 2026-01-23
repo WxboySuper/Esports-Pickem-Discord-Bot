@@ -47,6 +47,7 @@ from .pick import (
     get_pick_by_id,
     list_picks_for_user,
     list_picks_for_match,
+    list_picks_for_match_with_users,
     update_pick,
     delete_pick,
     PickCreateParams,
