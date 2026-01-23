@@ -1,134 +1,95 @@
-# Repository Agents (Agent README)
+# Developer & Agent Guidelines
 
-This file is the single source-of-truth README for automated agents, integrations, and tools that interact with this repository. It exists to help human maintainers and automated agents operate safely and consistently.
+This file serves as the technical manual and rulebook for developers and AI agents working on the **Esports Pick'em Discord Bot**. It consolidates architectural decisions, coding standards, and project-specific "gotchas".
 
-See https://agents.md for general guidance on agent design and policies.
+**All contributors (human and AI) must follow these guidelines.**
 
-Important: store all credentials and tokens in GitHub Secrets or a secure vault — never commit secrets to the repository.
+## 1. Tech Stack & Core Libraries
 
----
+- **Language**: Python 3.10+
+- **Web/Async**: `asyncio`, `aiohttp`
+- **Database**: SQLite, `SQLModel` (ORM), `Alembic` (Migrations)
+- **Discord**: `discord.py`
+- **Scheduling**: `APScheduler`
+- **Data Source**: PandaScore API (`PandaScoreClient`)
 
-## Purpose & Audience
-- For maintainers: explain what agents do, who owns them, how to onboard/offboard them, and where config lives.
-- For agents (automations, bots): a machine-readable and human-readable guide describing expectations and required behavior when operating on this repo.
+## 2. Database & Models
 
-This file resides in the repository root as `AGENTS.md`.
+### SQLModel & Async SQLAlchemy
+- **Avoid N+1 Queries**: When fetching objects that have relationships (e.g., `Match` with `Result`), you **must** use `.options(selectinload(Model.relationship))` in your query.
+  ```python
+  # DO:
+  statement = select(Match).options(selectinload(Match.result))
+  # DON'T:
+  statement = select(Match) # Accessing match.result later will fail or cause extra queries
+  ```
+- **Timezones**: Use the custom `TZDateTime` type decorator for all datetime fields to ensure timezone awareness is preserved (stored as ISO strings in SQLite).
+  ```python
+  scheduled_time: datetime = Field(sa_column=Column(TZDateTime(), nullable=False))
+  ```
 
----
+### CRUD Patterns
+- **Module Structure**: Database operations live in `src/crud/`.
+- **Function Signatures**: List functions should accept optional boolean arguments to toggle eager loading.
+  ```python
+  def list_picks(session, with_users: bool = False):
+      stmt = select(Pick)
+      if with_users:
+          stmt = stmt.options(selectinload(Pick.user))
+      return session.exec(stmt).all()
+  ```
 
-## High-level rules for all agents
-1. Least privilege: request only the permissions required for the task. Prefer GitHub Apps or workflow-level permissions.
-2. Secrets: read tokens only from configured secrets (not from repository files).
-3. Transparency: every automated change must open a pull request with a clear description and link to an onboarding issue when applicable.
-4. Approval confirmation: agents MUST NOT push changes or open PRs without an explicit human confirmation recorded for that operation. The canonical confirmation phrase for this repo is:
+### Migrations (Alembic)
+- **Idempotency**: SQLite does not support transactional DDL well. Wrap operations like `create_table` or `add_column` in checks to prevent crashes if the schema partially exists.
+  ```python
+  # Example: Check if column exists before adding
+  conn = op.get_bind()
+  inspector = sqlalchemy.inspect(conn)
+  if "image_url" not in [c["name"] for c in inspector.get_columns("contest")]:
+      with op.batch_alter_table("contest") as batch_op:
+          batch_op.add_column(...)
+  ```
+- **Environment**: `alembic/env.py` is configured to read `DATABASE_URL` from the environment. Do not hardcode connection strings.
 
-   "I approve the changes by the agent to proceed"
+## 3. Asynchronous Patterns
 
-   - An authorized human must post this exact line in the relevant conversation thread, issue, or PR comment to grant permission for a specific operation initiated by an agent.
-   - Agents must include the human confirmation comment permalink in the PR body when creating the PR and must reference the person who posted it.
-5. Size & scope: when opening a PR, include a size label or reference to `.github/SIZE_GUIDELINES.md` and follow `CONTRIBUTING.md`.
-6. Audit: log actions and include a short note in the PR describing what was changed and why.
+- **Concurrent Requests**: When fetching independent data (e.g., multiple API endpoints), use `asyncio.gather` instead of sequential awaits.
+- **Blocking Code**: Never run blocking DB calls (synchronous `session.exec` without `await` is only for sync contexts, but this app is largely async). Note that `SQLModel` has both sync and async sessions; ensure you are using the correct one for the context (Discord commands are async).
 
----
+## 4. Testing
 
-## Onboarding an agent (checklist for humans)
-1. Open an issue titled `onboard: <agent-name>` describing:
-   - The agent's owner
-   - The exact operations it will perform
-   - Required permissions with rationale
-   - Config location and secrets needed
-2. Add or update the agent entry in `AGENTS.md` (this file) and open a PR that references the onboarding issue.
-3. After the PR is merged, install or create the integration and add secrets to repo/org secrets.
-4. Perform a verified smoke run (if applicable) and document the first successful run in the onboarding issue.
-5. Periodically (quarterly) review the agent and its granted permissions.
+- **Command**: Run tests using `python -m pytest` to ensure `sys.path` is correctly set.
+- **Mocking Strategy**: Mock the **immediate dependency**, not the database driver.
+  - *Good*: Mock `src.crud.get_match_by_id` when testing a Discord command.
+  - *Bad*: Mocking `session.exec` or `sqlalchemy.engine`.
+- **Discord Views**: When testing `discord.ui.View` subclasses in isolation, you may need to mock `discord.Interaction` and ensure items added to views behave correctly.
 
-Agent entry template (when adding an entry):
-- Name:
-- Integration type: (GitHub App, OAuth App, GitHub Actions, Service account, CLI tool)
-- Identity: (GitHub username, app id, service account)
-- Purpose: (what the agent does)
-- Config location: (path to workflow or external service)
-- Permissions required: (exact scopes needed)
-- Owner / contact: (team or username)
-- Secret storage: (which secret key in repo/org secrets)
-- Onboarded (date / issue / PR):
-- Confirmation policy: (how the agent should request/receive human confirmation)
-- Notes / rollback plan:
+## 5. Discord UI Constraints
 
----
+- **Select Menus**: Discord limits dropdown options to **25 items**. Always use `.limit(25)` in database queries that populate select menus.
+- **Interaction Responses**: Always `defer()` if an operation might take >3 seconds.
+- **Message Architecture**: Prefer single message responses (using Embeds) that can be edited/updated rather than sending multiple separate messages. This keeps channels organized.
 
-## Required behavior for agent-authored PRs
-- PR title should start with the agent name in square brackets, e.g. `[Copilot] Fix README typo`.
-- PR body MUST include:
-  - A brief summary of the change
-  - The onboarding issue reference (if applicable)
-  - The exact human confirmation comment permalink that authorized the action and the author of that comment
-  - Size (XS/S/M/L/XL) per `.github/SIZE_GUIDELINES.md`
-  - A short test or verification checklist
-- Add labels as appropriate (`docs`, `automation`, `dependency`) and request review from the owner listed in the agent entry.
-- If multiple files are changed, prefer splitting into smaller PRs to match the project's size guidelines.
+## 6. Project Architecture
 
----
+### Data Synchronization
+- **Source**: We use **PandaScore**. (Legacy `Leaguepedia` code has been removed).
+- **Jobs**:
+  - `perform_pandascore_sync`: Runs every **1 hour** (full sync).
+  - `poll_running_matches_job`: Runs every **1 minute** (updates live scores/results).
 
-## Examples
+### Configuration
+- **Environment Variables**: Managed in `.env` (local) and injected in production.
+- **Config Access**: Use `src/config.py` to access variables. Do not use `os.getenv` directly in business logic files.
 
-### GitHub Copilot (chat-driven suggestions / this assistant)
-- Name: GitHub Copilot / @copilot
-- Integration type: Chat / GitHub App
-- Identity: @copilot (or the installed GitHub App)
-- Purpose: Draft issues, propose files, and open PRs when explicitly authorized.
-- Config location: n/a (chat-driven)
-- Permissions required: push/write to create branches and PRs (GRANT ONLY WHEN NEEDED)
-- Owner / contact: repository maintainers (WxboySuper)
-- Secret storage: not applicable for chat; use GitHub App installation for push access
-- Onboarded: record onboarding issue/PR link
-- Confirmation policy: requires the exact human confirmation phrase in the conversation or an issue/PR comment before opening a PR. The agent must embed the confirmation comment permalink in the PR body.
-- Notes / rollback plan: remove app installation or revoke collaborator access; rotate tokens.
+## 7. Workflow & Git
 
-### Jules / Alternative CLI or service agent
-- Name: Jules (or <tool-name>)
-- Integration type: CLI / Service account
-- Identity: service account user or bot user
-- Purpose: e.g., automation for dependency updates, scaffolding, CI ops
-- Config location: `.github/workflows/<workflow>.yml` or external service URL
-- Permissions required: minimal required scopes (e.g., contents: read/write)
-- Owner / contact: (person/team)
-- Secret storage: store token as `JULES_TOKEN` in repo/org secrets
-- Onboarded: record onboarding issue/PR link
-- Confirmation policy: same confirmation phrase; require human comment and include permalink in the PR body
-- Notes / rollback plan: revoke token, disable workflow, and open an incident issue
+### Commit Messages
+- **Format**: Semantic Commits (`type: message`)
+- **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`.
+- **Example**: `feat: add auto-refresh to leaderboard view`
 
----
-
-## Security & operations
-- Rotate tokens periodically and immediately if compromise is suspected.
-- Limit access to only the necessary repositories and scopes.
-- Prefer GitHub Apps (finer-grained permissions) over personal access tokens.
-- Keep an audit of installed agents and their permissions; review quarterly.
-
----
-
-## Disabling or removing an agent
-1. Revoke tokens or uninstall the app immediately if the agent behaves unexpectedly.
-2. Disable any associated workflows in `.github/workflows/`.
-3. Open an incident issue describing mitigation and root cause analysis.
-4. Mark the agent entry in `AGENTS.md` as `retired` with the date and reason and link the incident issue.
-
----
-
-## Governance & contact
-- Repository owner: `WxboySuper`
-- Contact for automation onboarding: open an issue labeled `automation` or `infrastructure` and ping `@WxboySuper`.
-
----
-
-## Contributing updates to this file
-- To add or change an entry, open a PR targeting `main` and reference an onboarding or removal issue.
-- Agents must follow the confirmation and PR-body requirements above when proposing changes.
-
----
-
-## Related docs
-- `CONTRIBUTING.md` — contributor workflow and PR conventions
-- `.github/SIZE_GUIDELINES.md` — PR sizing guidance
-- `LICENSE` — project license
+### Pre-commit Checks
+Before submitting code, you must ensure:
+1. **Linting**: Run `flake8` and `black .`
+2. **Tests**: Run `python -m pytest` and ensure all tests pass.
