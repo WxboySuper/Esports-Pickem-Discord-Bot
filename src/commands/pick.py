@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
 from src.db import get_session
-from src.models import Match, Pick, Contest
+from src.models import Match, Pick
 from src import crud
 
 logger = logging.getLogger("esports-bot.commands.pick")
@@ -24,7 +24,9 @@ class PickView(discord.ui.View):
     Supports navigation and auto-advancement.
     """
 
-    def __init__(self, matches: list[Match], user_picks: dict[int, str], user_id: int):
+    def __init__(
+        self, matches: list[Match], user_picks: dict[int, str], user_id: int
+    ):
         super().__init__(timeout=600)  # Timeout after 10 minutes
         self.matches = matches
         self.user_picks = user_picks
@@ -35,11 +37,15 @@ class PickView(discord.ui.View):
         # --- Initialize Buttons ---
 
         # Row 0: Team Buttons
-        self.btn_team1 = discord.ui.Button(style=discord.ButtonStyle.secondary, row=0)
+        self.btn_team1 = discord.ui.Button(
+            style=discord.ButtonStyle.secondary, row=0
+        )
         self.btn_team1.callback = self.on_team1
         self.add_item(self.btn_team1)
 
-        self.btn_team2 = discord.ui.Button(style=discord.ButtonStyle.secondary, row=0)
+        self.btn_team2 = discord.ui.Button(
+            style=discord.ButtonStyle.secondary, row=0
+        )
         self.btn_team2.callback = self.on_team2
         self.add_item(self.btn_team2)
 
@@ -70,7 +76,9 @@ class PickView(discord.ui.View):
         return self.matches[self.current_index]
 
     def update_components(self):
-        """Update button labels, styles, and states based on current match and pick."""
+        """
+        Update button labels, styles, and states based on current match/pick.
+        """
         match = self.current_match
         current_pick = self.user_picks.get(match.id)
 
@@ -92,16 +100,19 @@ class PickView(discord.ui.View):
 
         # Update Auto-Next Button
         self.btn_auto.label = f"Auto-Next: {'ON' if self.auto_next else 'OFF'}"
-        self.btn_auto.style = (
-            discord.ButtonStyle.success if self.auto_next else discord.ButtonStyle.secondary
-        )
+        if self.auto_next:
+            self.btn_auto.style = discord.ButtonStyle.success
+        else:
+            self.btn_auto.style = discord.ButtonStyle.secondary
 
     def get_embed(self) -> discord.Embed:
         """Generate the embed for the current match."""
         match = self.current_match
         current_pick = self.user_picks.get(match.id)
 
-        contest_name = match.contest.name if match.contest else "Unknown Tournament"
+        contest_name = (
+            match.contest.name if match.contest else "Unknown Tournament"
+        )
         timestamp = int(match.scheduled_time.timestamp())
         time_str = f"<t:{timestamp}:F> (<t:{timestamp}:R>)"
 
@@ -248,7 +259,7 @@ async def pick(interaction: discord.Interaction):
         view = PickView(
             matches=active_matches,
             user_picks=user_picks,
-            user_id=interaction.user.id
+            user_id=interaction.user.id,
         )
 
         await interaction.response.send_message(
