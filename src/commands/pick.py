@@ -149,7 +149,10 @@ class PickView(discord.ui.View):
 
         # Check if match has already started
         if datetime.now(timezone.utc) >= match.scheduled_time:
-            await interaction.response.send_message(
+            self.update_components()
+            embed = self.get_embed()
+            await interaction.response.edit_message(embed=embed, view=self)
+            await interaction.followup.send(
                 "Cannot pick: Match has already started!", ephemeral=True
             )
             return
