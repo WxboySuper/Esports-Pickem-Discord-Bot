@@ -66,13 +66,13 @@ def list_picks_for_user(session: Session, user_id: int) -> List[Pick]:
     return list(session.exec(statement))
 
 
-def list_picks_for_match(
-    session: Session, match_id: int, with_users: bool = False
-) -> List[Pick]:
+def list_picks_for_match(session: Session, match_id: int) -> List[Pick]:
     logger.debug("Listing picks for match ID: %s", match_id)
-    statement = select(Pick).where(Pick.match_id == match_id)
-    if with_users:
-        statement = statement.options(selectinload(Pick.user))
+    statement = (
+        select(Pick)
+        .options(selectinload(Pick.user))
+        .where(Pick.match_id == match_id)
+    )
     return list(session.exec(statement))
 
 
