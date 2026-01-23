@@ -5,6 +5,7 @@ import discord
 from src.commands.pick import PickView
 from src.models import Match, Contest
 
+
 @pytest.fixture
 def mock_match():
     return Match(
@@ -12,10 +13,15 @@ def mock_match():
         team1="T1",
         team2="T2",
         scheduled_time=datetime.now(timezone.utc) + timedelta(days=1),
-        contest=Contest(name="Worlds", start_date=datetime.now(timezone.utc), end_date=datetime.now(timezone.utc)),
+        contest=Contest(
+            name="Worlds",
+            start_date=datetime.now(timezone.utc),
+            end_date=datetime.now(timezone.utc),
+        ),
         best_of=1,
-        contest_id=1
+        contest_id=1,
     )
+
 
 @pytest.fixture
 def mock_matches(mock_match):
@@ -24,11 +30,16 @@ def mock_matches(mock_match):
         team1="G2",
         team2="FNC",
         scheduled_time=datetime.now(timezone.utc) + timedelta(days=2),
-        contest=Contest(name="LEC", start_date=datetime.now(timezone.utc), end_date=datetime.now(timezone.utc)),
+        contest=Contest(
+            name="LEC",
+            start_date=datetime.now(timezone.utc),
+            end_date=datetime.now(timezone.utc),
+        ),
         best_of=3,
-        contest_id=1
+        contest_id=1,
     )
     return [mock_match, m2]
+
 
 @pytest.mark.asyncio
 async def test_pick_view_initialization(mock_matches):
@@ -50,6 +61,7 @@ async def test_pick_view_initialization(mock_matches):
     assert view.btn_prev.disabled is True
     assert view.btn_next.disabled is False
 
+
 @pytest.mark.asyncio
 async def test_pick_view_navigation(mock_matches):
     view = PickView(matches=mock_matches, user_picks={}, user_id=123)
@@ -65,6 +77,7 @@ async def test_pick_view_navigation(mock_matches):
     mock_interaction.response.reset_mock()
     await view.on_prev(mock_interaction)
     assert view.current_index == 0
+
 
 @pytest.mark.asyncio
 @patch("src.commands.pick.get_session")
