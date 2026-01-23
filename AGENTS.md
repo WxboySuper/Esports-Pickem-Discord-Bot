@@ -8,7 +8,7 @@ This file serves as the technical manual and rulebook for developers and AI agen
 
 - **Language**: Python 3.10+
 - **Web/Async**: `asyncio`, `aiohttp`
-- **Database**: PostgreSQL (Production) / SQLite (Local), `SQLModel` (ORM), `Alembic` (Migrations)
+- **Database**: SQLite, `SQLModel` (ORM), `Alembic` (Migrations)
 - **Discord**: `discord.py`
 - **Scheduling**: `APScheduler`
 - **Data Source**: PandaScore API (`PandaScoreClient`)
@@ -68,6 +68,7 @@ This file serves as the technical manual and rulebook for developers and AI agen
 
 - **Select Menus**: Discord limits dropdown options to **25 items**. Always use `.limit(25)` in database queries that populate select menus.
 - **Interaction Responses**: Always `defer()` if an operation might take >3 seconds.
+- **Message Architecture**: Prefer single message responses (using Embeds) that can be edited/updated rather than sending multiple separate messages. This keeps channels organized.
 
 ## 6. Project Architecture
 

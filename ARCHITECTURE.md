@@ -9,7 +9,7 @@ High-level description of the bot, its purpose, and key components.
 - Python 3.10+
 - SQLModel (ORM)
 - Alembic (Migrations)
-- SQLite (local/dev) / PostgreSQL (production)
+- SQLite
 - Discord.py
 - PandaScore API (Match Data Source)
 
