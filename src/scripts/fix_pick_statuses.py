@@ -8,36 +8,35 @@ from src.models import Pick, Match, Result
 logger = logging.getLogger(__name__)
 
 
+def _set_pick_correct(pick: Pick) -> bool:
+    """Sets pick as correct if not already. Returns True if changed."""
+    if not pick.is_correct or pick.status != "correct" or pick.score != 10:
+        pick.is_correct = True
+        pick.status = "correct"
+        pick.score = 10
+        return True
+    return False
+
+
+def _set_pick_incorrect(pick: Pick) -> bool:
+    """Sets pick as incorrect if not already. Returns True if changed."""
+    if pick.is_correct or pick.status != "incorrect" or pick.score != 0:
+        pick.is_correct = False
+        pick.status = "incorrect"
+        pick.score = 0
+        return True
+    return False
+
+
 def _update_pick_if_needed(pick: Pick, winner: str) -> bool:
     """
     Evaluates if a pick needs updating based on the winner.
     Updates the pick in place and returns True if changed.
     """
-    should_be_correct = pick.chosen_team == winner
-    needs_update = False
-
-    if should_be_correct:
-        if (
-            not pick.is_correct
-            or pick.status != "correct"
-            or pick.score != 10
-        ):
-            pick.is_correct = True
-            pick.status = "correct"
-            pick.score = 10
-            needs_update = True
+    if pick.chosen_team == winner:
+        return _set_pick_correct(pick)
     else:
-        if (
-            pick.is_correct
-            or pick.status != "incorrect"
-            or pick.score != 0
-        ):
-            pick.is_correct = False
-            pick.status = "incorrect"
-            pick.score = 0
-            needs_update = True
-
-    return needs_update
+        return _set_pick_incorrect(pick)
 
 
 async def fix_pick_statuses():
