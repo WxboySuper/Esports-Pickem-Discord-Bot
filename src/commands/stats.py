@@ -41,9 +41,9 @@ async def stats(interaction: discord.Interaction, user: discord.Member = None):
             return
 
         # Calculate basic stats
-        picks = crud.list_picks_for_user(session, db_user.id)
-        total_picks = len(picks)
-        correct_picks = len([p for p in picks if p.status == "correct"])
+        total_picks, correct_picks = crud.get_user_pick_stats(
+            session, db_user.id
+        )
         win_rate = (
             (correct_picks / total_picks) * 100 if total_picks > 0 else 0
         )

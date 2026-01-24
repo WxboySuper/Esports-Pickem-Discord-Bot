@@ -308,6 +308,55 @@ def test_pick_update_delete_missing(session: Session):
     assert crud.delete_pick(session, 7777) is False
 
 
+def test_get_user_pick_stats(session: Session):
+    user, contest, match = _mk_user_contest_match(session)
+
+    # Create 3 picks: 2 correct, 1 incorrect
+    # We'll use different matches to be clean, though Pick model might allow duplicates
+    base_time = datetime(
+        2025, 5, 12, 12, 0, 0, tzinfo=timezone.utc
+    )
+
+    for i in range(3):
+        m = crud.create_match(
+            session,
+            crud.MatchCreateParams(
+                contest_id=contest.id,
+                team1=f"T{i}A",
+                team2=f"T{i}B",
+                scheduled_time=base_time,
+                leaguepedia_id=f"m-stat-{i}",
+            ),
+        )
+
+        pick = crud.create_pick(
+            session,
+            crud.PickCreateParams(
+                user_id=user.id,
+                contest_id=contest.id,
+                match_id=m.id,
+                chosen_team=f"T{i}A",
+            ),
+        )
+        if i < 2:
+            pick.status = "correct"
+        else:
+            pick.status = "incorrect"
+        session.add(pick)
+
+    session.commit()
+
+    total, correct = crud.get_user_pick_stats(session, user.id)
+    assert total == 3
+    assert correct == 2
+
+    # Check empty stats for a new user
+    user2 = crud.create_user(session, "u2", "user2")
+    total2, correct2 = crud.get_user_pick_stats(session, user2.id)
+    assert total2 == 0
+    assert correct2 == 0
+
+
 # ---- RESULT ----
 def test_result_crud_and_queries(session: Session):
     contest = _mk_contest(session)
