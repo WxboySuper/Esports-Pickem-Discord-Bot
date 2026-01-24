@@ -98,9 +98,9 @@ class NotificationBatcher:
                 return
 
             # If batch mode was entered while we were sleeping, abort flush.
-            # Do NOT remove from _timers; let the task complete. _ensure_timer
-            # will see it is done and start a new one if needed.
+            # Remove from _timers so _flush_all knows not to wait for us.
             if self._batch_depth > 0:
+                self._timers.pop(key, None)
                 return
 
             items = self._pending.pop(key, [])
