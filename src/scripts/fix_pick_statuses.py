@@ -10,22 +10,30 @@ logger = logging.getLogger(__name__)
 
 def _set_pick_correct(pick: Pick) -> bool:
     """Sets pick as correct if not already. Returns True if changed."""
-    if not pick.is_correct or pick.status != "correct" or pick.score != 10:
-        pick.is_correct = True
-        pick.status = "correct"
-        pick.score = 10
-        return True
-    return False
+    # Check if already correct state
+    if pick.is_correct and pick.status == "correct" and pick.score == 10:
+        return False
+
+    pick.is_correct = True
+    pick.status = "correct"
+    pick.score = 10
+    return True
 
 
 def _set_pick_incorrect(pick: Pick) -> bool:
     """Sets pick as incorrect if not already. Returns True if changed."""
-    if pick.is_correct or pick.status != "incorrect" or pick.score != 0:
-        pick.is_correct = False
-        pick.status = "incorrect"
-        pick.score = 0
-        return True
-    return False
+    # Check if already incorrect state
+    if (
+        pick.is_correct is False
+        and pick.status == "incorrect"
+        and pick.score == 0
+    ):
+        return False
+
+    pick.is_correct = False
+    pick.status = "incorrect"
+    pick.score = 0
+    return True
 
 
 def _update_pick_if_needed(pick: Pick, winner: str) -> bool:
@@ -35,8 +43,7 @@ def _update_pick_if_needed(pick: Pick, winner: str) -> bool:
     """
     if pick.chosen_team == winner:
         return _set_pick_correct(pick)
-    else:
-        return _set_pick_incorrect(pick)
+    return _set_pick_incorrect(pick)
 
 
 async def fix_pick_statuses():
