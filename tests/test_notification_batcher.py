@@ -2,6 +2,7 @@ import pytest
 import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+import src.notification_batcher
 from src.notification_batcher import NotificationBatcher
 from src.models import Match, Contest
 
@@ -14,22 +15,29 @@ async def test_batch_reminders():
     # Mocks
     mock_bot = MagicMock()
 
-    with patch(
-        "src.notification_batcher.get_bot_instance", return_value=mock_bot
-    ), patch(
-        "src.notification_batcher.get_async_session"
-    ) as mock_session_cls, patch(
-        "src.notification_batcher.broadcast_embed_to_guilds",
+    # Mock session behavior for fallback (if patches fail)
+    mock_session = AsyncMock()
+    # Mock session.exec(...).first() behavior
+    # session.exec returns awaitable -> result. result.first() -> match
+    # However, if we patch the helpers, this shouldn't be reached.
+
+    # We patch directly on the module object to ensure correct targeting
+    with patch.object(
+        src.notification_batcher, "get_bot_instance", return_value=mock_bot
+    ), patch.object(
+        src.notification_batcher, "get_async_session"
+    ) as mock_session_cls, patch.object(
+        src.notification_batcher,
+        "broadcast_embed_to_guilds",
         new_callable=AsyncMock,
-    ) as mock_broadcast, patch(
-        "src.notification_batcher.fetch_teams", new_callable=AsyncMock
-    ) as mock_fetch_teams, patch(
-        "src.notification_batcher._get_match_with_contest",
+    ) as mock_broadcast, patch.object(
+        src.notification_batcher, "fetch_teams", new_callable=AsyncMock
+    ) as mock_fetch_teams, patch.object(
+        src.notification_batcher,
+        "_get_match_with_contest",
         new_callable=AsyncMock,
     ) as mock_get_match_with_contest:
 
-        # Setup session mock
-        mock_session = AsyncMock()
         mock_session_cls.return_value.__aenter__.return_value = mock_session
 
         # Mock data
@@ -90,22 +98,24 @@ async def test_batch_results():
     batcher = NotificationBatcher()
     mock_bot = MagicMock()
 
-    with patch(
-        "src.notification_batcher.get_bot_instance", return_value=mock_bot
-    ), patch(
-        "src.notification_batcher.get_async_session"
-    ) as mock_session_cls, patch(
-        "src.notification_batcher.broadcast_embed_to_guilds",
+    mock_session = AsyncMock()
+
+    with patch.object(
+        src.notification_batcher, "get_bot_instance", return_value=mock_bot
+    ), patch.object(
+        src.notification_batcher, "get_async_session"
+    ) as mock_session_cls, patch.object(
+        src.notification_batcher,
+        "broadcast_embed_to_guilds",
         new_callable=AsyncMock,
-    ) as mock_broadcast, patch(
-        "src.notification_batcher.fetch_teams", new_callable=AsyncMock
+    ) as mock_broadcast, patch.object(
+        src.notification_batcher, "fetch_teams", new_callable=AsyncMock
     ) as mock_fetch_teams, patch(
         "src.crud.get_match_with_result_by_id", new_callable=AsyncMock
-    ) as mock_get_match, patch(
-        "src.notification_batcher._get_pick_stats", new_callable=AsyncMock
+    ) as mock_get_match, patch.object(
+        src.notification_batcher, "_get_pick_stats", new_callable=AsyncMock
     ) as mock_get_pick_stats:
 
-        mock_session = AsyncMock()
         mock_session_cls.return_value.__aenter__.return_value = mock_session
 
         now = datetime.now(timezone.utc)
@@ -152,22 +162,24 @@ async def test_batch_results():
 @pytest.mark.asyncio
 async def test_explicit_batching_mode():
     batcher = NotificationBatcher()
+    mock_session = AsyncMock()
 
-    with patch(
-        "src.notification_batcher.get_bot_instance", return_value=MagicMock()
-    ), patch(
-        "src.notification_batcher.get_async_session"
-    ) as mock_session_cls, patch(
-        "src.notification_batcher.broadcast_embed_to_guilds",
+    with patch.object(
+        src.notification_batcher, "get_bot_instance", return_value=MagicMock()
+    ), patch.object(
+        src.notification_batcher, "get_async_session"
+    ) as mock_session_cls, patch.object(
+        src.notification_batcher,
+        "broadcast_embed_to_guilds",
         new_callable=AsyncMock,
-    ) as mock_broadcast, patch(
-        "src.notification_batcher.fetch_teams", new_callable=AsyncMock
-    ) as mock_fetch_teams, patch(
-        "src.notification_batcher._get_match_with_contest",
+    ) as mock_broadcast, patch.object(
+        src.notification_batcher, "fetch_teams", new_callable=AsyncMock
+    ) as mock_fetch_teams, patch.object(
+        src.notification_batcher,
+        "_get_match_with_contest",
         new_callable=AsyncMock,
     ) as mock_get_match_with_contest:
 
-        mock_session = AsyncMock()
         mock_session_cls.return_value.__aenter__.return_value = mock_session
 
         # Setup mocks for processing reminders (simplest case)

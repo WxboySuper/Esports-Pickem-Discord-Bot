@@ -128,109 +128,113 @@ class NotificationBatcher:
         logger.info("Processing batch %s with %d items", key, len(items))
         if key.startswith("reminder_"):
             minutes = int(key.split("_")[1])
-            await self._process_reminders(minutes, items)
+            await _process_reminders(minutes, items)
         elif key == "result":
-            await self._process_results(items)
+            await _process_results(items)
         elif key == "time_change":
-            await self._process_time_changes(items)
+            await _process_time_changes(items)
         elif key == "mid_series":
-            await self._process_mid_series(items)
+            await _process_mid_series(items)
 
-    async def _process_generic(
-        self,
-        items: List[Any],
-        fetch_data: Callable[[Any, Any], Any],
-        build_embed: Callable[[List[Any]], discord.Embed],
-        context_fmt: str,
-    ):
-        """
-        Generic processor for batch items.
 
-        Args:
-            items: List of raw items to process.
-            fetch_data: Coroutine accepting (session, item) returning data
-                        to include in the embed list, or None to skip.
-            build_embed: Function accepting list of data and returning an
-                         Embed.
-            context_fmt: Format string for log context (e.g. "result
-                         notification").
-        """
-        bot = get_bot_instance()
-        if not bot:
+# --- Module-level Processing Helpers ---
+
+
+async def _process_generic(
+    items: List[Any],
+    fetch_data: Callable[[Any, Any], Any],
+    build_embed: Callable[[List[Any]], discord.Embed],
+    context_fmt: str,
+):
+    """
+    Generic processor for batch items.
+
+    Args:
+        items: List of raw items to process.
+        fetch_data: Coroutine accepting (session, item) returning data
+                    to include in the embed list, or None to skip.
+        build_embed: Function accepting list of data and returning an
+                        Embed.
+        context_fmt: Format string for log context (e.g. "result
+                        notification").
+    """
+    bot = get_bot_instance()
+    if not bot:
+        return
+
+    async with get_async_session() as session:
+        data_list = []
+        for item in items:
+            res = await fetch_data(session, item)
+            if res:
+                data_list.append(res)
+
+        if not data_list:
             return
 
-        async with get_async_session() as session:
-            data_list = []
-            for item in items:
-                res = await fetch_data(session, item)
-                if res:
-                    data_list.append(res)
-
-            if not data_list:
-                return
-
-            embed = build_embed(data_list)
-            context = f"{context_fmt} for {len(data_list)} matches"
-            await broadcast_embed_to_guilds(bot, embed, context)
-
-    async def _process_reminders(self, minutes: int, match_ids: List[int]):
-        async def fetch(session, match_id):
-            match = await _get_match_with_contest(session, match_id)
-            if not match:
-                return None
-            team1, team2 = await fetch_teams(session, match)
-            return (match, team1, team2)
-
-        def build(data_list):
-            return _build_reminder_embed(minutes, data_list)
-
-        await self._process_generic(
-            match_ids, fetch, build, f"{minutes}-minute reminder"
-        )
-
-    async def _process_results(self, items: List[Tuple[int, int]]):
-        async def fetch(session, item):
-            match_id, result_id = item
-            from src import crud
-
-            match = await crud.get_match_with_result_by_id(session, match_id)
-            result = await session.get(Result, result_id)
-            if not match or not result:
-                return None
-            team1, team2 = await fetch_teams(session, match)
-            stats = await _get_pick_stats(session, match.id, result.winner)
-            return (match, result, team1, team2, stats)
-
-        await self._process_generic(
-            items, fetch, _build_result_embed, "result notification"
-        )
-
-    async def _process_time_changes(self, items: List[Tuple[int, Any, Any]]):
-        async def fetch(session, item):
-            match_id, old, new = item
-            match = await _get_match_with_contest(session, match_id)
-            if not match:
-                return None
-            return (match, old, new)
-
-        await self._process_generic(
-            items, fetch, _build_time_change_embed, "time change notification"
-        )
-
-    async def _process_mid_series(self, items: List[Tuple[int, str]]):
-        async def fetch(session, item):
-            match_id, score = item
-            match = await _get_match_with_contest(session, match_id)
-            if not match:
-                return None
-            return (match, score)
-
-        await self._process_generic(
-            items, fetch, _build_mid_series_embed, "mid-series update"
-        )
+        embed = build_embed(data_list)
+        context = f"{context_fmt} for {len(data_list)} matches"
+        await broadcast_embed_to_guilds(bot, embed, context)
 
 
-# --- Helper Functions (Static/Module-level) ---
+async def _process_reminders(minutes: int, match_ids: List[int]):
+    async def fetch(session, match_id):
+        match = await _get_match_with_contest(session, match_id)
+        if not match:
+            return None
+        team1, team2 = await fetch_teams(session, match)
+        return (match, team1, team2)
+
+    def build(data_list):
+        return _build_reminder_embed(minutes, data_list)
+
+    await _process_generic(
+        match_ids, fetch, build, f"{minutes}-minute reminder"
+    )
+
+
+async def _process_results(items: List[Tuple[int, int]]):
+    async def fetch(session, item):
+        match_id, result_id = item
+        from src import crud
+
+        match = await crud.get_match_with_result_by_id(session, match_id)
+        result = await session.get(Result, result_id)
+        if not match or not result:
+            return None
+        team1, team2 = await fetch_teams(session, match)
+        stats = await _get_pick_stats(session, match.id, result.winner)
+        return (match, result, team1, team2, stats)
+
+    await _process_generic(
+        items, fetch, _build_result_embed, "result notification"
+    )
+
+
+async def _process_time_changes(items: List[Tuple[int, Any, Any]]):
+    async def fetch(session, item):
+        match_id, old, new = item
+        match = await _get_match_with_contest(session, match_id)
+        if not match:
+            return None
+        return (match, old, new)
+
+    await _process_generic(
+        items, fetch, _build_time_change_embed, "time change notification"
+    )
+
+
+async def _process_mid_series(items: List[Tuple[int, str]]):
+    async def fetch(session, item):
+        match_id, score = item
+        match = await _get_match_with_contest(session, match_id)
+        if not match:
+            return None
+        return (match, score)
+
+    await _process_generic(
+        items, fetch, _build_mid_series_embed, "mid-series update"
+    )
 
 
 async def _get_match_with_contest(session, match_id: int) -> Optional[Match]:
