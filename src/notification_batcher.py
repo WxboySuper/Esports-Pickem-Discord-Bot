@@ -100,7 +100,7 @@ class NotificationBatcher:
 
         if items:
             try:
-                await self._process_batch(key, items)
+                await _process_batch(key, items)
             except Exception:
                 logger.exception("Failed to process batch for key %s", key)
 
@@ -120,24 +120,25 @@ class NotificationBatcher:
 
             if items:
                 try:
-                    await self._process_batch(key, items)
+                    await _process_batch(key, items)
                 except Exception:
                     logger.exception("Failed to flush batch for key %s", key)
 
-    async def _process_batch(self, key: str, items: List[Any]):
-        logger.info("Processing batch %s with %d items", key, len(items))
-        if key.startswith("reminder_"):
-            minutes = int(key.split("_")[1])
-            await _process_reminders(minutes, items)
-        elif key == "result":
-            await _process_results(items)
-        elif key == "time_change":
-            await _process_time_changes(items)
-        elif key == "mid_series":
-            await _process_mid_series(items)
-
 
 # --- Module-level Processing Helpers ---
+
+
+async def _process_batch(key: str, items: List[Any]):
+    logger.info("Processing batch %s with %d items", key, len(items))
+    if key.startswith("reminder_"):
+        minutes = int(key.split("_")[1])
+        await _process_reminders(minutes, items)
+    elif key == "result":
+        await _process_results(items)
+    elif key == "time_change":
+        await _process_time_changes(items)
+    elif key == "mid_series":
+        await _process_mid_series(items)
 
 
 async def _process_generic(
@@ -219,9 +220,24 @@ async def _process_time_changes(items: List[Tuple[int, Any, Any]]):
             return None
         return (match, old, new)
 
-    await _process_generic(
-        items, fetch, _build_time_change_embed, "time change notification"
-    )
+    def fmt_line(data):
+        m, _, new_time = data
+        ts = int(new_time.timestamp())
+        return (
+            f"**{m.team1}** vs **{m.team2}**\n"
+            f"New Time: <t:{ts}:F> (<t:{ts}:R>)"
+        )
+
+    def build(data_list):
+        return _build_simple_list_embed(
+            "📅 Match Schedule Updates",
+            "The following matches have been rescheduled:",
+            discord.Color.blue(),
+            data_list,
+            fmt_line,
+        )
+
+    await _process_generic(items, fetch, build, "time change notification")
 
 
 async def _process_mid_series(items: List[Tuple[int, str]]):
@@ -232,9 +248,23 @@ async def _process_mid_series(items: List[Tuple[int, str]]):
             return None
         return (match, score)
 
-    await _process_generic(
-        items, fetch, _build_mid_series_embed, "mid-series update"
-    )
+    def fmt_line(data):
+        m, score = data
+        return (
+            f"**{m.team1}** vs **{m.team2}**: **{score}** "
+            f"(Best of {m.best_of})"
+        )
+
+    def build(data_list):
+        return _build_simple_list_embed(
+            "Live Match Updates",
+            "Latest scores:",
+            discord.Color.orange(),
+            data_list,
+            fmt_line,
+        )
+
+    await _process_generic(items, fetch, build, "mid-series update")
 
 
 async def _get_match_with_contest(session, match_id: int) -> Optional[Match]:
@@ -340,50 +370,33 @@ def _build_result_embed(
     return embed
 
 
-def _build_time_change_embed(
-    changes_data: List[Tuple[Match, Any, Any]],
+def _build_simple_list_embed(
+    title: str,
+    description: str,
+    color: discord.Color,
+    data_list: List[Any],
+    line_formatter: Callable[[Any], str],
 ) -> discord.Embed:
+    """
+    Helper to build a simple list embed for time changes and mid-series
+    updates.
+    """
     embed = discord.Embed(
-        title="📅 Match Schedule Updates",
-        description="The following matches have been rescheduled:",
-        color=discord.Color.blue(),
+        title=title,
+        description=description,
+        color=color,
         timestamp=datetime.now(timezone.utc),
     )
-    changes_data.sort(key=lambda x: x[0].id)
+    # Assume data items have match as first element
+    data_list.sort(key=lambda x: x[0].id)
 
-    for match, _, new_time in changes_data:
-        ts = int(new_time.timestamp())
-        line = (
-            f"**{match.team1}** vs **{match.team2}**\n"
-            f"New Time: <t:{ts}:F> (<t:{ts}:R>)"
-        )
+    for item in data_list:
+        match = item[0]
+        line = line_formatter(item)
         embed.add_field(name=f"Match {match.id}", value=line, inline=False)
 
-    if changes_data:
-        _set_thumbnail(embed, changes_data[0][0])
-    return embed
-
-
-def _build_mid_series_embed(
-    updates_data: List[Tuple[Match, str]],
-) -> discord.Embed:
-    embed = discord.Embed(
-        title="Live Match Updates",
-        description="Latest scores:",
-        color=discord.Color.orange(),
-        timestamp=datetime.now(timezone.utc),
-    )
-    updates_data.sort(key=lambda x: x[0].id)
-
-    for match, score in updates_data:
-        line = (
-            f"**{match.team1}** vs **{match.team2}**: "
-            f"**{score}** (Best of {match.best_of})"
-        )
-        embed.add_field(name=f"Match {match.id}", value=line, inline=False)
-
-    if updates_data:
-        _set_thumbnail(embed, updates_data[0][0])
+    if data_list:
+        _set_thumbnail(embed, data_list[0][0])
     return embed
 
 

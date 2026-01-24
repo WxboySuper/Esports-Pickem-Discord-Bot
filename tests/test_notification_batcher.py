@@ -83,7 +83,7 @@ async def test_batch_reminders():
         # Should have called broadcast once
         assert mock_broadcast.call_count == 1
 
-        args, kwargs = mock_broadcast.call_args
+        args, _ = mock_broadcast.call_args
         embed = args[1]
 
         # Check embed content
