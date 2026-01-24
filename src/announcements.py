@@ -1,4 +1,5 @@
 import logging
+import asyncio
 import os
 from typing import Optional
 
@@ -322,3 +323,30 @@ async def send_admin_update(message: str, mention_user_id: int | None = None):
             logger.info("Sent admin update to %s", channel.name)
     except Exception as e:
         logger.exception("Failed sending admin update: %s", e)
+
+
+async def broadcast_embed_to_guilds(
+    bot: discord.Client, embed: discord.Embed, context: str
+):
+    """
+    Broadcast an embed to every guild the bot is a member of and
+    record success or failure for each delivery.
+
+    Parameters:
+        bot (discord.Client): The bot instance used to access guilds.
+        embed (discord.Embed): The embed to broadcast.
+        context (str): Short description included in log messages to
+            identify this broadcast.
+    """
+    for i, guild in enumerate(bot.guilds):
+        try:
+            await send_announcement(guild, embed)
+            logger.info("Sent %s to guild %s.", context, guild.id)
+        except Exception as e:
+            msg = "Failed to send %s to guild %s: %s"
+            logger.error(msg, context, guild.id, e)
+
+        # Yield to event loop every 3 guilds to avoid heartbeat blocking.
+        # Use (i+1) % 3 == 0 to process the first guild before yielding.
+        if (i + 1) % 3 == 0:
+            await asyncio.sleep(0)
