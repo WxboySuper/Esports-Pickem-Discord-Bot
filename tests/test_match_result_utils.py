@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, AsyncMock
 from src.match_result_utils import save_result_and_update_picks
 from src.models import Match, Pick, Result
 
+
 @pytest.mark.asyncio
 async def test_save_result_and_update_picks_updates_status_and_score():
     # Setup
@@ -13,16 +14,22 @@ async def test_save_result_and_update_picks_updates_status_and_score():
 
     # Mock existing picks
     # Pick 1: Correct
-    pick1 = Pick(id=1, match_id=1, chosen_team="T1", user_id=101, status="pending")
+    pick1 = Pick(
+        id=1, match_id=1, chosen_team="T1", user_id=101, status="pending"
+    )
     # Pick 2: Incorrect
-    pick2 = Pick(id=2, match_id=1, chosen_team="Gen.G", user_id=102, status="pending")
+    pick2 = Pick(
+        id=2, match_id=1, chosen_team="Gen.G", user_id=102, status="pending"
+    )
 
     mock_result_proxy = MagicMock()
     mock_result_proxy.all.return_value = [pick1, pick2]
     session.exec.return_value = mock_result_proxy
 
     # Execute
-    result = await save_result_and_update_picks(session, match, winner, score_str)
+    result = await save_result_and_update_picks(
+        session, match, winner, score_str
+    )
 
     # Verify Result creation
     assert isinstance(result, Result)

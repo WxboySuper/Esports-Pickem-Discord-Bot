@@ -52,7 +52,7 @@ def process_match(session, match: Match) -> int:
             updated_count += 1
 
     if updated_count > 0:
-        logger.info(f"Match {match.id}: Updated {updated_count} picks.")
+        logger.info("Match %s: Updated %d picks.", match.id, updated_count)
 
     return updated_count
 
@@ -71,7 +71,7 @@ def fix_picks():
             .options(selectinload(Match.result), selectinload(Match.picks))
         ).all()
 
-        logger.info(f"Found {len(matches)} matches with results.")
+        logger.info("Found %d matches with results.", len(matches))
 
         total_picks_updated = 0
         matches_processed = 0
@@ -85,8 +85,10 @@ def fix_picks():
         if total_picks_updated > 0:
             session.commit()
             logger.info(
-                f"Successfully committed updates for {total_picks_updated} "
-                f"picks across {matches_processed} matches."
+                "Successfully committed updates for %d picks across %d "
+                "matches.",
+                total_picks_updated,
+                matches_processed,
             )
         else:
             logger.info("No picks needed updates.")
