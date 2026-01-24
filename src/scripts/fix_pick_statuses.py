@@ -8,6 +8,38 @@ from src.models import Pick, Match, Result
 logger = logging.getLogger(__name__)
 
 
+def _update_pick_if_needed(pick: Pick, winner: str) -> bool:
+    """
+    Evaluates if a pick needs updating based on the winner.
+    Updates the pick in place and returns True if changed.
+    """
+    should_be_correct = pick.chosen_team == winner
+    needs_update = False
+
+    if should_be_correct:
+        if (
+            not pick.is_correct
+            or pick.status != "correct"
+            or pick.score != 10
+        ):
+            pick.is_correct = True
+            pick.status = "correct"
+            pick.score = 10
+            needs_update = True
+    else:
+        if (
+            pick.is_correct
+            or pick.status != "incorrect"
+            or pick.score != 0
+        ):
+            pick.is_correct = False
+            pick.status = "incorrect"
+            pick.score = 0
+            needs_update = True
+
+    return needs_update
+
+
 async def fix_pick_statuses():
     """
     Iterates through picks where the match has a result but the pick
@@ -29,7 +61,7 @@ async def fix_pick_statuses():
             .where(
                 or_(
                     Pick.status == "pending",
-                    Pick.status.is_(None),  # Fix E711
+                    Pick.status.is_(None),
                     # Check for inconsistencies
                     (Pick.status == "correct") & (Pick.score != 10),
                     (Pick.status == "incorrect") & (Pick.score != 0),
@@ -49,40 +81,14 @@ async def fix_pick_statuses():
             if not match_result:
                 continue
 
-            winner = match_result.winner
-            should_be_correct = pick.chosen_team == winner
-
-            needs_update = False
-
-            if should_be_correct:
-                if (
-                    not pick.is_correct
-                    or pick.status != "correct"
-                    or pick.score != 10
-                ):
-                    pick.is_correct = True
-                    pick.status = "correct"
-                    pick.score = 10
-                    needs_update = True
-            else:
-                if (
-                    pick.is_correct
-                    or pick.status != "incorrect"
-                    or pick.score != 0
-                ):
-                    pick.is_correct = False
-                    pick.status = "incorrect"
-                    pick.score = 0
-                    needs_update = True
-
-            if needs_update:
+            if _update_pick_if_needed(pick, match_result.winner):
                 session.add(pick)
                 fixed_count += 1
 
         if fixed_count > 0:
             await session.commit()
             logger.info(
-                f"Fixed {fixed_count} picks with incorrect status/score."
+                "Fixed %d picks with incorrect status/score.", fixed_count
             )
         else:
             logger.info("No picks needed fixing.")
