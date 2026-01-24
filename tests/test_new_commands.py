@@ -51,13 +51,18 @@ async def test_pick_command_no_active_matches(
 ):
     """Test the /pick command when there are no active matches."""
     mock_get_session.return_value.__enter__.return_value = mock_session
+    # Mock return values for potential queries
     mock_session.exec.return_value.all.return_value = []
+    mock_session.exec.return_value.first.return_value = None
 
     await pick.pick.callback(mock_interaction)
 
-    mock_interaction.response.send_message.assert_called_once_with(
-        "There are no active matches available to pick.", ephemeral=True
-    )
+    # Check that an embed is sent instead of plain text
+    mock_interaction.response.send_message.assert_called_once()
+    _, kwargs = mock_interaction.response.send_message.call_args
+    assert "embed" in kwargs
+    embed = kwargs["embed"]
+    assert "No Active Matches" in embed.title
 
 
 @pytest.mark.asyncio
