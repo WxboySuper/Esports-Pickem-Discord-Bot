@@ -145,3 +145,53 @@ async def test_batch_results():
         assert "A" in embed.fields[0].value
         assert "D" in embed.fields[1].value
         assert "🏆 Match Results" in embed.title
+
+
+@pytest.mark.asyncio
+async def test_explicit_batching_mode():
+    batcher = NotificationBatcher()
+
+    with patch(
+        "src.notification_batcher.get_bot_instance", return_value=MagicMock()
+    ), patch(
+        "src.notification_batcher.get_async_session"
+    ) as mock_session_cls, patch(
+        "src.notification_batcher.broadcast_embed_to_guilds",
+        new_callable=AsyncMock,
+    ) as mock_broadcast, patch(
+        "src.notification_batcher.fetch_teams", new_callable=AsyncMock
+    ) as mock_fetch_teams:
+
+        mock_session = AsyncMock()
+        mock_session_cls.return_value.__aenter__.return_value = mock_session
+
+        # Setup mocks for processing reminders (simplest case)
+        match1 = MagicMock(id=1, scheduled_time=datetime.now(timezone.utc))
+        match1.contest.image_url = None
+        match2 = MagicMock(id=2, scheduled_time=datetime.now(timezone.utc))
+
+        batcher._get_match_with_contest = AsyncMock(
+            side_effect=[match1, match2]
+        )
+        mock_fetch_teams.return_value = (None, None)
+
+        # Enter batching mode
+        async with batcher.batching():
+            await batcher.add_reminder(1, 5)
+            # Normal debounce would flush here if we wait, but we are in batch
+            # mode
+            await asyncio.sleep(1.1)
+
+            # Should NOT have broadcast yet
+            assert mock_broadcast.call_count == 0
+            assert len(batcher._pending["reminder_5"]) == 1
+
+            await batcher.add_reminder(2, 5)
+
+        # Exited batching mode -> should flush immediately
+        # We might need to wait a tick for the flush coroutine if it was async
+        # scheduled, but _flush_all calls _process_batch which awaits
+        # processing. However, _flush_all is awaited in __exit__.
+
+        assert mock_broadcast.call_count == 1
+        assert len(batcher._pending["reminder_5"]) == 0

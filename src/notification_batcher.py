@@ -2,7 +2,8 @@ import asyncio
 import logging
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Tuple, Any, AsyncGenerator
+from contextlib import asynccontextmanager
 
 import discord
 from sqlmodel import select
@@ -22,6 +23,35 @@ class NotificationBatcher:
         self._pending = defaultdict(list)
         self._timers = {}
         self._lock = asyncio.Lock()
+        self._batch_depth = 0
+
+    @asynccontextmanager
+    async def batching(self) -> AsyncGenerator[None, None]:
+        """
+        Context manager to pause automatic flushing of notifications.
+        When the outer-most context exits, all pending notifications are
+        flushed.
+        """
+        async with self._lock:
+            self._batch_depth += 1
+            logger.debug(
+                "Entered batching mode (depth=%d)", self._batch_depth
+            )
+
+        try:
+            yield
+        finally:
+            should_flush = False
+            async with self._lock:
+                self._batch_depth -= 1
+                logger.debug(
+                    "Exited batching mode (depth=%d)", self._batch_depth
+                )
+                if self._batch_depth == 0:
+                    should_flush = True
+
+            if should_flush:
+                await self._flush_all()
 
     async def add_reminder(self, match_id: int, minutes: int):
         key = f"reminder_{minutes}"
@@ -50,6 +80,11 @@ class NotificationBatcher:
             self._ensure_timer(key)
 
     def _ensure_timer(self, key: str):
+        # If we are in batch mode (depth > 0), do not schedule a timer.
+        # The flush will happen when the context manager exits.
+        if self._batch_depth > 0:
+            return
+
         if key not in self._timers:
             # Schedule flush after 1 second (debounce)
             self._timers[key] = asyncio.create_task(self._flush_later(key))
@@ -57,6 +92,11 @@ class NotificationBatcher:
     async def _flush_later(self, key: str):
         await asyncio.sleep(1.0)
         async with self._lock:
+            # If batch mode was entered while we were sleeping, abort flush.
+            if self._batch_depth > 0:
+                self._timers.pop(key, None)
+                return
+
             items = self._pending.pop(key, [])
             self._timers.pop(key, None)
 
@@ -65,6 +105,26 @@ class NotificationBatcher:
                 await self._process_batch(key, items)
             except Exception:
                 logger.exception("Failed to process batch for key %s", key)
+
+    async def _flush_all(self):
+        """Flush all pending notifications immediately."""
+        keys_to_process = []
+        async with self._lock:
+            keys_to_process = list(self._pending.keys())
+            # Cancel any existing timers since we are flushing now
+            for key, task in self._timers.items():
+                task.cancel()
+            self._timers.clear()
+
+        for key in keys_to_process:
+            async with self._lock:
+                items = self._pending.pop(key, [])
+
+            if items:
+                try:
+                    await self._process_batch(key, items)
+                except Exception:
+                    logger.exception("Failed to flush batch for key %s", key)
 
     async def _process_batch(self, key: str, items: List[Any]):
         logger.info("Processing batch %s with %d items", key, len(items))
