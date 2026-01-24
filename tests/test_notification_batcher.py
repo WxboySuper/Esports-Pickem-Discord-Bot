@@ -23,7 +23,10 @@ async def test_batch_reminders():
         new_callable=AsyncMock,
     ) as mock_broadcast, patch(
         "src.notification_batcher.fetch_teams", new_callable=AsyncMock
-    ) as mock_fetch_teams:
+    ) as mock_fetch_teams, patch(
+        "src.notification_batcher._get_match_with_contest",
+        new_callable=AsyncMock,
+    ) as mock_get_match_with_contest:
 
         # Setup session mock
         mock_session = AsyncMock()
@@ -54,11 +57,8 @@ async def test_batch_reminders():
         )
         match2.contest = contest
 
-        # Mock _get_match_with_contest to avoid complex SQLModel mocking
-        # We patch the method on the instance
-        batcher._get_match_with_contest = AsyncMock(
-            side_effect=[match1, match2]
-        )
+        # Patch module-level function
+        mock_get_match_with_contest.side_effect = [match1, match2]
         mock_fetch_teams.return_value = (None, None)
 
         # Action: Add reminders
@@ -101,7 +101,9 @@ async def test_batch_results():
         "src.notification_batcher.fetch_teams", new_callable=AsyncMock
     ) as mock_fetch_teams, patch(
         "src.crud.get_match_with_result_by_id", new_callable=AsyncMock
-    ) as mock_get_match:
+    ) as mock_get_match, patch(
+        "src.notification_batcher._get_pick_stats", new_callable=AsyncMock
+    ) as mock_get_pick_stats:
 
         mock_session = AsyncMock()
         mock_session_cls.return_value.__aenter__.return_value = mock_session
@@ -129,8 +131,8 @@ async def test_batch_results():
         # mock session.get for Result
         mock_session.get.side_effect = [res1, res2]
 
-        # Mock _get_pick_stats
-        batcher._get_pick_stats = AsyncMock(return_value=(10, 5, 50.0))
+        # Mock _get_pick_stats module function
+        mock_get_pick_stats.return_value = (10, 5, 50.0)
         mock_fetch_teams.return_value = (None, None)
 
         await batcher.add_result(1, 101)
@@ -160,7 +162,10 @@ async def test_explicit_batching_mode():
         new_callable=AsyncMock,
     ) as mock_broadcast, patch(
         "src.notification_batcher.fetch_teams", new_callable=AsyncMock
-    ) as mock_fetch_teams:
+    ) as mock_fetch_teams, patch(
+        "src.notification_batcher._get_match_with_contest",
+        new_callable=AsyncMock,
+    ) as mock_get_match_with_contest:
 
         mock_session = AsyncMock()
         mock_session_cls.return_value.__aenter__.return_value = mock_session
@@ -170,9 +175,7 @@ async def test_explicit_batching_mode():
         match1.contest.image_url = None
         match2 = MagicMock(id=2, scheduled_time=datetime.now(timezone.utc))
 
-        batcher._get_match_with_contest = AsyncMock(
-            side_effect=[match1, match2]
-        )
+        mock_get_match_with_contest.side_effect = [match1, match2]
         mock_fetch_teams.return_value = (None, None)
 
         # Enter batching mode

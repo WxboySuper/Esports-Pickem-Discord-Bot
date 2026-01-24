@@ -2,7 +2,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Optional, List, Tuple, Any, AsyncGenerator
+from typing import Optional, List, Tuple, Any, AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 
 import discord
@@ -34,9 +34,7 @@ class NotificationBatcher:
         """
         async with self._lock:
             self._batch_depth += 1
-            logger.debug(
-                "Entered batching mode (depth=%d)", self._batch_depth
-            )
+            logger.debug("Entered batching mode (depth=%d)", self._batch_depth)
 
         try:
             yield
@@ -138,269 +136,251 @@ class NotificationBatcher:
         elif key == "mid_series":
             await self._process_mid_series(items)
 
-    async def _get_match_with_contest(
-        self, session, match_id: int
-    ) -> Optional[Match]:
-        """Fetch match with contest eager-loaded."""
-        stmt = (
-            select(Match)
-            .options(selectinload(Match.contest))
-            .where(Match.id == match_id)
-        )
-        return (await session.exec(stmt)).first()
-
-    async def _process_reminders(self, minutes: int, match_ids: List[int]):
-        bot = get_bot_instance()
-        if not bot:
-            return
-
-        async with get_async_session() as session:
-            matches_data = []
-            for match_id in match_ids:
-                match = await self._get_match_with_contest(session, match_id)
-                if match:
-                    team1, team2 = await fetch_teams(session, match)
-                    matches_data.append((match, team1, team2))
-
-            if not matches_data:
-                return
-
-            embed = self._build_reminder_embed(minutes, matches_data)
-            context = (
-                f"{minutes}-minute reminder for {len(matches_data)} matches"
-            )
-            await broadcast_embed_to_guilds(bot, embed, context)
-
-    async def _process_results(self, items: List[Tuple[int, int]]):
-        bot = get_bot_instance()
-        if not bot:
-            return
-
-        async with get_async_session() as session:
-            results_data = []
-            from src import crud
-
-            for match_id, result_id in items:
-                match = await crud.get_match_with_result_by_id(
-                    session, match_id
-                )
-                result = await session.get(Result, result_id)
-                if match and result:
-                    team1, team2 = await fetch_teams(session, match)
-                    stats = await self._get_pick_stats(
-                        session, match.id, result.winner
-                    )
-                    results_data.append((match, result, team1, team2, stats))
-
-            if not results_data:
-                return
-
-            embed = self._build_result_embed(results_data)
-            context = f"result notification for {len(results_data)} matches"
-            await broadcast_embed_to_guilds(bot, embed, context)
-
-    async def _process_time_changes(self, items: List[Tuple[int, Any, Any]]):
-        bot = get_bot_instance()
-        if not bot:
-            return
-
-        async with get_async_session() as session:
-            changes_data = []
-            for match_id, old, new in items:
-                match = await self._get_match_with_contest(session, match_id)
-                if match:
-                    changes_data.append((match, old, new))
-
-            if not changes_data:
-                return
-
-            embed = self._build_time_change_embed(changes_data)
-            context = (
-                f"time change notification for {len(changes_data)} matches"
-            )
-            await broadcast_embed_to_guilds(bot, embed, context)
-
-    async def _process_mid_series(self, items: List[Tuple[int, str]]):
-        bot = get_bot_instance()
-        if not bot:
-            return
-
-        async with get_async_session() as session:
-            updates_data = []
-            for match_id, score in items:
-                match = await self._get_match_with_contest(session, match_id)
-                if match:
-                    updates_data.append((match, score))
-
-            if not updates_data:
-                return
-
-            embed = self._build_mid_series_embed(updates_data)
-            context = f"mid-series update for {len(updates_data)} matches"
-            await broadcast_embed_to_guilds(bot, embed, context)
-
-    # --- Embed Builders ---
-
-    def _build_reminder_embed(
-        self, minutes: int, matches_data: List[Tuple[Match, Any, Any]]
-    ) -> discord.Embed:
-        # Sort by scheduled time, then ID
-        matches_data.sort(key=lambda x: (x[0].scheduled_time, x[0].id))
-
-        if minutes == 5:
-            title = "🔴 Matches Starting Soon!"
-            color = discord.Color.red()
-            desc_prefix = (
-                "The following matches are starting soon! "
-                "Last chance to lock in picks."
-            )
-        else:
-            title = "⚔️ Upcoming Match Reminders"
-            color = discord.Color.blue()
-            desc_prefix = (
-                "Get your picks in! The following matches are starting soon."
-            )
-
-        description_lines = [desc_prefix, ""]
-
-        for match, _, _ in matches_data:
-            ts = int(match.scheduled_time.timestamp())
-            line = f"**{match.team1}** vs **{match.team2}** <t:{ts}:R>"
-            description_lines.append(line)
-
-        embed = discord.Embed(
-            title=title,
-            description="\n".join(description_lines),
-            color=color,
-        )
-
-        # Use contest icon from the first match
-        if matches_data:
-            first_match = matches_data[0][0]
-            first_team1 = matches_data[0][1]
-            first_team2 = matches_data[0][2]
-            self._set_thumbnail(embed, first_match, first_team1, first_team2)
-
-        embed.set_footer(
-            text="Use the /picks command to make your predictions!"
-        )
-        return embed
-
-    def _build_result_embed(
-        self, results_data: List[Tuple[Match, Result, Any, Any, Tuple]]
-    ) -> discord.Embed:
-        embed = discord.Embed(
-            title="🏆 Match Results",
-            description="The following matches have concluded:",
-            color=discord.Color.gold(),
-            timestamp=datetime.now(timezone.utc),
-        )
-
-        # Sort by match ID
-        results_data.sort(key=lambda x: x[0].id)
-
-        for match, result, team1, team2, stats in results_data:
-            _, correct, _ = stats
-            # Determine winner display
-            if result.winner == match.team1:
-                display = f"||**{match.team1}** def **{match.team2}**||"
-            else:
-                display = f"||**{match.team2}** def **{match.team1}**||"
-
-            score_text = f"||{result.score}||"
-            stats_text = f"✅ {correct} correct"
-
-            field_name = f"{match.team1} vs {match.team2}"
-            field_value = f"{display} ({score_text})\n{stats_text}"
-            embed.add_field(name=field_name, value=field_value, inline=False)
-
-        # Thumbnail from first match
-        if results_data:
-            first = results_data[0]
-            self._set_thumbnail(embed, first[0], first[2], first[3])
-
-        return embed
-
-    def _build_time_change_embed(
-        self, changes_data: List[Tuple[Match, Any, Any]]
-    ) -> discord.Embed:
-        embed = discord.Embed(
-            title="📅 Match Schedule Updates",
-            description="The following matches have been rescheduled:",
-            color=discord.Color.blue(),
-            timestamp=datetime.now(timezone.utc),
-        )
-
-        changes_data.sort(key=lambda x: x[0].id)
-
-        for match, _, new_time in changes_data:
-            ts = int(new_time.timestamp())
-            line = (
-                f"**{match.team1}** vs **{match.team2}**\n"
-                f"New Time: <t:{ts}:F> (<t:{ts}:R>)"
-            )
-            embed.add_field(name=f"Match {match.id}", value=line, inline=False)
-
-        if changes_data:
-            self._set_thumbnail(embed, changes_data[0][0], None, None)
-
-        return embed
-
-    def _build_mid_series_embed(
-        self, updates_data: List[Tuple[Match, str]]
-    ) -> discord.Embed:
-        embed = discord.Embed(
-            title="Live Match Updates",
-            description="Latest scores:",
-            color=discord.Color.orange(),
-            timestamp=datetime.now(timezone.utc),
-        )
-
-        updates_data.sort(key=lambda x: x[0].id)
-
-        for match, score in updates_data:
-            line = (
-                f"**{match.team1}** vs **{match.team2}**: "
-                f"**{score}** (Best of {match.best_of})"
-            )
-            embed.add_field(name=f"Match {match.id}", value=line, inline=False)
-
-        if updates_data:
-            self._set_thumbnail(embed, updates_data[0][0], None, None)
-
-        return embed
-
-    def _set_thumbnail(
+    async def _process_generic(
         self,
-        embed: discord.Embed,
-        match: Match,
-        team1: Optional[Team],
-        team2: Optional[Team],
+        items: List[Any],
+        fetch_data: Callable[[Any, Any], Any],
+        build_embed: Callable[[List[Any]], discord.Embed],
+        context_fmt: str,
     ):
         """
-        Sets the thumbnail of the embed using the contest image if available,
-        otherwise falls back to team images.
+        Generic processor for batch items.
+
+        Args:
+            items: List of raw items to process.
+            fetch_data: Coroutine accepting (session, item) returning data
+                        to include in the embed list, or None to skip.
+            build_embed: Function accepting list of data and returning an
+                         Embed.
+            context_fmt: Format string for log context (e.g. "result
+                         notification").
         """
-        contest = getattr(match, "contest", None)
-        if contest and getattr(contest, "image_url", None):
-            embed.set_thumbnail(url=contest.image_url)
+        bot = get_bot_instance()
+        if not bot:
             return
 
-        # Fallback to team images if provided
-        if team1 and getattr(team1, "image_url", None):
-            embed.set_thumbnail(url=team1.image_url)
-        elif team2 and getattr(team2, "image_url", None):
-            embed.set_thumbnail(url=team2.image_url)
+        async with get_async_session() as session:
+            data_list = []
+            for item in items:
+                res = await fetch_data(session, item)
+                if res:
+                    data_list.append(res)
 
-    async def _get_pick_stats(self, session, match_id: int, winner: str):
-        # Duplicated from notifications.py to avoid circular import issues
-        # or we could move this to a util. For now, duplication is safe.
-        statement = select(Pick).where(Pick.match_id == match_id)
-        picks = (await session.exec(statement)).all()
-        total = len(picks)
-        correct = len([p for p in picks if p.chosen_team == winner])
-        percentage = (correct / total * 100) if total > 0 else 0
-        return total, correct, percentage
+            if not data_list:
+                return
+
+            embed = build_embed(data_list)
+            context = f"{context_fmt} for {len(data_list)} matches"
+            await broadcast_embed_to_guilds(bot, embed, context)
+
+    async def _process_reminders(self, minutes: int, match_ids: List[int]):
+        async def fetch(session, match_id):
+            match = await _get_match_with_contest(session, match_id)
+            if not match:
+                return None
+            team1, team2 = await fetch_teams(session, match)
+            return (match, team1, team2)
+
+        def build(data_list):
+            return _build_reminder_embed(minutes, data_list)
+
+        await self._process_generic(
+            match_ids, fetch, build, f"{minutes}-minute reminder"
+        )
+
+    async def _process_results(self, items: List[Tuple[int, int]]):
+        async def fetch(session, item):
+            match_id, result_id = item
+            from src import crud
+
+            match = await crud.get_match_with_result_by_id(session, match_id)
+            result = await session.get(Result, result_id)
+            if not match or not result:
+                return None
+            team1, team2 = await fetch_teams(session, match)
+            stats = await _get_pick_stats(session, match.id, result.winner)
+            return (match, result, team1, team2, stats)
+
+        await self._process_generic(
+            items, fetch, _build_result_embed, "result notification"
+        )
+
+    async def _process_time_changes(self, items: List[Tuple[int, Any, Any]]):
+        async def fetch(session, item):
+            match_id, old, new = item
+            match = await _get_match_with_contest(session, match_id)
+            if not match:
+                return None
+            return (match, old, new)
+
+        await self._process_generic(
+            items, fetch, _build_time_change_embed, "time change notification"
+        )
+
+    async def _process_mid_series(self, items: List[Tuple[int, str]]):
+        async def fetch(session, item):
+            match_id, score = item
+            match = await _get_match_with_contest(session, match_id)
+            if not match:
+                return None
+            return (match, score)
+
+        await self._process_generic(
+            items, fetch, _build_mid_series_embed, "mid-series update"
+        )
+
+
+# --- Helper Functions (Static/Module-level) ---
+
+
+async def _get_match_with_contest(session, match_id: int) -> Optional[Match]:
+    stmt = (
+        select(Match)
+        .options(selectinload(Match.contest))
+        .where(Match.id == match_id)
+    )
+    return (await session.exec(stmt)).first()
+
+
+async def _get_pick_stats(session, match_id: int, winner: str):
+    statement = select(Pick).where(Pick.match_id == match_id)
+    picks = (await session.exec(statement)).all()
+    total = len(picks)
+    correct = len([p for p in picks if p.chosen_team == winner])
+    percentage = (correct / total * 100) if total > 0 else 0
+    return total, correct, percentage
+
+
+def _set_thumbnail(
+    embed: discord.Embed,
+    match: Match,
+    team1: Optional[Team] = None,
+    team2: Optional[Team] = None,
+):
+    contest = getattr(match, "contest", None)
+    if contest and getattr(contest, "image_url", None):
+        embed.set_thumbnail(url=contest.image_url)
+        return
+    if team1 and getattr(team1, "image_url", None):
+        embed.set_thumbnail(url=team1.image_url)
+    elif team2 and getattr(team2, "image_url", None):
+        embed.set_thumbnail(url=team2.image_url)
+
+
+def _build_reminder_embed(
+    minutes: int, matches_data: List[Tuple[Match, Any, Any]]
+) -> discord.Embed:
+    matches_data.sort(key=lambda x: (x[0].scheduled_time, x[0].id))
+
+    if minutes == 5:
+        title = "🔴 Matches Starting Soon!"
+        color = discord.Color.red()
+        desc_prefix = (
+            "The following matches are starting soon! "
+            "Last chance to lock in picks."
+        )
+    else:
+        title = "⚔️ Upcoming Match Reminders"
+        color = discord.Color.blue()
+        desc_prefix = (
+            "Get your picks in! The following matches are starting soon."
+        )
+
+    description_lines = [desc_prefix, ""]
+    for match, _, _ in matches_data:
+        ts = int(match.scheduled_time.timestamp())
+        line = f"**{match.team1}** vs **{match.team2}** <t:{ts}:R>"
+        description_lines.append(line)
+
+    embed = discord.Embed(
+        title=title,
+        description="\n".join(description_lines),
+        color=color,
+    )
+
+    if matches_data:
+        first = matches_data[0]
+        _set_thumbnail(embed, first[0], first[1], first[2])
+
+    embed.set_footer(text="Use the /picks command to make your predictions!")
+    return embed
+
+
+def _build_result_embed(
+    results_data: List[Tuple[Match, Result, Any, Any, Tuple]],
+) -> discord.Embed:
+    embed = discord.Embed(
+        title="🏆 Match Results",
+        description="The following matches have concluded:",
+        color=discord.Color.gold(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    results_data.sort(key=lambda x: x[0].id)
+
+    for match, result, _, _, stats in results_data:
+        _, correct, _ = stats
+        if result.winner == match.team1:
+            display = f"||**{match.team1}** def **{match.team2}**||"
+        else:
+            display = f"||**{match.team2}** def **{match.team1}**||"
+        score_text = f"||{result.score}||"
+        stats_text = f"✅ {correct} correct"
+
+        field_name = f"{match.team1} vs {match.team2}"
+        field_value = f"{display} ({score_text})\n{stats_text}"
+        embed.add_field(name=field_name, value=field_value, inline=False)
+
+    if results_data:
+        first = results_data[0]
+        _set_thumbnail(embed, first[0], first[2], first[3])
+    return embed
+
+
+def _build_time_change_embed(
+    changes_data: List[Tuple[Match, Any, Any]],
+) -> discord.Embed:
+    embed = discord.Embed(
+        title="📅 Match Schedule Updates",
+        description="The following matches have been rescheduled:",
+        color=discord.Color.blue(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    changes_data.sort(key=lambda x: x[0].id)
+
+    for match, _, new_time in changes_data:
+        ts = int(new_time.timestamp())
+        line = (
+            f"**{match.team1}** vs **{match.team2}**\n"
+            f"New Time: <t:{ts}:F> (<t:{ts}:R>)"
+        )
+        embed.add_field(name=f"Match {match.id}", value=line, inline=False)
+
+    if changes_data:
+        _set_thumbnail(embed, changes_data[0][0])
+    return embed
+
+
+def _build_mid_series_embed(
+    updates_data: List[Tuple[Match, str]],
+) -> discord.Embed:
+    embed = discord.Embed(
+        title="Live Match Updates",
+        description="Latest scores:",
+        color=discord.Color.orange(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    updates_data.sort(key=lambda x: x[0].id)
+
+    for match, score in updates_data:
+        line = (
+            f"**{match.team1}** vs **{match.team2}**: "
+            f"**{score}** (Best of {match.best_of})"
+        )
+        embed.add_field(name=f"Match {match.id}", value=line, inline=False)
+
+    if updates_data:
+        _set_thumbnail(embed, updates_data[0][0])
+    return embed
 
 
 # Global instance
