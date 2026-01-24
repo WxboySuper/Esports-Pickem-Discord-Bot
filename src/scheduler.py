@@ -17,6 +17,7 @@ def start_scheduler():
     from src.pandascore_sync import perform_pandascore_sync
     from src.polling_manager import schedule_live_polling
     from src.pandascore_polling import poll_running_matches_job
+    from src.scripts.fix_pick_statuses import fix_pick_statuses
 
     if not getattr(scheduler, "running", False):
         logger.info("Scheduler not running. Starting jobs...")
@@ -25,6 +26,13 @@ def start_scheduler():
             "interval",
             hours=6,
             id="sync_pandascore_job",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            fix_pick_statuses,
+            "interval",
+            hours=6,
+            id="fix_pick_statuses_job",
             replace_existing=True,
         )
         logger.info("Added 'sync_pandascore_job' to scheduler.")
