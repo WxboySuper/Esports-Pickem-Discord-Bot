@@ -156,6 +156,12 @@ async def save_result_and_update_picks(session, match, winner, score_str):
     updated_count = 0
     for pick in picks_to_update:
         pick.is_correct = pick.chosen_team == winner
+        if pick.is_correct:
+            pick.status = "correct"
+            pick.score = 10
+        else:
+            pick.status = "incorrect"
+            pick.score = 0
         session.add(pick)
         updated_count += 1
     logger.info("Updated %d picks for match %s.", updated_count, match.id)
