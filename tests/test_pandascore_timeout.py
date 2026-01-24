@@ -12,7 +12,9 @@ async def test_pandascore_client_timeout():
     if client._session:
         await client.close()
 
-    with patch("aiohttp.ClientSession") as mock_session_cls:
+    with patch(
+        "src.pandascore_client.aiohttp.ClientSession"
+    ) as mock_session_cls:
         mock_session_cls.return_value = MagicMock()
 
         await client._get_session()
