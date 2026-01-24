@@ -223,6 +223,13 @@ class PandaScoreClient:
                 )
             except ClientError as e:
                 await self._handle_client_error(e, attempt, max_retries)
+            except asyncio.TimeoutError as e:
+                logger.error("PandaScore request timeout: %s", e)
+                if attempt == max_retries - 1:
+                    raise PandaScoreError(
+                        f"Request timeout after {max_retries} attempts: {e}"
+                    )
+                await asyncio.sleep(2**attempt)
 
         raise PandaScoreError("Request failed after all retries")
 
