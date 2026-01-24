@@ -229,13 +229,13 @@ async def _process_time_changes(items: List[Tuple[int, Any, Any]]):
         )
 
     def build(data_list):
-        return _build_simple_list_embed(
-            "📅 Match Schedule Updates",
-            "The following matches have been rescheduled:",
-            discord.Color.blue(),
-            data_list,
-            fmt_line,
+        embed = discord.Embed(
+            title="📅 Match Schedule Updates",
+            description="The following matches have been rescheduled:",
+            color=discord.Color.blue(),
+            timestamp=datetime.now(timezone.utc),
         )
+        return _populate_list_embed(embed, data_list, fmt_line)
 
     await _process_generic(items, fetch, build, "time change notification")
 
@@ -256,13 +256,13 @@ async def _process_mid_series(items: List[Tuple[int, str]]):
         )
 
     def build(data_list):
-        return _build_simple_list_embed(
-            "Live Match Updates",
-            "Latest scores:",
-            discord.Color.orange(),
-            data_list,
-            fmt_line,
+        embed = discord.Embed(
+            title="Live Match Updates",
+            description="Latest scores:",
+            color=discord.Color.orange(),
+            timestamp=datetime.now(timezone.utc),
         )
+        return _populate_list_embed(embed, data_list, fmt_line)
 
     await _process_generic(items, fetch, build, "mid-series update")
 
@@ -370,23 +370,14 @@ def _build_result_embed(
     return embed
 
 
-def _build_simple_list_embed(
-    title: str,
-    description: str,
-    color: discord.Color,
+def _populate_list_embed(
+    embed: discord.Embed,
     data_list: List[Any],
     line_formatter: Callable[[Any], str],
 ) -> discord.Embed:
     """
-    Helper to build a simple list embed for time changes and mid-series
-    updates.
+    Helper to populate fields and thumbnail for a list embed.
     """
-    embed = discord.Embed(
-        title=title,
-        description=description,
-        color=color,
-        timestamp=datetime.now(timezone.utc),
-    )
     # Assume data items have match as first element
     data_list.sort(key=lambda x: x[0].id)
 
