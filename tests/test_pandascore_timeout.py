@@ -34,15 +34,13 @@ async def test_pandascore_client_handle_timeout_error():
     # Mock _do_request_once to raise asyncio.TimeoutError
     with patch.object(
         client, "_do_request_once", side_effect=asyncio.TimeoutError("Timeout")
-    ) as mock_request:
-        # Mock _get_session to return a dummy session
-        with patch.object(client, "_get_session", return_value=MagicMock()):
-            # Mock asyncio.sleep to speed up tests
-            with patch("asyncio.sleep", return_value=None):
-                with pytest.raises(
-                    PandaScoreError, match="Request timeout after"
-                ):
-                    await client._make_request("/test", max_retries=2)
+    ) as mock_request, patch.object(
+        client, "_get_session", return_value=MagicMock()
+    ), patch(
+        "asyncio.sleep", return_value=None
+    ):
+        with pytest.raises(PandaScoreError, match="Request timeout after"):
+            await client._make_request("/test", max_retries=2)
 
-        # Should have tried 2 times
-        assert mock_request.call_count == 2
+    # Should have tried 2 times
+    assert mock_request.call_count == 2
