@@ -38,9 +38,10 @@ async def test_pandascore_client_handle_timeout_error():
         client, "_get_session", return_value=MagicMock()
     ), patch(
         "asyncio.sleep", return_value=None
+    ), pytest.raises(
+        PandaScoreError, match="Request timeout after"
     ):
-        with pytest.raises(PandaScoreError, match="Request timeout after"):
-            await client._make_request("/test", max_retries=2)
+        await client._make_request("/test", max_retries=2)
 
     # Should have tried 2 times
     assert mock_request.call_count == 2

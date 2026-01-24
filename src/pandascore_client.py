@@ -173,6 +173,18 @@ class PandaScoreClient:
         await asyncio.sleep(2**attempt)
 
     @staticmethod
+    async def _handle_timeout_error(
+        e: asyncio.TimeoutError, attempt: int, max_retries: int
+    ) -> None:
+        """Handle asyncio.TimeoutError with logging and backoff."""
+        logger.error("PandaScore request timeout: %s", e)
+        if attempt == max_retries - 1:
+            raise PandaScoreError(
+                f"Request timeout after {max_retries} attempts: {e}"
+            )
+        await asyncio.sleep(2**attempt)
+
+    @staticmethod
     async def _handle_rate_limit_error(
         e: RateLimitError, attempt: int, max_retries: int
     ) -> None:
@@ -224,12 +236,7 @@ class PandaScoreClient:
             except ClientError as e:
                 await self._handle_client_error(e, attempt, max_retries)
             except asyncio.TimeoutError as e:
-                logger.error("PandaScore request timeout: %s", e)
-                if attempt == max_retries - 1:
-                    raise PandaScoreError(
-                        f"Request timeout after {max_retries} attempts: {e}"
-                    )
-                await asyncio.sleep(2**attempt)
+                await self._handle_timeout_error(e, attempt, max_retries)
 
         raise PandaScoreError("Request failed after all retries")
 
