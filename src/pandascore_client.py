@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Union
 
 import aiohttp
-from aiohttp import ClientError, ClientResponseError
+from aiohttp import ClientError, ClientResponseError, ClientTimeout
 
 from src.config import PANDASCORE_API_KEY
 
@@ -87,7 +87,10 @@ class PandaScoreClient:
         """Get or create an aiohttp session."""
         if self._session is None or self._session.closed:
             headers = self._build_headers()
-            self._session = aiohttp.ClientSession(headers=headers)
+            timeout = ClientTimeout(total=30)
+            self._session = aiohttp.ClientSession(
+                headers=headers, timeout=timeout
+            )
 
         return self._session
 
