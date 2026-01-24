@@ -6,14 +6,13 @@ from typing import Optional, List, Tuple, Any, AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 
 import discord
-from sqlmodel import select
+from sqlmodel import select, or_, func
 from sqlalchemy.orm import selectinload
 
 from src.db import get_async_session
 from src.models import Match, Result, Pick, Team
 from src.announcements import broadcast_embed_to_guilds
 from src.bot_instance import get_bot_instance
-from src.match_result_utils import fetch_teams
 
 logger = logging.getLogger(__name__)
 
@@ -151,33 +150,25 @@ async def _process_batch(key: str, items: List[Any]):
 
 async def _process_generic(
     items: List[Any],
-    fetch_data: Callable[[Any, Any], Any],
+    fetch_batch: Callable[[Any, List[Any]], Any],
     build_embed: Callable[[List[Any]], discord.Embed],
     context_fmt: str,
 ):
     """
-    Generic processor for batch items.
+    Generic processor for batch items using bulk fetching.
 
     Args:
         items: List of raw items to process.
-        fetch_data: Coroutine accepting (session, item) returning data
-                    to include in the embed list, or None to skip.
-        build_embed: Function accepting list of data and returning an
-                        Embed.
-        context_fmt: Format string for log context (e.g. "result
-                        notification").
+        fetch_batch: Coroutine accepting (session, items) returning list of data.
+        build_embed: Function accepting list of data and returning an Embed.
+        context_fmt: Format string for log context.
     """
     bot = get_bot_instance()
     if not bot:
         return
 
     async with get_async_session() as session:
-        data_list = []
-        for item in items:
-            res = await fetch_data(session, item)
-            if res:
-                data_list.append(res)
-
+        data_list = await fetch_batch(session, items)
         if not data_list:
             return
 
@@ -187,46 +178,78 @@ async def _process_generic(
 
 
 async def _process_reminders(minutes: int, match_ids: List[int]):
-    async def fetch(session, match_id):
-        match = await _get_match_with_contest(session, match_id)
-        if not match:
-            return None
-        team1, team2 = await fetch_teams(session, match)
-        return (match, team1, team2)
+    async def fetch_batch(session, ids):
+        matches = await _bulk_fetch_matches(session, ids)
+        if not matches:
+            return []
+
+        teams_map = await _bulk_fetch_teams(session, matches)
+        data = []
+        for m in matches:
+            t1, t2 = _resolve_teams(m, teams_map)
+            data.append((m, t1, t2))
+        return data
 
     def build(data_list):
         return _build_reminder_embed(minutes, data_list)
 
     await _process_generic(
-        match_ids, fetch, build, f"{minutes}-minute reminder"
+        match_ids, fetch_batch, build, f"{minutes}-minute reminder"
     )
 
 
 async def _process_results(items: List[Tuple[int, int]]):
-    async def fetch(session, item):
-        match_id, result_id = item
-        from src import crud
+    # items are (match_id, result_id)
+    async def fetch_batch(session, item_list):
+        match_ids = [i[0] for i in item_list]
+        result_ids = [i[1] for i in item_list]
 
-        match = await crud.get_match_with_result_by_id(session, match_id)
-        result = await session.get(Result, result_id)
-        if not match or not result:
-            return None
-        team1, team2 = await fetch_teams(session, match)
-        stats = await _get_pick_stats(session, match.id, result.winner)
-        return (match, result, team1, team2, stats)
+        matches = await _bulk_fetch_matches(session, match_ids)
+        # Fetch results
+        stmt = select(Result).where(Result.id.in_(result_ids))
+        results = (await session.exec(stmt)).all()
+        results_map = {r.id: r for r in results}
+
+        # Filter matches that have corresponding results in this batch
+        # Map match_id -> result_id from input items
+        match_to_res_id = {m_id: r_id for m_id, r_id in item_list}
+
+        valid_data = []
+        if matches:
+            teams_map = await _bulk_fetch_teams(session, matches)
+            stats_map = await _bulk_fetch_pick_stats(session, match_ids)
+
+            for m in matches:
+                res_id = match_to_res_id.get(m.id)
+                res = results_map.get(res_id)
+                if res:
+                    t1, t2 = _resolve_teams(m, teams_map)
+                    # Stats calculation needs winner name
+                    total, counts = stats_map.get(m.id, (0, defaultdict(int)))
+                    correct = counts.get(res.winner, 0)
+                    percentage = (correct / total * 100) if total > 0 else 0
+                    stats = (total, correct, percentage)
+                    valid_data.append((m, res, t1, t2, stats))
+
+        return valid_data
 
     await _process_generic(
-        items, fetch, _build_result_embed, "result notification"
+        items, fetch_batch, _build_result_embed, "result notification"
     )
 
 
 async def _process_time_changes(items: List[Tuple[int, Any, Any]]):
-    async def fetch(session, item):
-        match_id, old, new = item
-        match = await _get_match_with_contest(session, match_id)
-        if not match:
-            return None
-        return (match, old, new)
+    # items: (match_id, old, new)
+    async def fetch_batch(session, item_list):
+        match_ids = [i[0] for i in item_list]
+        matches = await _bulk_fetch_matches(session, match_ids)
+        match_map = {m.id: m for m in matches}
+
+        data = []
+        for m_id, old, new in item_list:
+            if m := match_map.get(m_id):
+                data.append((m, old, new))
+        return data
 
     def fmt_line(data):
         m, _, new_time = data
@@ -245,16 +268,21 @@ async def _process_time_changes(items: List[Tuple[int, Any, Any]]):
         )
         return _populate_list_embed(embed, data_list, fmt_line)
 
-    await _process_generic(items, fetch, build, "time change notification")
+    await _process_generic(items, fetch_batch, build, "time change notification")
 
 
 async def _process_mid_series(items: List[Tuple[int, str]]):
-    async def fetch(session, item):
-        match_id, score = item
-        match = await _get_match_with_contest(session, match_id)
-        if not match:
-            return None
-        return (match, score)
+    # items: (match_id, score)
+    async def fetch_batch(session, item_list):
+        match_ids = [i[0] for i in item_list]
+        matches = await _bulk_fetch_matches(session, match_ids)
+        match_map = {m.id: m for m in matches}
+
+        data = []
+        for m_id, score in item_list:
+            if m := match_map.get(m_id):
+                data.append((m, score))
+        return data
 
     def fmt_line(data):
         m, score = data
@@ -272,25 +300,73 @@ async def _process_mid_series(items: List[Tuple[int, str]]):
         )
         return _populate_list_embed(embed, data_list, fmt_line)
 
-    await _process_generic(items, fetch, build, "mid-series update")
+    await _process_generic(items, fetch_batch, build, "mid-series update")
 
 
-async def _get_match_with_contest(session, match_id: int) -> Optional[Match]:
+# --- Bulk Fetching Helpers ---
+
+async def _bulk_fetch_matches(session, match_ids: List[int]) -> List[Match]:
+    if not match_ids:
+        return []
     stmt = (
         select(Match)
         .options(selectinload(Match.contest))
-        .where(Match.id == match_id)
+        .where(Match.id.in_(match_ids))
     )
-    return (await session.exec(stmt)).first()
+    return (await session.exec(stmt)).all()
 
+async def _bulk_fetch_teams(session, matches: List[Match]) -> dict:
+    ids = set()
+    names = set()
+    for m in matches:
+        if m.team1_id: ids.add(m.team1_id)
+        else: names.add(m.team1)
+        if m.team2_id: ids.add(m.team2_id)
+        else: names.add(m.team2)
 
-async def _get_pick_stats(session, match_id: int, winner: str):
-    statement = select(Pick).where(Pick.match_id == match_id)
-    picks = (await session.exec(statement)).all()
-    total = len(picks)
-    correct = len([p for p in picks if p.chosen_team == winner])
-    percentage = (correct / total * 100) if total > 0 else 0
-    return total, correct, percentage
+    if not ids and not names:
+        return {}
+
+    conditions = []
+    if ids: conditions.append(Team.pandascore_id.in_(ids))
+    if names: conditions.append(Team.name.in_(names))
+
+    stmt = select(Team).where(or_(*conditions))
+    teams = (await session.exec(stmt)).all()
+
+    # Map by ID and Name
+    by_id = {t.pandascore_id: t for t in teams if t.pandascore_id}
+    by_name = {t.name: t for t in teams}
+    return {"id": by_id, "name": by_name}
+
+def _resolve_teams(match: Match, teams_map: dict) -> Tuple[Optional[Team], Optional[Team]]:
+    by_id = teams_map.get("id", {})
+    by_name = teams_map.get("name", {})
+
+    t1 = by_id.get(match.team1_id) if match.team1_id else by_name.get(match.team1)
+    t2 = by_id.get(match.team2_id) if match.team2_id else by_name.get(match.team2)
+    return t1, t2
+
+async def _bulk_fetch_pick_stats(session, match_ids: List[int]) -> dict:
+    if not match_ids:
+        return {}
+
+    # Fetch counts grouped by match_id and chosen_team
+    stmt = (
+        select(Pick.match_id, Pick.chosen_team, func.count(Pick.id))
+        .where(Pick.match_id.in_(match_ids))
+        .group_by(Pick.match_id, Pick.chosen_team)
+    )
+    rows = (await session.exec(stmt)).all()
+
+    # Structure: {match_id: (total, {team_name: count})}
+    stats = defaultdict(lambda: (0, defaultdict(int)))
+    for mid, team, count in rows:
+        total, team_counts = stats[mid]
+        stats[mid] = (total + count, team_counts)
+        team_counts[team] = count
+
+    return stats
 
 
 def _set_thumbnail(
