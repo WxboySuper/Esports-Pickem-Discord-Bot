@@ -1,9 +1,8 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from datetime import datetime, timedelta, timezone
 from src.reminders import schedule_reminders, send_reminder
-from src.models import Match, Team
-from contextlib import asynccontextmanager
+from src.models import Match
 
 
 @pytest.fixture(name="mock_scheduler")
