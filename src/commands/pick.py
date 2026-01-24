@@ -253,8 +253,42 @@ async def pick(interaction: discord.Interaction):
         active_matches = session.exec(active_matches_stmt).all()
 
         if not active_matches:
+            # Check for the next upcoming match to give users context
+            next_match_stmt = (
+                select(Match)
+                .where(Match.scheduled_time > now_utc)
+                .order_by(Match.scheduled_time)
+                .limit(1)
+            )
+            next_match = session.exec(next_match_stmt).first()
+
+            embed = discord.Embed(
+                title="No Active Matches",
+                description=(
+                    "There are no matches currently open for picking "
+                    f"(next {PICK_WINDOW_DAYS} days).\n"
+                    "Check back later or view the global standings!"
+                ),
+                color=discord.Color.orange(),
+            )
+
+            if next_match:
+                ts = int(next_match.scheduled_time.timestamp())
+                embed.add_field(
+                    name="Next Upcoming Match",
+                    value=f"<t:{ts}:F>\n(<t:{ts}:R>)",
+                    inline=False,
+                )
+
+            # Suggest viewing leaderboard
+            embed.add_field(
+                name="While You Wait",
+                value="Use `/leaderboard` to check the current standings.",
+                inline=False,
+            )
+
             await interaction.response.send_message(
-                "There are no active matches available to pick.",
+                embed=embed,
                 ephemeral=True,
             )
             return

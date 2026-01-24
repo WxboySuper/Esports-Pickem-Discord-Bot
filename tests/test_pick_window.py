@@ -20,10 +20,10 @@ async def test_pick_uses_pick_window(mock_datetime, mock_get_session):
     mock_datetime.now.return_value = fixed_now
 
     # Capture the statement passed to session.exec
-    captured = {}
+    captured_stmts = []
 
     def fake_exec(stmt):
-        captured["stmt"] = stmt
+        captured_stmts.append(stmt)
 
         class R:
             @staticmethod
@@ -48,21 +48,24 @@ async def test_pick_uses_pick_window(mock_datetime, mock_get_session):
 
     await pick.pick.callback(mock_interaction)
 
-    assert "stmt" in captured, "No statement was executed by pick command"
-
-    # Compile the captured SQLAlchemy statement and examine bound params
-    compiled = captured["stmt"].compile(dialect=sqlite.dialect())
-    params = compiled.params
+    assert len(captured_stmts) > 0, "No statement was executed by pick command"
 
     # Expect the pick cutoff (now + PICK_WINDOW_DAYS) to be present
     expected_cutoff = fixed_now + timedelta(days=pick.PICK_WINDOW_DAYS)
 
-    found = any(
-        (isinstance(v, datetime) and v == expected_cutoff)
-        for v in params.values()
-    )
-    err = (
-        f"Expected cutoff {expected_cutoff!r} not found in stmt params: "
-        f"{params}"
-    )
+    found = False
+    for stmt in captured_stmts:
+        try:
+            compiled = stmt.compile(dialect=sqlite.dialect())
+            params = compiled.params
+            if any(
+                (isinstance(v, datetime) and v == expected_cutoff)
+                for v in params.values()
+            ):
+                found = True
+                break
+        except Exception:
+            continue
+
+    err = f"Expected cutoff {expected_cutoff!r} not found in any stmt params."
     assert found, err
