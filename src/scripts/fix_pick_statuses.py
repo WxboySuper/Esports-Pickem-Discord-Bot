@@ -11,7 +11,13 @@ logger = logging.getLogger(__name__)
 def _set_pick_correct(pick: Pick) -> bool:
     """Sets pick as correct if not already. Returns True if changed."""
     # Check if already correct state
-    if pick.is_correct and pick.status == "correct" and pick.score == 10:
+    is_state_correct = (
+        pick.is_correct is True
+        and pick.status == "correct"
+        and pick.score == 10
+    )
+
+    if is_state_correct:
         return False
 
     pick.is_correct = True
@@ -23,11 +29,13 @@ def _set_pick_correct(pick: Pick) -> bool:
 def _set_pick_incorrect(pick: Pick) -> bool:
     """Sets pick as incorrect if not already. Returns True if changed."""
     # Check if already incorrect state
-    if (
+    is_state_incorrect = (
         pick.is_correct is False
         and pick.status == "incorrect"
         and pick.score == 0
-    ):
+    )
+
+    if is_state_incorrect:
         return False
 
     pick.is_correct = False
