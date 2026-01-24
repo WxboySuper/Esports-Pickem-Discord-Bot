@@ -83,16 +83,24 @@ class NotificationBatcher:
         if self._batch_depth > 0:
             return
 
-        if key not in self._timers:
-            # Schedule flush after 1 second (debounce)
-            self._timers[key] = asyncio.create_task(self._flush_later(key))
+        existing = self._timers.get(key)
+        if existing and not existing.done():
+            return
+
+        # Schedule flush after 1 second (debounce)
+        self._timers[key] = asyncio.create_task(self._flush_later(key))
 
     async def _flush_later(self, key: str):
         await asyncio.sleep(1.0)
         async with self._lock:
+            # Check if we are still the active timer for this key
+            if self._timers.get(key) != asyncio.current_task():
+                return
+
             # If batch mode was entered while we were sleeping, abort flush.
+            # Do NOT remove from _timers; let the task complete. _ensure_timer
+            # will see it is done and start a new one if needed.
             if self._batch_depth > 0:
-                self._timers.pop(key, None)
                 return
 
             items = self._pending.pop(key, [])
