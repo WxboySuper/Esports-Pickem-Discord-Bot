@@ -1,7 +1,8 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime
 from dataclasses import dataclass
+from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 from src.models import Pick
@@ -125,3 +126,28 @@ def delete_pick(session: Session, pick_id: int) -> bool:
     _delete_and_commit(session, pick)
     logger.info("Deleted pick ID: %s", pick_id)
     return True
+
+
+def get_user_pick_stats(session: Session, user_id: int) -> Tuple[int, int]:
+    """
+    Get statistics for a user's picks.
+
+    Parameters:
+        session (Session): Database session.
+        user_id (int): The ID of the user.
+
+    Returns:
+        Tuple[int, int]: A tuple containing (total_picks, correct_picks).
+    """
+    logger.debug("Fetching pick stats for user ID: %s", user_id)
+    # Total picks
+    total_query = select(func.count(Pick.id)).where(Pick.user_id == user_id)
+    total_picks = session.scalar(total_query) or 0
+
+    # Correct picks
+    correct_query = select(func.count(Pick.id)).where(
+        Pick.user_id == user_id, Pick.status == "correct"
+    )
+    correct_picks = session.scalar(correct_query) or 0
+
+    return total_picks, correct_picks
