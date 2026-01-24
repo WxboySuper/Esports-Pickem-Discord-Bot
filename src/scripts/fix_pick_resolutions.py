@@ -9,6 +9,54 @@ from src.models import Match, Pick, Result
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fix_pick_resolutions")
 
+
+def update_pick_state(pick: Pick, winner: str) -> bool:
+    """
+    Update a single pick's state based on the winner.
+    Returns True if the pick was modified, False otherwise.
+    """
+    is_dirty = False
+    is_correct = pick.chosen_team == winner
+    expected_status = "correct" if is_correct else "incorrect"
+    expected_score = 10 if is_correct else 0
+
+    if pick.is_correct != is_correct:
+        pick.is_correct = is_correct
+        is_dirty = True
+
+    if pick.status != expected_status:
+        pick.status = expected_status
+        is_dirty = True
+
+    if pick.score != expected_score:
+        pick.score = expected_score
+        is_dirty = True
+
+    return is_dirty
+
+
+def process_match(session, match: Match) -> int:
+    """
+    Process picks for a single match.
+    Returns the number of picks updated.
+    """
+    if not match.result or not match.picks:
+        return 0
+
+    winner = match.result.winner
+    updated_count = 0
+
+    for pick in match.picks:
+        if update_pick_state(pick, winner):
+            session.add(pick)
+            updated_count += 1
+
+    if updated_count > 0:
+        logger.info(f"Match {match.id}: Updated {updated_count} picks.")
+
+    return updated_count
+
+
 def fix_picks():
     """
     Iterate over all matches with results and ensure all related picks
@@ -17,8 +65,6 @@ def fix_picks():
     logger.info("Starting pick resolution fix...")
 
     with get_session() as session:
-        # Fetch all matches that have a result
-        # Eagerly load the result and picks to avoid N+1 queries
         matches = session.exec(
             select(Match)
             .join(Result)
@@ -31,56 +77,24 @@ def fix_picks():
         matches_processed = 0
 
         for match in matches:
-            if not match.result:
-                continue
-
-            winner = match.result.winner
-            picks = match.picks
-
-            if not picks:
-                continue
-
-            match_picks_updated = 0
-            for pick in picks:
-                is_dirty = False
-
-                # Determine correct state based on winner
-                is_correct = (pick.chosen_team == winner)
-                expected_status = "correct" if is_correct else "incorrect"
-                expected_score = 10 if is_correct else 0
-
-                # Check if updates are needed
-                if pick.is_correct != is_correct:
-                    pick.is_correct = is_correct
-                    is_dirty = True
-
-                if pick.status != expected_status:
-                    pick.status = expected_status
-                    is_dirty = True
-
-                if pick.score != expected_score:
-                    pick.score = expected_score
-                    is_dirty = True
-
-                if is_dirty:
-                    session.add(pick)
-                    match_picks_updated += 1
-
-            if match_picks_updated > 0:
-                logger.info(f"Match {match.id}: Updated {match_picks_updated} picks.")
-                total_picks_updated += match_picks_updated
-
+            updated = process_match(session, match)
+            if updated > 0:
+                total_picks_updated += updated
             matches_processed += 1
 
         if total_picks_updated > 0:
             session.commit()
-            logger.info(f"Successfully committed updates for {total_picks_updated} picks across {matches_processed} matches.")
+            logger.info(
+                f"Successfully committed updates for {total_picks_updated} "
+                f"picks across {matches_processed} matches."
+            )
         else:
             logger.info("No picks needed updates.")
+
 
 if __name__ == "__main__":
     try:
         fix_picks()
-    except Exception as e:
+    except Exception:
         logger.exception("An error occurred during the fix process.")
         sys.exit(1)
