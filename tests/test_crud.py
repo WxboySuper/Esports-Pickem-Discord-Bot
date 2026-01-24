@@ -309,7 +309,7 @@ def test_pick_update_delete_missing(session: Session):
 
 
 def test_get_user_pick_stats(session: Session):
-    user, contest, match = _mk_user_contest_match(session)
+    user, contest, _ = _mk_user_contest_match(session)
 
     # Create 3 picks: 2 correct, 1 incorrect
     # We'll use different matches to be clean, though Pick model might
