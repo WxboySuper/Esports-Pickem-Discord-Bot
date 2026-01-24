@@ -142,12 +142,12 @@ def get_user_pick_stats(session: Session, user_id: int) -> Tuple[int, int]:
     logger.debug("Fetching pick stats for user ID: %s", user_id)
     # Total picks
     total_query = select(func.count(Pick.id)).where(Pick.user_id == user_id)
-    total_picks = session.exec(total_query).one()
+    total_picks = session.scalar(total_query) or 0
 
     # Correct picks
     correct_query = select(func.count(Pick.id)).where(
         Pick.user_id == user_id, Pick.status == "correct"
     )
-    correct_picks = session.exec(correct_query).one()
+    correct_picks = session.scalar(correct_query) or 0
 
     return total_picks, correct_picks

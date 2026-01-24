@@ -312,10 +312,9 @@ def test_get_user_pick_stats(session: Session):
     user, contest, match = _mk_user_contest_match(session)
 
     # Create 3 picks: 2 correct, 1 incorrect
-    # We'll use different matches to be clean, though Pick model might allow duplicates
-    base_time = datetime(
-        2025, 5, 12, 12, 0, 0, tzinfo=timezone.utc
-    )
+    # We'll use different matches to be clean, though Pick model might
+    # allow duplicates
+    base_time = datetime(2025, 5, 12, 12, 0, 0, tzinfo=timezone.utc)
 
     for i in range(3):
         m = crud.create_match(
