@@ -229,14 +229,6 @@ async def _fetch_results_batch(session, item_list):
     teams_map = await _bulk_fetch_teams(session, matches)
     stats_map = await _bulk_fetch_pick_stats(session, match_ids)
 
-    return _process_result_batch_items(
-        matches, match_to_res_id, results_map, teams_map, stats_map
-    )
-
-
-def _process_result_batch_items(
-    matches, match_to_res_id, results_map, teams_map, stats_map
-):
     valid_data = []
     for m in matches:
         res_id = match_to_res_id.get(m.id)
