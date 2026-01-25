@@ -18,7 +18,11 @@ from src.pandascore_client import (
 )
 from src.db import get_async_session
 from src.crud import get_match_by_pandascore_id
-from src.notifications import send_result_notification
+from src.notifications import (
+    send_result_notification,
+    send_match_time_change_notification,
+)
+from src.notification_batcher import batcher
 from src.pandascore_utils import (
     safe_schedule,
     safe_notify,
@@ -35,10 +39,12 @@ logger = logging.getLogger(__name__)
 
 
 async def _run_post_sync_actions(
-    matches_to_schedule: List[Any], notifications: List[Tuple[int, int]]
+    matches_to_schedule: List[Any],
+    notifications: List[Tuple[int, int]],
+    time_change_notifications: List[Tuple[Any, Any, Any]],
 ) -> None:
     """
-    Schedule reminders and send result notifications after sync.
+    Schedule reminders and send result/time-change notifications after sync.
     """
 
     async def _process_with_yield_calls(
@@ -50,18 +56,44 @@ async def _run_post_sync_actions(
             if (i + 1) % batch == 0:
                 await asyncio.sleep(0)
 
-    # Prepare callables to avoid duplicating yield logic
-    match_calls: List[Callable[[], Awaitable[None]]] = [
-        (lambda m=match: safe_schedule(m)) for match in matches_to_schedule
-    ]
-    await _process_with_yield_calls(match_calls, batch=5)
+    # Run all notification-related actions within a batching context
+    # so they are flushed as a single announcement (per type) at the end.
+    async with batcher.batching():
+        # 1. Schedule reminders
+        match_calls: List[Callable[[], Awaitable[None]]] = [
+            (lambda m=match: safe_schedule(m)) for match in matches_to_schedule
+        ]
+        await _process_with_yield_calls(match_calls, batch=5)
 
-    logger.info("Sending %d result notifications...", len(notifications))
-    notif_calls: List[Callable[[], Awaitable[None]]] = [
-        (lambda mid=mid, rid=rid: safe_notify(mid, rid))
-        for mid, rid in notifications
-    ]
-    await _process_with_yield_calls(notif_calls, batch=5)
+        # 2. Send result notifications
+        logger.info("Sending %d result notifications...", len(notifications))
+        notif_calls: List[Callable[[], Awaitable[None]]] = [
+            (lambda mid=mid, rid=rid: safe_notify(mid, rid))
+            for mid, rid in notifications
+        ]
+        await _process_with_yield_calls(notif_calls, batch=5)
+
+        # 3. Send time change notifications
+        if time_change_notifications:
+            logger.info(
+                "Sending %d time change notifications...",
+                len(time_change_notifications),
+            )
+
+            async def _safe_time_notify(m, old, new):
+                try:
+                    await send_match_time_change_notification(m, old, new)
+                except Exception:
+                    logger.exception(
+                        "Failed to send time change notification for match %s",
+                        m.id,
+                    )
+
+            time_calls: List[Callable[[], Awaitable[None]]] = [
+                (lambda m=m, old=old, new=new: _safe_time_notify(m, old, new))
+                for m, old, new in time_change_notifications
+            ]
+            await _process_with_yield_calls(time_calls, batch=5)
 
 
 async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
@@ -70,7 +102,7 @@ async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
     Returns combined list or None on failure.
     """
     try:
-        upcoming = await pandascore_client.fetch_matches(
+        upcoming_coro = pandascore_client.fetch_matches(
             "upcoming",
             {
                 "filter_key": "league_id",
@@ -79,10 +111,10 @@ async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
                 "page": 1,
             },
         )
-        running = await pandascore_client.fetch_matches(
+        running_coro = pandascore_client.fetch_matches(
             "running", {"page_size": DEFAULT_PAGE_SIZE}
         )
-        past = await pandascore_client.fetch_matches(
+        past_coro = pandascore_client.fetch_matches(
             "recent_past",
             {
                 "filter_key": "league_id",
@@ -90,6 +122,11 @@ async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
                 "page_size": DEFAULT_PAGE_SIZE,
             },
         )
+
+        upcoming, running, past = await asyncio.gather(
+            upcoming_coro, running_coro, past_coro
+        )
+
         return upcoming + running + past
     except Exception:
         logger.exception("Failed to fetch matches from PandaScore")
@@ -98,7 +135,12 @@ async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
 
 async def _process_matches_and_commit(
     matches_data: List[Any], db_session
-) -> Tuple[List[Any], List[Tuple[int, int]], Dict[str, int]]:
+) -> Tuple[
+    List[Any],
+    List[Tuple[int, int]],
+    List[Tuple[Any, Any, Any]],
+    Dict[str, int],
+]:
     """
     Process matches; commit DB changes; return schedules/notifications
     and summary.
@@ -118,7 +160,12 @@ async def _process_matches_and_commit(
             await asyncio.sleep(0)
 
     await db_session.commit()
-    return ctx.matches_to_schedule, ctx.notifications, ctx.summary
+    return (
+        ctx.matches_to_schedule,
+        ctx.notifications,
+        ctx.time_change_notifications,
+        ctx.summary,
+    )
 
 
 async def perform_pandascore_sync(
@@ -151,11 +198,16 @@ async def perform_pandascore_sync(
     )
 
     async with get_async_session() as db_session:
-        all_matches_to_schedule, all_notifications, summary = (
-            await _process_matches_and_commit(matches_data, db_session)
-        )
+        (
+            all_matches_to_schedule,
+            all_notifications,
+            all_time_changes,
+            summary,
+        ) = await _process_matches_and_commit(matches_data, db_session)
 
-    await _run_post_sync_actions(all_matches_to_schedule, all_notifications)
+    await _run_post_sync_actions(
+        all_matches_to_schedule, all_notifications, all_time_changes
+    )
     return summary
 
 

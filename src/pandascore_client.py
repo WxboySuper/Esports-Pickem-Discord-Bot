@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Union
 
 import aiohttp
-from aiohttp import ClientError, ClientResponseError
+from aiohttp import ClientError, ClientResponseError, ClientTimeout
 
 from src.config import PANDASCORE_API_KEY
 
@@ -87,7 +87,10 @@ class PandaScoreClient:
         """Get or create an aiohttp session."""
         if self._session is None or self._session.closed:
             headers = self._build_headers()
-            self._session = aiohttp.ClientSession(headers=headers)
+            timeout = ClientTimeout(total=30)
+            self._session = aiohttp.ClientSession(
+                headers=headers, timeout=timeout
+            )
 
         return self._session
 
@@ -170,6 +173,18 @@ class PandaScoreClient:
         await asyncio.sleep(2**attempt)
 
     @staticmethod
+    async def _handle_timeout_error(
+        e: asyncio.TimeoutError, attempt: int, max_retries: int
+    ) -> None:
+        """Handle asyncio.TimeoutError with logging and backoff."""
+        logger.error("PandaScore request timeout: %s", e)
+        if attempt == max_retries - 1:
+            raise PandaScoreError(
+                f"Request timeout after {max_retries} attempts: {e}"
+            )
+        await asyncio.sleep(2**attempt)
+
+    @staticmethod
     async def _handle_rate_limit_error(
         e: RateLimitError, attempt: int, max_retries: int
     ) -> None:
@@ -220,6 +235,8 @@ class PandaScoreClient:
                 )
             except ClientError as e:
                 await self._handle_client_error(e, attempt, max_retries)
+            except asyncio.TimeoutError as e:
+                await self._handle_timeout_error(e, attempt, max_retries)
 
         raise PandaScoreError("Request failed after all retries")
 

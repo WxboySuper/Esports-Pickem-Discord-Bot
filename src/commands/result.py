@@ -153,7 +153,9 @@ async def enter_result(
 
             updated_picks_count = 0
             for pick in picks:
-                if pick.chosen_team == winner:
+                is_correct = pick.chosen_team == winner
+                pick.is_correct = is_correct
+                if is_correct:
                     pick.status = "correct"
                     pick.score = 10  # Award 10 points for a correct pick
                 else:

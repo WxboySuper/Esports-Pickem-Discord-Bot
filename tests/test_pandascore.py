@@ -130,7 +130,7 @@ class TestPandaScoreSyncHelpers:
         from src.pandascore_parsing import _extract_contest_data
 
         match_data = {
-            "league": {"id": 1, "name": "LCS"},
+            "league": {"id": 1, "name": "LCS", "image_url": "http://img"},
             "serie": {
                 "id": 10,
                 "name": "Spring",
@@ -144,6 +144,7 @@ class TestPandaScoreSyncHelpers:
         assert result["pandascore_serie_id"] == 10
         assert "LCS" in result["name"]
         assert "Spring" in result["name"]
+        assert result["image_url"] == "http://img"
 
     def test_extract_match_data_valid(self):
         """Test extracting match data from PandaScore match object."""

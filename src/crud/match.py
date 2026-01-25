@@ -96,7 +96,7 @@ async def upsert_match(
 
 async def upsert_match_by_pandascore(
     session: AsyncSession, match_data: dict
-) -> Tuple[Optional[Match], bool]:
+) -> Tuple[Optional[Match], bool, bool, Optional[datetime]]:
     """
     Create or update a Match identified by its PandaScore ID.
 
@@ -106,15 +106,17 @@ async def upsert_match_by_pandascore(
             May include `best_of`, `status`, `team1_id`, `team2_id`.
 
     Returns:
-        tuple[Optional[Match], bool]: A tuple containing the upserted
-            Match (or None on failure) and a boolean that is True
-            if the match's scheduled time changed or the match was
-            newly created, False otherwise.
+        tuple[Optional[Match], bool, bool, Optional[datetime]]:
+        A tuple containing:
+            1. The upserted Match (or None on failure)
+            2. A boolean indicating if the match is newly created
+            3. A boolean indicating if the match's scheduled time changed
+            4. The original scheduled time (if updated) or None
     """
     pandascore_id = match_data.get("pandascore_id")
     if pandascore_id is None:
         logger.error("Missing pandascore_id in match_data")
-        return None, False
+        return None, False, False, None
 
     try:
         result = await session.exec(
@@ -123,11 +125,16 @@ async def upsert_match_by_pandascore(
             .options(selectinload(Match.result))
         )
         match = result.first()
+        is_new = False
+        original_time = None
 
         if match:
-            time_changed = _update_match_from_data(match, match_data)
+            time_changed, original_time = _update_match_from_data(
+                match, match_data
+            )
         else:
             match, time_changed = _create_match_from_data(match_data)
+            is_new = True
 
         session.add(match)
         await session.flush()
@@ -135,17 +142,22 @@ async def upsert_match_by_pandascore(
             "Upserted match ID: %s (PandaScore: %s)", match.id, pandascore_id
         )
 
-        return match, time_changed
+        return match, is_new, time_changed, original_time
     except KeyError as e:
         logger.error("Missing key in match_data: %s", e)
-        return None, False
+        return None, False, False, None
     except Exception:
         logger.exception("Error upserting match with data: %s", match_data)
-        return None, False
+        return None, False, False, None
 
 
-def _update_match_from_data(match: Match, match_data: dict) -> bool:
-    """Updates existing match fields and returns True if time changed."""
+def _update_match_from_data(
+    match: Match, match_data: dict
+) -> Tuple[bool, Optional[datetime]]:
+    """
+    Updates existing match fields and returns
+    (time_changed, original_time).
+    """
     logger.info(
         "Updating existing match (PandaScore ID: %s)", match.pandascore_id
     )
@@ -155,6 +167,7 @@ def _update_match_from_data(match: Match, match_data: dict) -> bool:
 
     original_time = match.scheduled_time
     new_time = match_data.get("scheduled_time")
+    time_changed = False
     if new_time and original_time != new_time:
         logger.info(
             "Match %s time changed from %s to %s",
@@ -163,8 +176,9 @@ def _update_match_from_data(match: Match, match_data: dict) -> bool:
             new_time,
         )
         match.scheduled_time = new_time
-        return True
-    return False
+        time_changed = True
+
+    return time_changed, original_time
 
 
 def _create_match_from_data(match_data: dict) -> Tuple[Match, bool]:

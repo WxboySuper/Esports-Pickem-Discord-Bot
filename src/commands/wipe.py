@@ -8,7 +8,6 @@ from src.db import get_async_session
 from src.models import Contest, Match, Pick, Result
 from src.auth import is_admin
 
-
 CONFIRM_PHRASE = "WIPE DATABASE"
 logger = logging.getLogger("esports-bot.commands.wipe")
 

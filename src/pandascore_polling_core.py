@@ -254,6 +254,34 @@ async def _handle_winner(
                 "Failed to remove pandascore_id %s from running set",
                 match.pandascore_id,
             )
+
+    # Schedule a full sync to catch any schedule updates caused by this
+    # match's conclusion (e.g. cascading start times for subsequent matches).
+    try:
+        from src.scheduler_instance import scheduler
+        from src.pandascore_sync import perform_pandascore_sync
+
+        # Schedule slightly in the future to allow DB to settle if needed,
+        # but "earliest convenience" essentially means now-ish.
+        run_date = datetime.now(timezone.utc) + timedelta(seconds=10)
+        scheduler.add_job(
+            perform_pandascore_sync,
+            "date",
+            run_date=run_date,
+            id=f"sync_after_match_{match.id}_{int(run_date.timestamp())}",
+            replace_existing=True,
+        )
+        logger.info(
+            "Scheduled full match sync to run at %s following conclusion "
+            "of match %s",
+            run_date,
+            match.id,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to schedule sync after match %s conclusion", match.id
+        )
+
     return bool(committed)
 
 

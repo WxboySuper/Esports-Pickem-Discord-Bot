@@ -12,4 +12,3 @@ def setup_logging():
     logging.getLogger("aiosqlite").setLevel(logging.WARNING)
     logging.getLogger("discord").setLevel(logging.INFO)
     logging.getLogger("websockets").setLevel(logging.WARNING)
-    logging.getLogger("mwrogue").setLevel(logging.INFO)

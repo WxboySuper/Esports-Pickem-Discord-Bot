@@ -42,13 +42,14 @@ from .user import (
     delete_user,
 )
 
-from .pick import (
+from .pick import (  # skipcq: PY-W2000
     create_pick,
     get_pick_by_id,
     list_picks_for_user,
     list_picks_for_match,
     update_pick,
     delete_pick,
+    get_user_pick_stats,
     PickCreateParams,
 )
 

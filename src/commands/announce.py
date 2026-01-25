@@ -5,7 +5,6 @@ from discord.utils import get
 
 from src.auth import is_admin
 
-
 CATEGORY_NAME = "esports-pickem"
 CHANNEL_NAME = "pickem-announcements"
 
