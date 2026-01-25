@@ -179,63 +179,67 @@ async def _process_generic(
 
 
 async def _process_reminders(minutes: int, match_ids: List[int]):
-    async def fetch_batch(session, ids):
-        matches = await _bulk_fetch_matches(session, ids)
-        if not matches:
-            return []
-
-        teams_map = await _bulk_fetch_teams(session, matches)
-        data = []
-        for m in matches:
-            t1, t2 = _resolve_teams(m, teams_map)
-            data.append((m, t1, t2))
-        return data
-
     def build(data_list):
         return _build_reminder_embed(minutes, data_list)
 
     await _process_generic(
-        match_ids, fetch_batch, build, f"{minutes}-minute reminder"
+        match_ids, _fetch_reminders_batch, build, f"{minutes}-minute reminder"
     )
+
+
+async def _fetch_reminders_batch(session, ids):
+    matches = await _bulk_fetch_matches(session, ids)
+    if not matches:
+        return []
+
+    teams_map = await _bulk_fetch_teams(session, matches)
+    data = []
+    for m in matches:
+        t1, t2 = _resolve_teams(m, teams_map)
+        data.append((m, t1, t2))
+    return data
 
 
 async def _process_results(items: List[Tuple[int, int]]):
-    # items are (match_id, result_id)
-    async def fetch_batch(session, item_list):
-        match_ids = [i[0] for i in item_list]
-        result_ids = [i[1] for i in item_list]
-
-        matches = await _bulk_fetch_matches(session, match_ids)
-        # Fetch results
-        stmt = select(Result).where(Result.id.in_(result_ids))
-        results = (await session.exec(stmt)).all()
-        results_map = {r.id: r for r in results}
-
-        # Map match_id -> result_id from input items
-        match_to_res_id = dict(item_list)
-
-        if not matches:
-            return []
-
-        teams_map = await _bulk_fetch_teams(session, matches)
-        stats_map = await _bulk_fetch_pick_stats(session, match_ids)
-
-        def get_res(m_id):
-            return results_map.get(match_to_res_id.get(m_id))
-
-        return _process_result_batch_items(
-            matches, get_res, teams_map, stats_map
-        )
-
     await _process_generic(
-        items, fetch_batch, _build_result_embed, "result notification"
+        items,
+        _fetch_results_batch,
+        _build_result_embed,
+        "result notification",
     )
 
 
-def _process_result_batch_items(matches, get_res, teams_map, stats_map):
+async def _fetch_results_batch(session, item_list):
+    match_ids = [i[0] for i in item_list]
+    result_ids = [i[1] for i in item_list]
+
+    matches = await _bulk_fetch_matches(session, match_ids)
+    # Fetch results
+    stmt = select(Result).where(Result.id.in_(result_ids))
+    results = (await session.exec(stmt)).all()
+    results_map = {r.id: r for r in results}
+
+    # Map match_id -> result_id from input items
+    match_to_res_id = dict(item_list)
+
+    if not matches:
+        return []
+
+    teams_map = await _bulk_fetch_teams(session, matches)
+    stats_map = await _bulk_fetch_pick_stats(session, match_ids)
+
+    return _process_result_batch_items(
+        matches, match_to_res_id, results_map, teams_map, stats_map
+    )
+
+
+def _process_result_batch_items(
+    matches, match_to_res_id, results_map, teams_map, stats_map
+):
     valid_data = []
     for m in matches:
-        res = get_res(m.id)
+        res_id = match_to_res_id.get(m.id)
+        res = results_map.get(res_id)
         if res:
             t1, t2 = _resolve_teams(m, teams_map)
             # Stats calculation needs winner name
@@ -248,69 +252,72 @@ def _process_result_batch_items(matches, get_res, teams_map, stats_map):
 
 
 async def _process_time_changes(items: List[Tuple[int, Any, Any]]):
-    # items: (match_id, old, new)
-    async def fetch_batch(session, item_list):
-        match_ids = [i[0] for i in item_list]
-        matches = await _bulk_fetch_matches(session, match_ids)
-        match_map = {m.id: m for m in matches}
-
-        data = []
-        for m_id, old, new in item_list:
-            if m := match_map.get(m_id):
-                data.append((m, old, new))
-        return data
-
-    def fmt_line(data):
-        m, _, new_time = data
-        ts = int(new_time.timestamp())
-        return (
-            f"**{m.team1}** vs **{m.team2}**\n"
-            f"New Time: <t:{ts}:F> (<t:{ts}:R>)"
-        )
-
-    def build(data_list):
-        embed = discord.Embed(
-            title="📅 Match Schedule Updates",
-            description="The following matches have been rescheduled:",
-            color=discord.Color.blue(),
-            timestamp=datetime.now(timezone.utc),
-        )
-        return _populate_list_embed(embed, data_list, fmt_line)
-
     await _process_generic(
-        items, fetch_batch, build, "time change notification"
+        items,
+        _fetch_simple_batch,
+        _build_time_change_embed,
+        "time change notification",
     )
 
 
 async def _process_mid_series(items: List[Tuple[int, str]]):
-    # items: (match_id, score)
-    async def fetch_batch(session, item_list):
-        match_ids = [i[0] for i in item_list]
-        matches = await _bulk_fetch_matches(session, match_ids)
-        match_map = {m.id: m for m in matches}
+    await _process_generic(
+        items,
+        _fetch_simple_batch,
+        _build_mid_series_embed,
+        "mid-series update",
+    )
 
-        data = []
-        for m_id, score in item_list:
-            if m := match_map.get(m_id):
-                data.append((m, score))
-        return data
 
-    def fmt_line(data):
-        m, score = data
-        return f"**{m.team1}** vs **{m.team2}**: **{score}**" + (
-            f" (Best of {m.best_of})" if m.best_of else ""
-        )
+async def _fetch_simple_batch(session, item_list):
+    match_ids = [i[0] for i in item_list]
+    matches = await _bulk_fetch_matches(session, match_ids)
+    match_map = {m.id: m for m in matches}
 
-    def build(data_list):
-        embed = discord.Embed(
-            title="Live Match Updates",
-            description="Latest scores:",
-            color=discord.Color.orange(),
-            timestamp=datetime.now(timezone.utc),
-        )
-        return _populate_list_embed(embed, data_list, fmt_line)
+    data = []
+    for item in item_list:
+        m_id = item[0]
+        if m := match_map.get(m_id):
+            # item is (match_id, ...) so we replace match_id with match obj
+            # and keep the rest of the tuple
+            data.append((m,) + item[1:])
+    return data
 
-    await _process_generic(items, fetch_batch, build, "mid-series update")
+
+def _fmt_time_change_line(data):
+    m, _, new_time = data
+    ts = int(new_time.timestamp())
+    return (
+        f"**{m.team1}** vs **{m.team2}**\n"
+        f"New Time: <t:{ts}:F> (<t:{ts}:R>)"
+    )
+
+
+def _build_time_change_embed(data_list):
+    embed = discord.Embed(
+        title="📅 Match Schedule Updates",
+        description="The following matches have been rescheduled:",
+        color=discord.Color.blue(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    return _populate_list_embed(embed, data_list, _fmt_time_change_line)
+
+
+def _fmt_mid_series_line(data):
+    m, score = data
+    return f"**{m.team1}** vs **{m.team2}**: ||**{score}**||" + (
+        f" (Best of {m.best_of})" if m.best_of else ""
+    )
+
+
+def _build_mid_series_embed(data_list):
+    embed = discord.Embed(
+        title="Live Match Updates",
+        description="Latest scores:",
+        color=discord.Color.orange(),
+        timestamp=datetime.now(timezone.utc),
+    )
+    return _populate_list_embed(embed, data_list, _fmt_mid_series_line)
 
 
 # --- Bulk Fetching Helpers ---
