@@ -1,9 +1,8 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from datetime import datetime, timedelta, timezone
 from src.reminders import schedule_reminders, send_reminder
-from src.models import Match, Team
-from contextlib import asynccontextmanager
+from src.models import Match
 
 
 @pytest.fixture(name="mock_scheduler")
@@ -21,41 +20,6 @@ async def _run_schedule(scheduler, now, match):
     ) as mock_dt:
         mock_dt.now.return_value = now
         await schedule_reminders(match)
-
-
-def _collect_title_desc_errors(
-    obj, title_sub: str, desc_list: list[str]
-) -> list[str]:
-    errs: list[str] = []
-    title = getattr(obj, "title", "") or ""
-    if title_sub not in title:
-        errs.append(f"embed title missing '{title_sub}'")
-    description = getattr(obj, "description", "") or ""
-    missing = [s for s in desc_list if s not in description]
-    if missing:
-        errs.append(f"embed description missing: {', '.join(missing)}")
-    return errs
-
-
-def _collect_thumbnail_error(obj, expected_url: str) -> list[str]:
-    thumb = getattr(obj, "thumbnail", None)
-    url = getattr(thumb, "url", None) if thumb is not None else None
-    return ["unexpected thumbnail URL"] if url != expected_url else []
-
-
-def _validate_embed(
-    sent_embed,
-    title_contains: str,
-    desc_contains_list: list[str],
-    thumbnail_url: str | None = None,
-):
-    errors = _collect_title_desc_errors(
-        sent_embed, title_contains, desc_contains_list
-    )
-    if thumbnail_url is not None:
-        errors += _collect_thumbnail_error(sent_embed, thumbnail_url)
-    if errors:
-        raise AssertionError("; ".join(errors))
 
 
 @pytest.mark.asyncio
@@ -201,78 +165,16 @@ async def test_schedule_late_5_min_reminder(mock_scheduler):
         raise AssertionError(f"unexpected add_job call args: {call_obj}")
 
 
-def _prepare_send_reminder_mocks(mock_get_bot, mock_get_session, match):
-    mock_bot = MagicMock()
-    mock_guild = MagicMock()
-    mock_bot.guilds = [mock_guild]
-    mock_get_bot.return_value = mock_bot
-
-    team1 = MagicMock(spec=Team)
-    team1.name = "Team Liquid"
-    team1.image_url = "http://team_liquid.png"
-    team2 = MagicMock(spec=Team)
-    team2.name = "100 Thieves"
-    team2.image_url = "http://100_thieves.png"
-
-    mock_session = AsyncMock()
-    mock_session.exec.side_effect = [
-        MagicMock(first=lambda: team1),
-        MagicMock(first=lambda: team2),
-        MagicMock(first=lambda: team1),
-        MagicMock(first=lambda: team2),
-    ]
-    mock_session.get.return_value = match
-
-    @asynccontextmanager
-    async def async_context_manager(*args, **kwargs):
-        yield mock_session
-
-    mock_get_session.return_value = async_context_manager()
-
-
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "case",
-    [
-        (
-            30,
-            "Upcoming Match Reminder",
-            ["Team Liquid", "100 Thieves"],
-            "http://team_liquid.png",
-        ),
-        (
-            5,
-            "Match Starting Soon",
-            ["Last chance"],
-            None,
-        ),
-    ],
-)
-@patch("src.reminders.get_bot_instance")
-@patch("src.reminders.get_async_session")
-@patch("src.reminders.broadcast_embed_to_guilds")
-async def test_send_reminder_embed_content(
-    mock_broadcast, mock_get_session, mock_get_bot, case
-):
-    now = datetime.now(timezone.utc)
-    match_time = now + timedelta(hours=1)
-    match = Match(
-        id=1,
-        scheduled_time=match_time,
-        team1="Team Liquid",
-        team2="100 Thieves",
-        leaguepedia_id="1",
-        contest_id=1,
-    )
+@patch("src.reminders.batcher.add_reminder")
+async def test_send_reminder_delegates_to_batcher(mock_batcher_add):
+    """
+    Verify that send_reminder delegates to batcher.add_reminder instead of
+    broadcasting immediately.
+    """
+    match_id = 123
+    minutes = 30
 
-    _prepare_send_reminder_mocks(mock_get_bot, mock_get_session, match)
+    await send_reminder(match_id, minutes)
 
-    minutes, title, expected_desc, thumbnail = case
-
-    await send_reminder(match_id=1, minutes=minutes)
-
-    call_count = len(mock_broadcast.call_args_list)
-    if call_count != 1:
-        raise AssertionError(f"expected 1 broadcast call, got {call_count}")
-    sent_embed = mock_broadcast.call_args[0][1]
-    _validate_embed(sent_embed, title, expected_desc, thumbnail)
+    mock_batcher_add.assert_called_once_with(match_id, minutes)

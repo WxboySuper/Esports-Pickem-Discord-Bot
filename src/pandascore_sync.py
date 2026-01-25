@@ -22,6 +22,7 @@ from src.notifications import (
     send_result_notification,
     send_match_time_change_notification,
 )
+from src.notification_batcher import batcher
 from src.pandascore_utils import (
     safe_schedule,
     safe_notify,
@@ -55,41 +56,44 @@ async def _run_post_sync_actions(
             if (i + 1) % batch == 0:
                 await asyncio.sleep(0)
 
-    # 1. Schedule reminders
-    match_calls: List[Callable[[], Awaitable[None]]] = [
-        (lambda m=match: safe_schedule(m)) for match in matches_to_schedule
-    ]
-    await _process_with_yield_calls(match_calls, batch=5)
-
-    # 2. Send result notifications
-    logger.info("Sending %d result notifications...", len(notifications))
-    notif_calls: List[Callable[[], Awaitable[None]]] = [
-        (lambda mid=mid, rid=rid: safe_notify(mid, rid))
-        for mid, rid in notifications
-    ]
-    await _process_with_yield_calls(notif_calls, batch=5)
-
-    # 3. Send time change notifications
-    if time_change_notifications:
-        logger.info(
-            "Sending %d time change notifications...",
-            len(time_change_notifications),
-        )
-
-        async def _safe_time_notify(m, old, new):
-            try:
-                await send_match_time_change_notification(m, old, new)
-            except Exception:
-                logger.exception(
-                    "Failed to send time change notification for match %s",
-                    m.id,
-                )
-
-        time_calls: List[Callable[[], Awaitable[None]]] = [
-            (lambda m=m, old=old, new=new: _safe_time_notify(m, old, new))
-            for m, old, new in time_change_notifications
+    # Run all notification-related actions within a batching context
+    # so they are flushed as a single announcement (per type) at the end.
+    async with batcher.batching():
+        # 1. Schedule reminders
+        match_calls: List[Callable[[], Awaitable[None]]] = [
+            (lambda m=match: safe_schedule(m)) for match in matches_to_schedule
         ]
-        await _process_with_yield_calls(time_calls, batch=5)
+        await _process_with_yield_calls(match_calls, batch=5)
+
+        # 2. Send result notifications
+        logger.info("Sending %d result notifications...", len(notifications))
+        notif_calls: List[Callable[[], Awaitable[None]]] = [
+            (lambda mid=mid, rid=rid: safe_notify(mid, rid))
+            for mid, rid in notifications
+        ]
+        await _process_with_yield_calls(notif_calls, batch=5)
+
+        # 3. Send time change notifications
+        if time_change_notifications:
+            logger.info(
+                "Sending %d time change notifications...",
+                len(time_change_notifications),
+            )
+
+            async def _safe_time_notify(m, old, new):
+                try:
+                    await send_match_time_change_notification(m, old, new)
+                except Exception:
+                    logger.exception(
+                        "Failed to send time change notification for match %s",
+                        m.id,
+                    )
+
+            time_calls: List[Callable[[], Awaitable[None]]] = [
+                (lambda m=m, old=old, new=new: _safe_time_notify(m, old, new))
+                for m, old, new in time_change_notifications
+            ]
+            await _process_with_yield_calls(time_calls, batch=5)
 
 
 async def _fetch_matches_for_sync(league_ids: Optional[List[int]]):
