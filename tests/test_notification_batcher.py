@@ -142,7 +142,7 @@ async def test_explicit_batching_mode():
         mock_session_cls.return_value.__aenter__.return_value = mock_session
 
         match1 = MagicMock(id=1, scheduled_time=datetime.now(timezone.utc))
-        match1.contest.image_url = None
+        match1.contest = MagicMock(image_url=None)
         match2 = MagicMock(id=2, scheduled_time=datetime.now(timezone.utc))
 
         mock_bulk_matches.return_value = [match1, match2]

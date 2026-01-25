@@ -212,7 +212,7 @@ async def _process_results(items: List[Tuple[int, int]]):
         results_map = {r.id: r for r in results}
 
         # Map match_id -> result_id from input items
-        match_to_res_id = {m_id: r_id for m_id, r_id in item_list}
+        match_to_res_id = dict(item_list)
 
         if not matches:
             return []
@@ -220,8 +220,11 @@ async def _process_results(items: List[Tuple[int, int]]):
         teams_map = await _bulk_fetch_teams(session, matches)
         stats_map = await _bulk_fetch_pick_stats(session, match_ids)
 
+        def get_res(m_id):
+            return results_map.get(match_to_res_id.get(m_id))
+
         return _process_result_batch_items(
-            matches, match_to_res_id, results_map, teams_map, stats_map
+            matches, get_res, teams_map, stats_map
         )
 
     await _process_generic(
@@ -229,13 +232,10 @@ async def _process_results(items: List[Tuple[int, int]]):
     )
 
 
-def _process_result_batch_items(
-    matches, match_to_res_id, results_map, teams_map, stats_map
-):
+def _process_result_batch_items(matches, get_res, teams_map, stats_map):
     valid_data = []
     for m in matches:
-        res_id = match_to_res_id.get(m.id)
-        res = results_map.get(res_id)
+        res = get_res(m.id)
         if res:
             t1, t2 = _resolve_teams(m, teams_map)
             # Stats calculation needs winner name
@@ -395,14 +395,16 @@ async def _bulk_fetch_pick_stats(session, match_ids: List[int]) -> dict:
     )
     rows = (await session.exec(stmt)).all()
 
-    # Structure: {match_id: (total, {team_name: count})}
-    stats = defaultdict(lambda: (0, defaultdict(int)))
+    # Structure: {match_id: [total, {team_name: count}]}
+    # Use list for mutability
+    stats = defaultdict(lambda: [0, defaultdict(int)])
     for mid, team, count in rows:
-        total, team_counts = stats[mid]
-        stats[mid] = (total + count, team_counts)
+        total_ref, team_counts = stats[mid]
+        stats[mid][0] = total_ref + count
         team_counts[team] = count
 
-    return stats
+    # Convert to tuple format
+    return {k: (v[0], v[1]) for k, v in stats.items()}
 
 
 def _set_thumbnail(
