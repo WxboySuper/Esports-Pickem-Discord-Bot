@@ -31,19 +31,19 @@ Milestones are scoped for fast, incremental releases. Each milestone below maps 
 
 - Core scheduler, PandaScore ingestion, DB models, baseline tests
 
-### v1.1 — Short-term UX & Reminders
+### v1.1 — Short-term UX & Reminders (released)
 
 **Goal:** quick, high-impact UX improvements: 24-hour reminders and a bulk-friendly `/pick` redesign.
 
 **Checklist:**
 
-- Add configurable 24-hour reminders (server opt-in, per-user opt-out) and scheduler integration.
+- [x] Add configurable 24-hour reminders (server opt-in, per-user opt-out) and scheduler integration.
 
-- Redesign `/pick` output for faster multi-match picking (compact, bulk-friendly UI using Discord components).
+- [x] Redesign `/pick` output for faster multi-match picking (compact, bulk-friendly UI using Discord components).
 
-- Audit primary command UX and apply small quick wins (consistent ordering, shorter messages, clearer help text).
+- [x] Audit primary command UX and apply small quick wins (consistent ordering, shorter messages, clearer help text).
 
-- Update docs/changelog and release notes for v1.1.
+- [x] Update docs/changelog and release notes for v1.1.
 
 **Acceptance:** increased engagement via reminders and a more usable `/pick` flow; tests and docs updated.
 
@@ -207,6 +207,5 @@ For each release:
 
 ## Next Steps
 
-1. Finalize acceptance criteria for v1.1 and schedule a sprint.
-2. Begin parser refactor for LoL and implement improved rate-limit tracking.
-3. Start v1.2 (CS2) once v1.1 is validated in CI.
+1. Begin parser refactor for LoL and implement improved rate-limit tracking.
+2. Start v1.2 (CS2) once v1.1 is validated in CI.
