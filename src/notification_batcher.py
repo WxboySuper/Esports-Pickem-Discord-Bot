@@ -297,9 +297,8 @@ async def _process_mid_series(items: List[Tuple[int, str]]):
 
     def fmt_line(data):
         m, score = data
-        return (
-            f"**{m.team1}** vs **{m.team2}**: **{score}** "
-            f"(Best of {m.best_of})"
+        return f"**{m.team1}** vs **{m.team2}**: **{score}**" + (
+            f" (Best of {m.best_of})" if m.best_of else ""
         )
 
     def build(data_list):

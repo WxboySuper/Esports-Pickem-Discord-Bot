@@ -175,6 +175,7 @@ async def test_explicit_batching_mode():
         match1 = MagicMock(id=1, scheduled_time=datetime.now(timezone.utc))
         match1.contest = MagicMock(image_url=None)
         match2 = MagicMock(id=2, scheduled_time=datetime.now(timezone.utc))
+        match2.contest = MagicMock(image_url=None)
 
         mock_bulk_matches.return_value = [match1, match2]
         mock_bulk_teams.return_value = {}
