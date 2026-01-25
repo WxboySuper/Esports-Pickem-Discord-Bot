@@ -54,13 +54,13 @@ class NotificationBatcher:
         key = f"reminder_{minutes}"
         async with self._lock:
             self._pending[key].append(match_id)
-            self._ensure_timer(key)
+        await self._ensure_timer(key)
 
     async def add_result(self, match_id: int, result_id: int):
         key = "result"
         async with self._lock:
             self._pending[key].append((match_id, result_id))
-            self._ensure_timer(key)
+        await self._ensure_timer(key)
 
     async def add_time_change(
         self, match_id: int, old_time: Any, new_time: Any
@@ -68,26 +68,27 @@ class NotificationBatcher:
         key = "time_change"
         async with self._lock:
             self._pending[key].append((match_id, old_time, new_time))
-            self._ensure_timer(key)
+        await self._ensure_timer(key)
 
     async def add_mid_series_update(self, match_id: int, score: str):
         key = "mid_series"
         async with self._lock:
             self._pending[key].append((match_id, score))
-            self._ensure_timer(key)
+        await self._ensure_timer(key)
 
-    def _ensure_timer(self, key: str):
-        # If we are in batch mode (depth > 0), do not schedule a timer.
-        # The flush will happen when the context manager exits.
-        if self._batch_depth > 0:
-            return
+    async def _ensure_timer(self, key: str):
+        async with self._lock:
+            # If we are in batch mode (depth > 0), do not schedule a timer.
+            # The flush will happen when the context manager exits.
+            if self._batch_depth > 0:
+                return
 
-        existing = self._timers.get(key)
-        if existing and not existing.done():
-            return
+            existing = self._timers.get(key)
+            if existing and not existing.done():
+                return
 
-        # Schedule flush after 1 second (debounce)
-        self._timers[key] = asyncio.create_task(self._flush_later(key))
+            # Schedule flush after 1 second (debounce)
+            self._timers[key] = asyncio.create_task(self._flush_later(key))
 
     async def _flush_later(self, key: str):
         await asyncio.sleep(1.0)
@@ -363,6 +364,7 @@ def _collect_team_ids_and_names(matches: List[Match]):
             ids.add(m.team1_id)
         else:
             names.add(m.team1)
+
         if m.team2_id:
             ids.add(m.team2_id)
         else:
@@ -405,9 +407,8 @@ async def _bulk_fetch_pick_stats(session, match_ids: List[int]) -> dict:
     # Use list for mutability
     stats = defaultdict(lambda: [0, defaultdict(int)])
     for mid, team, count in rows:
-        total_ref, team_counts = stats[mid]
-        stats[mid][0] = total_ref + count
-        team_counts[team] = count
+        stats[mid][0] += count
+        stats[mid][1][team] = count
 
     # Convert to tuple format
     return {k: (v[0], v[1]) for k, v in stats.items()}
