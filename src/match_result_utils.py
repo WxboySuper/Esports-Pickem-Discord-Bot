@@ -155,11 +155,12 @@ async def save_result_and_update_picks(session, match, winner, score_str):
     picks_to_update = result_proxy.all()
     updated_count = 0
     for pick in picks_to_update:
-        pick.is_correct = pick.chosen_team == winner
-        if pick.is_correct:
+        if pick.chosen_team == winner:
+            pick.is_correct = True
             pick.status = "correct"
             pick.score = 10
         else:
+            pick.is_correct = False
             pick.status = "incorrect"
             pick.score = 0
         session.add(pick)
