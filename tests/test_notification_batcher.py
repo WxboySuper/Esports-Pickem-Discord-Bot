@@ -21,7 +21,9 @@ async def test_batch_reminders():
     ), patch.object(
         src.notification_batcher, "get_async_session"
     ) as mock_session_cls, patch.object(
-        src.notification_batcher, "broadcast_embed_to_guilds", new_callable=AsyncMock
+        src.notification_batcher,
+        "broadcast_embed_to_guilds",
+        new_callable=AsyncMock,
     ) as mock_broadcast, patch.object(
         src.notification_batcher, "_bulk_fetch_matches", new_callable=AsyncMock
     ) as mock_bulk_matches, patch.object(
@@ -33,14 +35,31 @@ async def test_batch_reminders():
         mock_session_cls.return_value.__aenter__.return_value = mock_session
 
         now = datetime.now(timezone.utc)
-        contest = Contest(name="C1", image_url="http://example.com/icon.png", start_date=now, end_date=now)
-        match1 = Match(id=1, team1="Team A", team2="Team B", scheduled_time=now, contest_id=1)
+        contest = Contest(
+            name="C1",
+            image_url="http://example.com/icon.png",
+            start_date=now,
+            end_date=now,
+        )
+        match1 = Match(
+            id=1,
+            team1="Team A",
+            team2="Team B",
+            scheduled_time=now,
+            contest_id=1,
+        )
         match1.contest = contest
-        match2 = Match(id=2, team1="Team C", team2="Team D", scheduled_time=now, contest_id=1)
+        match2 = Match(
+            id=2,
+            team1="Team C",
+            team2="Team D",
+            scheduled_time=now,
+            contest_id=1,
+        )
         match2.contest = contest
 
         mock_bulk_matches.return_value = [match1, match2]
-        mock_bulk_teams.return_value = {} # Mock dict
+        mock_bulk_teams.return_value = {}  # Mock dict
         mock_resolve_teams.return_value = (None, None)
 
         # Action: Add reminders
@@ -69,13 +88,17 @@ async def test_batch_results():
     ), patch.object(
         src.notification_batcher, "get_async_session"
     ) as mock_session_cls, patch.object(
-        src.notification_batcher, "broadcast_embed_to_guilds", new_callable=AsyncMock
+        src.notification_batcher,
+        "broadcast_embed_to_guilds",
+        new_callable=AsyncMock,
     ) as mock_broadcast, patch.object(
         src.notification_batcher, "_bulk_fetch_matches", new_callable=AsyncMock
     ) as mock_bulk_matches, patch.object(
         src.notification_batcher, "_bulk_fetch_teams", new_callable=AsyncMock
     ) as mock_bulk_teams, patch.object(
-        src.notification_batcher, "_bulk_fetch_pick_stats", new_callable=AsyncMock
+        src.notification_batcher,
+        "_bulk_fetch_pick_stats",
+        new_callable=AsyncMock,
     ) as mock_bulk_stats, patch.object(
         src.notification_batcher, "_resolve_teams"
     ) as mock_resolve_teams:
@@ -83,10 +106,19 @@ async def test_batch_results():
         mock_session_cls.return_value.__aenter__.return_value = mock_session
 
         now = datetime.now(timezone.utc)
-        contest = Contest(name="C1", image_url="http://example.com/icon.png", start_date=now, end_date=now)
-        match1 = Match(id=1, team1="A", team2="B", scheduled_time=now, contest_id=1)
+        contest = Contest(
+            name="C1",
+            image_url="http://example.com/icon.png",
+            start_date=now,
+            end_date=now,
+        )
+        match1 = Match(
+            id=1, team1="A", team2="B", scheduled_time=now, contest_id=1
+        )
         match1.contest = contest
-        match2 = Match(id=2, team1="C", team2="D", scheduled_time=now, contest_id=1)
+        match2 = Match(
+            id=2, team1="C", team2="D", scheduled_time=now, contest_id=1
+        )
         match2.contest = contest
 
         mock_bulk_matches.return_value = [match1, match2]
@@ -103,10 +135,7 @@ async def test_batch_results():
         mock_session.exec.return_value = mock_exec_res
 
         # Mock stats: match_id -> (total, {team: count})
-        mock_bulk_stats.return_value = {
-            1: (10, {"A": 5}),
-            2: (20, {"D": 15})
-        }
+        mock_bulk_stats.return_value = {1: (10, {"A": 5}), 2: (20, {"D": 15})}
 
         await batcher.add_result(1, 101)
         await batcher.add_result(2, 102)
@@ -130,7 +159,9 @@ async def test_explicit_batching_mode():
     ), patch.object(
         src.notification_batcher, "get_async_session"
     ) as mock_session_cls, patch.object(
-        src.notification_batcher, "broadcast_embed_to_guilds", new_callable=AsyncMock
+        src.notification_batcher,
+        "broadcast_embed_to_guilds",
+        new_callable=AsyncMock,
     ) as mock_broadcast, patch.object(
         src.notification_batcher, "_bulk_fetch_matches", new_callable=AsyncMock
     ) as mock_bulk_matches, patch.object(
