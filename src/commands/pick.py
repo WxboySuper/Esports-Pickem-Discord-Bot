@@ -265,6 +265,7 @@ async def _handle_no_matches(interaction: discord.Interaction, session):
 @app_commands.command(
     name="pick", description="Submit or update a pick for an upcoming match."
 )
+@app_commands.checks.cooldown(1, 5.0, key=lambda i: i.user.id)
 async def pick(interaction: discord.Interaction):
     """The main command to initiate picking a match."""
     logger.info(
@@ -312,6 +313,27 @@ async def pick(interaction: discord.Interaction):
             view=view,
             ephemeral=True,
         )
+
+
+@pick.error
+async def pick_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+):
+    if isinstance(error, app_commands.CommandOnCooldown):
+        await interaction.response.send_message(
+            f"Slow down! You can pick again in {error.retry_after:.1f}s.",
+            ephemeral=True,
+        )
+    else:
+        logger.error("Error in pick command", exc_info=error)
+        if interaction.response.is_done():
+            await interaction.followup.send(
+                "An error occurred while processing your command.", ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "An error occurred while processing your command.", ephemeral=True
+            )
 
 
 async def setup(bot):
