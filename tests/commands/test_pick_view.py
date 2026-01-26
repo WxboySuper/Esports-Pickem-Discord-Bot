@@ -108,3 +108,23 @@ async def test_pick_view_pick_logic(mock_crud, mock_get_session, mock_matches):
     # Verify auto-next
     assert view.current_index == 1
     mock_interaction.response.edit_message.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_pick_view_locked_match(mock_matches):
+    # Match in the past
+    mock_matches[0].scheduled_time = datetime.now(timezone.utc) - timedelta(hours=1)
+
+    view = PickView(matches=mock_matches, user_picks={}, user_id=123)
+
+    # Check button states for locked match
+    assert view.btn_team1.disabled is True
+    assert view.btn_team2.disabled is True
+    assert "🔒" in view.btn_team1.label
+    assert "🔒" in view.btn_team2.label
+
+    # Check embed content
+    embed = view.get_embed()
+    # Find the "Your Pick" field
+    pick_field = next(f for f in embed.fields if f.name == "Your Pick")
+    assert "(Locked)" in pick_field.value

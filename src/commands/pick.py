@@ -83,8 +83,17 @@ class PickView(discord.ui.View):
         current_pick = self.user_picks.get(match.id)
 
         # Update Team Buttons
-        self.btn_team1.label = match.team1
-        self.btn_team2.label = match.team2
+        is_locked = datetime.now(timezone.utc) >= match.scheduled_time
+
+        self.btn_team1.label = (
+            f"{match.team1} 🔒" if is_locked else match.team1
+        )
+        self.btn_team2.label = (
+            f"{match.team2} 🔒" if is_locked else match.team2
+        )
+
+        self.btn_team1.disabled = is_locked
+        self.btn_team2.disabled = is_locked
 
         self.btn_team1.style = discord.ButtonStyle.secondary
         self.btn_team2.style = discord.ButtonStyle.secondary
@@ -133,6 +142,8 @@ class PickView(discord.ui.View):
         embed.add_field(name="Time", value=time_str, inline=False)
 
         pick_status = f"✅ **{current_pick}**" if current_pick else "❌ None"
+        if datetime.now(timezone.utc) >= match.scheduled_time:
+            pick_status += " (Locked)"
         embed.add_field(name="Your Pick", value=pick_status, inline=False)
 
         return embed
