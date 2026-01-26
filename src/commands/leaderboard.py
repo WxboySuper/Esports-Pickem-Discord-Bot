@@ -401,8 +401,40 @@ async def get_leaderboard_data(
     else:
         query = _build_count_query(days=days, contest_id=contest_id)
 
+    use_sql_filter = False
+    if guild_id:
+        bot = get_bot_instance()
+        if bot:
+            guild = bot.get_guild(guild_id)
+            if guild:
+                # Limit for SQL IN clause (safe margin below 999)
+                sql_in_limit = 900
+                member_ids = [str(m.id) for m in guild.members]
+
+                if len(member_ids) <= sql_in_limit:
+                    # Filter in SQL
+                    query = query.where(User.discord_id.in_(member_ids))
+                    use_sql_filter = True
+                    logger.debug(
+                        "Using SQL IN filter for guild %s with %s members",
+                        guild_id,
+                        len(member_ids),
+                    )
+                else:
+                    logger.debug(
+                        "Skipping SQL IN filter for guild %s with %s members "
+                        "(limit %s)",
+                        guild_id,
+                        len(member_ids),
+                        sql_in_limit,
+                    )
+
     results = session.exec(query).all()
-    return await _apply_guild_filter(results, guild_id, is_accuracy_based)
+    # If we filtered in SQL, pass None as guild_id to skip Python filtering
+    filter_guild_id = None if use_sql_filter else guild_id
+    return await _apply_guild_filter(
+        results, filter_guild_id, is_accuracy_based
+    )
 
 
 async def create_leaderboard_embed(
