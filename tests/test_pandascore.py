@@ -76,6 +76,7 @@ class TestPandaScoreParser:
     @pytest.fixture
     def parser(self):
         from src.parsers.base import PandaScoreParser
+
         return PandaScoreParser()
 
     def test_parse_date_valid(self, parser):

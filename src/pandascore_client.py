@@ -352,7 +352,8 @@ class PandaScoreClient:
     ) -> Tuple[Dict[str, Any], str]:
         """Prepare params and description for fetch request.
 
-        Handles the different parameter structures for running vs other matches.
+        Handles the different parameter structures for running vs other
+        matches.
         """
         if kind == "running":
             params = {
@@ -361,9 +362,11 @@ class PandaScoreClient:
             }
             description = desc_template
         else:
+            sort = opts.get("sort") or (
+                "scheduled_at" if kind == "upcoming" else "-scheduled_at"
+            )
             build_opts = {
-                "sort": opts.get("sort")
-                or ("scheduled_at" if kind == "upcoming" else "-scheduled_at"),
+                "sort": sort,
                 "page_size": opts.get("page_size", DEFAULT_PAGE_SIZE),
                 "page": opts.get("page"),
                 "filter_key": opts.get("filter_key"),

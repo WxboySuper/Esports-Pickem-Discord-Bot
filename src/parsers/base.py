@@ -28,7 +28,9 @@ class PandaScoreParser:
             logger.warning("Failed to parse date: %s", date_str)
             return None
 
-    def extract_team_data(self, opponent: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def extract_team_data(
+        self, opponent: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Extract team data from opponent object."""
         team_info = opponent.get("opponent")
         if not team_info:
@@ -41,7 +43,9 @@ class PandaScoreParser:
             "image_url": team_info.get("image_url"),
         }
 
-    def extract_contest_data(self, match_data: Dict[str, Any]) -> Dict[str, Any]:
+    def extract_contest_data(
+        self, match_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Extract contest (league/series) data from match object."""
         league = match_data.get("league", {})
         serie = match_data.get("serie", {})
@@ -76,11 +80,19 @@ class PandaScoreParser:
         opponents = match_data.get("opponents", [])
 
         # Extract team info, defaulting to TBD if missing
-        team1_info = opponents[0].get("opponent", {}) if len(opponents) > 0 else {}
-        team2_info = opponents[1].get("opponent", {}) if len(opponents) > 1 else {}
+        team1_info = (
+            opponents[0].get("opponent", {}) if len(opponents) > 0 else {}
+        )
+        team2_info = (
+            opponents[1].get("opponent", {}) if len(opponents) > 1 else {}
+        )
 
-        team1_name = team1_info.get("name") or team1_info.get("acronym") or "TBD"
-        team2_name = team2_info.get("name") or team2_info.get("acronym") or "TBD"
+        team1_name = (
+            team1_info.get("name") or team1_info.get("acronym") or "TBD"
+        )
+        team2_name = (
+            team2_info.get("name") or team2_info.get("acronym") or "TBD"
+        )
 
         return {
             "pandascore_id": pandascore_id,

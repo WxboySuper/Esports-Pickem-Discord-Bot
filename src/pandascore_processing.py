@@ -130,8 +130,8 @@ async def _detect_match_result(
     if not winner_id:
         return
 
-    winner_name, team1_score, team2_score = ctx.parser.extract_winner_and_scores(
-        match_data, match, winner_id
+    winner_name, team1_score, team2_score = (
+        ctx.parser.extract_winner_and_scores(match_data, match, winner_id)
     )
 
     if not winner_name:
