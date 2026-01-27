@@ -9,7 +9,7 @@ Implements rate limiting, retry logic, and error handling.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Callable, Awaitable
 
 import aiohttp
 from aiohttp import ClientError, ClientResponseError, ClientTimeout
@@ -30,6 +30,8 @@ MAX_PAGE_SIZE = 100
 # We'll be conservative and track our usage
 RATE_LIMIT_REQUESTS = 1000
 RATE_LIMIT_WINDOW_SECONDS = 3600
+# Warning threshold: 10% of limit or fixed number
+RATE_LIMIT_WARNING_THRESHOLD = 200
 
 
 class PandaScoreError(Exception):
@@ -83,6 +85,31 @@ class PandaScoreClient:
         self._request_count = 0
         self._window_start = datetime.now(timezone.utc)
 
+        # Enhanced Rate Limit Tracking
+        self._rate_limit_limit: Optional[int] = None
+        self._rate_limit_remaining: Optional[int] = None
+        self._rate_limit_reset: Optional[int] = None
+        self._warning_callback: Optional[
+            Callable[[Dict[str, Any]], Awaitable[None]]
+        ] = None
+        self._last_warning_time: Optional[datetime] = None
+
+    def add_rate_limit_warning_callback(
+        self, callback: Callable[[Dict[str, Any]], Awaitable[None]]
+    ) -> None:
+        """Register a callback to be invoked when rate limit is low."""
+        self._warning_callback = callback
+
+    def get_rate_limit_status(self) -> Dict[str, Any]:
+        """Return current rate limit status."""
+        return {
+            "request_count": self._request_count,
+            "window_start": self._window_start.isoformat(),
+            "limit": self._rate_limit_limit,
+            "remaining": self._rate_limit_remaining,
+            "reset": self._rate_limit_reset,
+        }
+
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create an aiohttp session."""
         if self._session is None or self._session.closed:
@@ -120,8 +147,74 @@ class PandaScoreClient:
     def _build_url(endpoint: str) -> str:
         return f"{BASE_URL}{endpoint}"
 
-    @staticmethod
+    def _update_rate_limits(self, headers: Any) -> None:
+        """Parse headers and update internal rate limit state."""
+        # Try different header casing variations
+        limit = (
+            headers.get("X-Rate-Limit-Limit")
+            or headers.get("X-RateLimit-Limit")
+            or headers.get("RateLimit-Limit")
+        )
+        remaining = (
+            headers.get("X-Rate-Limit-Remaining")
+            or headers.get("X-RateLimit-Remaining")
+            or headers.get("RateLimit-Remaining")
+        )
+        reset = (
+            headers.get("X-Rate-Limit-Reset")
+            or headers.get("X-RateLimit-Reset")
+            or headers.get("RateLimit-Reset")
+        )
+
+        if limit is not None:
+            try:
+                self._rate_limit_limit = int(limit)
+            except ValueError:
+                pass
+
+        if remaining is not None:
+            try:
+                self._rate_limit_remaining = int(remaining)
+                # Sync client-side request count if we have a limit
+                if self._rate_limit_limit:
+                    self._request_count = (
+                        self._rate_limit_limit - self._rate_limit_remaining
+                    )
+            except ValueError:
+                pass
+
+        if reset is not None:
+            try:
+                self._rate_limit_reset = int(reset)
+            except ValueError:
+                pass
+
+        # Check for warning condition
+        if (
+            self._rate_limit_remaining is not None
+            and self._rate_limit_remaining < RATE_LIMIT_WARNING_THRESHOLD
+        ):
+            self._trigger_warning_if_needed()
+
+    def _trigger_warning_if_needed(self) -> None:
+        """
+        Trigger warning callback if enough time passed since last warning.
+        """
+        now = datetime.now(timezone.utc)
+        if (
+            self._last_warning_time
+            and (now - self._last_warning_time).total_seconds() < 3600
+        ):
+            return  # Prevent spamming (max once per hour)
+
+        if self._warning_callback:
+            self._last_warning_time = now
+            # Schedule callback without awaiting to avoid blocking request flow
+            status = self.get_rate_limit_status()
+            asyncio.create_task(self._warning_callback(status))
+
     async def _do_request_once(
+        self,
         session: aiohttp.ClientSession,
         url: str,
         params: Optional[Dict[str, Any]] = None,
@@ -132,6 +225,7 @@ class PandaScoreClient:
         """
         async with session.get(url, params=params) as response:
             if response.status == 429:
+                self._update_rate_limits(response.headers)
                 retry_after = response.headers.get("Retry-After")
                 retry_seconds = int(retry_after) if retry_after else 60
                 logger.warning(
@@ -141,6 +235,7 @@ class PandaScoreClient:
                 raise RateLimitError(retry_after=retry_seconds)
 
             response.raise_for_status()
+            self._update_rate_limits(response.headers)
             return await response.json()
 
     @staticmethod
@@ -248,6 +343,26 @@ class PandaScoreClient:
 
     def _check_rate_limit(self):
         """Check if we're within rate limits."""
+        # Prioritize header-based tracking if available
+        if self._rate_limit_remaining is not None:
+            if self._rate_limit_remaining <= 0:
+                # If we have a reset time, calculate retry after
+                retry_after = 60
+                if self._rate_limit_reset:
+                    # Reset is usually seconds or timestamp?
+                    # Standard X-Rate-Limit-Reset is often timestamp in seconds
+                    # or remaining seconds.
+                    # If it's small (< 3600), assume remaining seconds.
+                    # If large, timestamp.
+                    # But let's assume worst case or just wait 60s if ambiguous
+                    # However, we can just let the request go through and fail
+                    # with 429 if we are unsure.
+                    # But we should trust 'remaining <= 0'.
+                    pass
+                raise RateLimitError(retry_after=retry_after)
+            return
+
+        # Fallback to client-side tracking
         now = datetime.now(timezone.utc)
         elapsed = (now - self._window_start).total_seconds()
 
@@ -567,6 +682,14 @@ class DisabledPandaScoreClient:
     # skipcq: PYL-R0201
     async def close(self) -> None:
         return None
+
+    def add_rate_limit_warning_callback(
+        self, callback: Callable[[Dict[str, Any]], Awaitable[None]]
+    ) -> None:
+        pass
+
+    def get_rate_limit_status(self) -> Dict[str, Any]:
+        return {}
 
 
 class _LazyPandaScoreClientProxy:

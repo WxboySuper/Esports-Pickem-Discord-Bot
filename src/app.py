@@ -80,6 +80,44 @@ class EsportsBot(commands.Bot):
             raise
         logger.info("Starting scheduler...")
         start_scheduler()
+
+        # Register PandaScore rate limit warning handler
+        from src.pandascore_client import pandascore_client
+        from src.auth import get_admin_ids
+
+        async def rate_limit_warning(status):
+            logger.warning("PandaScore Rate Limit Warning: %s", status)
+            admin_ids = get_admin_ids()
+            if not admin_ids:
+                return
+
+            msg = (
+                "⚠️ **PandaScore Rate Limit Warning** ⚠️\n"
+                f"Remaining: {status.get('remaining')}\n"
+                f"Limit: {status.get('limit')}\n"
+                f"Reset: {status.get('reset')}\n"
+                f"Window Start: {status.get('window_start')}"
+            )
+
+            for uid in admin_ids:
+                # Try cache first, then fetch
+                user = self.get_user(uid)
+                if not user:
+                    try:
+                        user = await self.fetch_user(uid)
+                    except Exception:
+                        logger.warning("Could not fetch admin user %s", uid)
+                        continue
+
+                if user:
+                    try:
+                        await user.send(msg)
+                    except Exception:
+                        logger.exception("Failed to DM admin %s", uid)
+
+        pandascore_client.add_rate_limit_warning_callback(rate_limit_warning)
+        logger.info("Registered PandaScore rate limit warning handler.")
+
         logger.info("Loading command modules...")
         commands_pkg = self._resolve_commands_package()
         if commands_pkg is not None:
