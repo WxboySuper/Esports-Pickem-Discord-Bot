@@ -14,10 +14,8 @@ logger = logging.getLogger(__name__)
 class PandaScoreParser:
     """Base parser for PandaScore API responses."""
 
-    def __init__(self, game_slug: Optional[str] = None):
-        self.game_slug = game_slug
-
-    def parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
+    @staticmethod
+    def parse_date(date_str: Optional[str]) -> Optional[datetime]:
         """Parse PandaScore ISO 8601 date string."""
         if not date_str:
             return None
@@ -28,8 +26,9 @@ class PandaScoreParser:
             logger.warning("Failed to parse date: %s", date_str)
             return None
 
+    @staticmethod
     def extract_team_data(
-        self, opponent: Dict[str, Any]
+        opponent: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
         """Extract team data from opponent object."""
         team_info = opponent.get("opponent")
@@ -43,9 +42,8 @@ class PandaScoreParser:
             "image_url": team_info.get("image_url"),
         }
 
-    def extract_contest_data(
-        self, match_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    @staticmethod
+    def extract_contest_data(match_data: Dict[str, Any]) -> Dict[str, Any]:
         """Extract contest (league/series) data from match object."""
         league = match_data.get("league", {})
         serie = match_data.get("serie", {})
@@ -54,7 +52,9 @@ class PandaScoreParser:
         serie_name = serie.get("full_name") or serie.get("name", "")
         contest_name = f"{league_name} {serie_name}".strip()
 
-        scheduled_at = self.parse_date(match_data.get("scheduled_at"))
+        scheduled_at = PandaScoreParser.parse_date(
+            match_data.get("scheduled_at")
+        )
         now = datetime.now(timezone.utc)
 
         return {
@@ -66,12 +66,15 @@ class PandaScoreParser:
             "image_url": league.get("image_url"),
         }
 
+    @staticmethod
     def extract_match_data(
-        self, match_data: Dict[str, Any], contest_id: int
+        match_data: Dict[str, Any], contest_id: int
     ) -> Optional[Dict[str, Any]]:
         """Extract match data from PandaScore match object."""
         pandascore_id = match_data.get("id")
-        scheduled_at = self.parse_date(match_data.get("scheduled_at"))
+        scheduled_at = PandaScoreParser.parse_date(
+            match_data.get("scheduled_at")
+        )
 
         if not pandascore_id or not scheduled_at:
             logger.warning("Match missing id or scheduled_at: %s", match_data)
@@ -106,8 +109,9 @@ class PandaScoreParser:
             "scheduled_time": scheduled_at,
         }
 
+    @staticmethod
     def extract_winner_and_scores(
-        self, match_data: Dict[str, Any], match: Any, winner_id: Any
+        match_data: Dict[str, Any], match: Any, winner_id: Any
     ) -> Tuple[Optional[str], int, int]:
         """Extract winner name and scores from match result."""
         results = match_data.get("results") or []
