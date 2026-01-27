@@ -328,11 +328,13 @@ async def pick_error(
         logger.error("Error in pick command", exc_info=error)
         if interaction.response.is_done():
             await interaction.followup.send(
-                "An error occurred while processing your command.", ephemeral=True
+                "An error occurred while processing your command.",
+                ephemeral=True,
             )
         else:
             await interaction.response.send_message(
-                "An error occurred while processing your command.", ephemeral=True
+                "An error occurred while processing your command.",
+                ephemeral=True,
             )
 
 
