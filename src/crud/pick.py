@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple
 from datetime import datetime
 from dataclasses import dataclass
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 from src.models import Pick
@@ -54,6 +55,44 @@ def create_pick(session: Session, params: PickCreateParams) -> Pick:
     _save_and_refresh(session, pick)
     logger.info("Created pick with ID: %s", pick.id)
     return pick
+
+
+def upsert_pick(session: Session, params: PickCreateParams) -> Optional[Pick]:
+    """
+    Create or update a pick for a user in a contest match.
+    Handles race conditions via IntegrityError catching.
+
+    Parameters:
+        session (Session): Database session.
+        params (PickCreateParams): Pick parameters.
+
+    Returns:
+        Optional[Pick]: The created or updated pick.
+    """
+    existing_pick_stmt = (
+        select(Pick)
+        .where(Pick.user_id == params.user_id)
+        .where(Pick.match_id == params.match_id)
+    )
+    existing_pick = session.exec(existing_pick_stmt).first()
+
+    if existing_pick:
+        existing_pick.chosen_team = params.chosen_team
+        _save_and_refresh(session, existing_pick)
+        return existing_pick
+
+    try:
+        return create_pick(session, params)
+    except IntegrityError:
+        session.rollback()
+        # Race condition caught: pick was created by another process
+        existing_pick = session.exec(existing_pick_stmt).first()
+        if existing_pick:
+            existing_pick.chosen_team = params.chosen_team
+            _save_and_refresh(session, existing_pick)
+            return existing_pick
+        logger.error("Failed to resolve race condition for pick creation")
+        return None
 
 
 def get_pick_by_id(session: Session, pick_id: int) -> Optional[Pick]:
