@@ -9,7 +9,7 @@ Implements rate limiting, retry logic, and error handling.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Tuple
 
 import aiohttp
 from aiohttp import ClientError, ClientResponseError, ClientTimeout
@@ -347,6 +347,32 @@ class PandaScoreClient:
 
         return params
 
+    def _prepare_fetch_context(
+        self, kind: str, opts: Dict[str, Any], desc_template: str
+    ) -> Tuple[Dict[str, Any], str]:
+        """Prepare params and description for fetch request.
+
+        Handles the different parameter structures for running vs other matches.
+        """
+        if kind == "running":
+            params = {
+                "page[size]": opts.get("page_size", DEFAULT_PAGE_SIZE),
+                "page[number]": opts.get("page", 1),
+            }
+            description = desc_template
+        else:
+            build_opts = {
+                "sort": opts.get("sort")
+                or ("scheduled_at" if kind == "upcoming" else "-scheduled_at"),
+                "page_size": opts.get("page_size", DEFAULT_PAGE_SIZE),
+                "page": opts.get("page"),
+                "filter_key": opts.get("filter_key"),
+                "filter_values": opts.get("filter_values"),
+            }
+            params = self._build_params(build_opts)
+            description = desc_template.format(page=opts.get("page", 1))
+        return params, description
+
     async def fetch_matches(
         self,
         kind: str,
@@ -364,7 +390,7 @@ class PandaScoreClient:
         k = (kind or "").lower()
         g = (game or "lol").lower()
 
-        # Endpoint selection mapping; `opts` now provides pagination/filtering
+        # Endpoint selection mapping
         mapping = {
             "upcoming": (
                 f"/{g}/matches/upcoming",
@@ -380,26 +406,9 @@ class PandaScoreClient:
             raise ValueError(f"Unknown match fetch kind: {kind}")
 
         endpoint, desc_template = entry
-
-        # For running we expect a simple page param; include both page
-        # size and page number so pagination works as callers expect.
-        if k == "running":
-            params = {
-                "page[size]": opts.get("page_size", DEFAULT_PAGE_SIZE),
-                "page[number]": opts.get("page", 1),
-            }
-            description = desc_template
-        else:
-            build_opts = {
-                "sort": opts.get("sort")
-                or ("scheduled_at" if k == "upcoming" else "-scheduled_at"),
-                "page_size": opts.get("page_size", DEFAULT_PAGE_SIZE),
-                "page": opts.get("page"),
-                "filter_key": opts.get("filter_key"),
-                "filter_values": opts.get("filter_values"),
-            }
-            params = self._build_params(build_opts)
-            description = desc_template.format(page=opts.get("page", 1))
+        params, description = self._prepare_fetch_context(
+            k, opts, desc_template
+        )
 
         return await self._fetch_matches(endpoint, params, description)
 
