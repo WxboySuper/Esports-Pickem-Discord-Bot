@@ -128,5 +128,8 @@ async def test_pick_view_locked_match(mock_matches):
     # Check embed content
     embed = view.get_embed()
     # Find the "Your Pick" field
-    pick_field = next(f for f in embed.fields if f.name == "Your Pick")
+    pick_field = next(
+        (f for f in embed.fields if f.name == "Your Pick"), None
+    )
+    assert pick_field is not None
     assert "(Locked)" in pick_field.value
