@@ -111,6 +111,9 @@ class Pick(SQLModel, table=True):
         default_factory=_now_utc,
         sa_column=Column(TZDateTime(), nullable=False),
     )
+    __table_args__ = (
+        sa.UniqueConstraint("user_id", "match_id", name="uq_pick_user_match"),
+    )
     user: Optional[User] = Relationship(back_populates="picks")
     contest: Optional[Contest] = Relationship(back_populates="picks")
     match: Optional[Match] = Relationship(back_populates="picks")
