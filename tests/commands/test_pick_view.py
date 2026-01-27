@@ -113,7 +113,9 @@ async def test_pick_view_pick_logic(mock_crud, mock_get_session, mock_matches):
 @pytest.mark.asyncio
 async def test_pick_view_locked_match(mock_matches):
     # Match in the past
-    mock_matches[0].scheduled_time = datetime.now(timezone.utc) - timedelta(hours=1)
+    mock_matches[0].scheduled_time = datetime.now(timezone.utc) - timedelta(
+        hours=1
+    )
 
     view = PickView(matches=mock_matches, user_picks={}, user_id=123)
 
