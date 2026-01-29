@@ -27,32 +27,34 @@ class PandaScoreParser:
             logger.warning("Failed to parse date: %s", date_str)
             return None
 
+    @staticmethod
     def extract_team_data(
-        self, opponent: Dict[str, Any]
+        opponent: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
         """Extract team data from opponent object."""
         raise NotImplementedError(
             "Subclasses must implement extract_team_data"
         )
 
-    def extract_contest_data(
-        self, match_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    @staticmethod
+    def extract_contest_data(match_data: Dict[str, Any]) -> Dict[str, Any]:
         """Extract contest (league/series) data from match object."""
         raise NotImplementedError(
             "Subclasses must implement extract_contest_data"
         )
 
+    @staticmethod
     def extract_match_data(
-        self, match_data: Dict[str, Any], contest_id: int
+        match_data: Dict[str, Any], contest_id: int
     ) -> Optional[Dict[str, Any]]:
         """Extract match data from PandaScore match object."""
         raise NotImplementedError(
             "Subclasses must implement extract_match_data"
         )
 
+    @staticmethod
     def extract_winner_and_scores(
-        self, match_data: Dict[str, Any], match: Any, winner_id: Any
+        match_data: Dict[str, Any], match: Any, winner_id: Any
     ) -> Tuple[Optional[str], int, int]:
         """Extract winner name and scores from match result."""
         raise NotImplementedError(

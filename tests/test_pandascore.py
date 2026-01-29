@@ -79,6 +79,7 @@ class TestLoLParser:
 
         return LoLParser()
 
+    # skipcq: PYL-R0201
     def test_parse_date_valid(self, parser):
         """Test parsing a valid ISO 8601 date."""
         result = parser.parse_date("2024-03-15T10:00:00Z")
