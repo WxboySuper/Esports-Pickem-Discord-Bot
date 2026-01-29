@@ -70,14 +70,14 @@ class TestPandaScoreClient:
         return match
 
 
-class TestPandaScoreParser:
-    """Tests for PandaScoreParser class."""
+class TestLoLParser:
+    """Tests for LoLParser class."""
 
     @pytest.fixture
     def parser(self):
-        from src.parsers.base import PandaScoreParser
+        from src.parsers.lol import LoLParser
 
-        return PandaScoreParser()
+        return LoLParser()
 
     def test_parse_date_valid(self, parser):
         """Test parsing a valid ISO 8601 date."""
